@@ -21,7 +21,7 @@ extensions = [
 
 ## get version information
 import importlib.util
-version_py = os.path.join(os.path.abspath('../'), "src/pySing/version.py")
+version_py = os.path.join(os.path.abspath('../'), "src/g4x-helpers/version.py")
 spec = importlib.util.spec_from_file_location("version", version_py)
 version = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(version)
@@ -32,9 +32,9 @@ __version__ = version.__version__
 
 source_suffix = '.rst'
 master_doc = 'index'
-project = 'pySing'
-repository_url = 'https://bitbucket.org/singulargenomics/pysing'
-copyright = '2023, Singular Genomics'
+project = 'g4x-helpers'
+repository_url = 'https://github.com/Singular-Genomics/G4X-helpers'
+copyright = '2025, Singular Genomics'
 author = 'Kenneth Gouin III'
 version = release = __version__
 
@@ -49,7 +49,7 @@ on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 
 if not on_rtd:  # only set the theme if we're building docs locally
     html_theme = 'sphinx_rtd_theme'
-html_title = "pySing"
+html_title = "G4X-helpers"
 html_use_smartypants = True
 html_last_updated_fmt = '%b %d, %Y'
 html_split_index = False

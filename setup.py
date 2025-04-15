@@ -15,7 +15,7 @@ from setuptools import setup
 import importlib.util
 
 mydir = os.path.dirname(os.path.realpath(__file__))
-version_py = os.path.join(mydir, "src/pySing/version.py")
+version_py = os.path.join(mydir, "src/g4x-helpers/version.py")
 spec = importlib.util.spec_from_file_location("version", version_py)
 version = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(version)
@@ -51,50 +51,15 @@ def check_module(module_name, verbose: bool=True):
         if verbose:
             print(f"{module_name} is not available.")
         return False
-    
-extra_seq = [
-    'biopython',
-    'pysam',
-    'gget ~= 0.27.9',
-    'pyfaidx == 0.8.1.3'
-]
-
-extra_scseq = [
-    'scanpy == 1.10.2',
-    'celltypist ~= 1.6.3',
-    'statannot',
-    'pybiomart',
-    'scrublet',
-    'scikit-misc',
-    'leidenalg ~= 0.10.2',
-    'igraph ~= 0.11.8',
-]
-
-extra_gpu = [
-    'rapids-singlecell[rapids12] ~= 0.10.11',
-    'polars[gpu] ~= 1.8.2'
-]
-
-extra_spatial = [
-    'spatialdata ~=0.3.0',
-    'spatialdata-io ~= 0.1.7'
-]
-
-extra_dev = [
-    *extra_seq, 
-    *extra_scseq,
-    *extra_spatial
-]
-
 
 setup(
-    name='pySing',
+    name='g4x-helpers',
     version=__version__,
     license='MIT',
-    description='Python helpers for Singular Genomics.',
+    description='Python helpers for G4X.',
     author='Kenneth Gouin III',
     author_email='kennethg@singulargenomics.com',
-    url='https://bitbucket.org/singulargenomics/pysing/src/master/',
+    url='https://github.com/Singular-Genomics/G4X-helpers',
     packages=find_packages('src'),
     package_dir={'': 'src'},
     py_modules=[splitext(basename(path))[0] for path in glob('src/*.py')],
@@ -112,21 +77,4 @@ setup(
         'Topic :: Scientific/Engineering :: Bio-Informatics',
     ],
     python_requires='>=3.10, <3.11',
-    extras_require={
-        'seq': extra_seq,
-        'scseq': extra_scseq,
-        'spatial': extra_spatial,
-        'gpu': extra_gpu,
-        'dev': extra_dev
-    },
-    entry_points={
-        'console_scripts': [
-            'pySing = pySing.cli:main',
-            'filter_pair = pySing.utils.filter_pair:launch_filter_pair',
-            'aggregate_metrics = pySing.utils.metric_aggregator:launch_aggregator',
-            'parse_secondary = pySing.utils.parse_secondary:launch_parser',
-            'flowcell_plot = pySing.utils.flowcell_plotter:launch_fc_plotter',
-            'brightphase_runner = pySing.utils.brightphase_runner:launch_brightphase'
-        ]
-    },
 )
