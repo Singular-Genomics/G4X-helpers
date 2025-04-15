@@ -88,7 +88,7 @@ class G4XOutput():
     def includes_protein(self) -> bool:
         return self.protein_panel is not None
     
-    
+
     def setup_logger(
         self,
         *,
@@ -127,7 +127,7 @@ class G4XOutput():
             except Exception as e:
                 self.logger.exception(f"No single-cell clustering results found.")
                 self.logger.exception(e)
-        adata.obs_names = f"{self.sample_id}-" + adata.obs['cell_id'].str.split('-').str[0]
+        adata.obs_names = f"{self.sample_id}-" + adata.obs['cell_id'].str.split('-').str[1]
         return adata
 
     def _get_image(self, parent_directory: str, pattern: str) -> np.ndarray:

@@ -50,7 +50,7 @@ def setup_logger(
     logger = logging.getLogger(logger_name)
     logger.setLevel(logging.DEBUG)
     if format is None:
-        format = '[%(asctime)s %(levelname)s  %(funcName)s PID=%(process)d] %(message)s'
+        format = '[%(asctime)s %(levelname)s %(funcName)s %(name)s] %(message)s'
     formatter = logging.Formatter(format)
 
     ## optionally clear existing handlers
