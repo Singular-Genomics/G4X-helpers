@@ -15,7 +15,7 @@ from setuptools import setup
 import importlib.util
 
 mydir = os.path.dirname(os.path.realpath(__file__))
-version_py = os.path.join(mydir, "src/g4x-helpers/version.py")
+version_py = os.path.join(mydir, "src/g4x_helpers/version.py")
 spec = importlib.util.spec_from_file_location("version", version_py)
 version = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(version)
@@ -53,7 +53,7 @@ def check_module(module_name, verbose: bool=True):
         return False
 
 setup(
-    name='g4x-helpers',
+    name='g4x_helpers',
     version=__version__,
     license='MIT',
     description='Python helpers for G4X.',

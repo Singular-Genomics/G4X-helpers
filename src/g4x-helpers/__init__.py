@@ -1,1 +1,0 @@
-from g4x-helpers.version import __version__

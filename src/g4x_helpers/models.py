@@ -41,7 +41,7 @@ class G4XOutput():
         *,
         remove_nontargeting: Optional[bool] = True,
         load_clustering: Optional[bool] = True
-    ) -> anndata.AnnData
+    ) -> anndata.AnnData:
         adata = sc.read_h5ad(self.run_base / "single_cell_data" / "feature_matrix.h5")
         adata.obs_names = adata.obs["cell_id"]
         adata.var_names = adata.var['gene_id']
@@ -68,7 +68,7 @@ class G4XOutput():
             img = tifffile.imread(img_path)
         return img
 
-    def load_protein_image(self, protein: str) -> np.ndarray
+    def load_protein_image(self, protein: str) -> np.ndarray:
         if not self.protein_panel:
             print("No protein results.")
             return None

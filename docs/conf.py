@@ -21,7 +21,7 @@ extensions = [
 
 ## get version information
 import importlib.util
-version_py = os.path.join(os.path.abspath('../'), "src/g4x-helpers/version.py")
+version_py = os.path.join(os.path.abspath('../'), "src/g4x_helpers/version.py")
 spec = importlib.util.spec_from_file_location("version", version_py)
 version = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(version)
