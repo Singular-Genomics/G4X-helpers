@@ -1,11 +1,14 @@
 import logging
 import os
+import shutil
 from pathlib import Path
-from typing import Any, Callable, Generator, Iterable, Iterator, List, Literal, Optional, Tuple, Union
+from typing import Optional, Union  # , Any, Callable, Generator, Iterable, Iterator, List, Literal, Tuple
 
 import numpy as np
 from shapely.affinity import scale, translate
 from shapely.geometry import Polygon
+
+from .models import G4Xoutput
 
 
 def setup_logger(
@@ -208,7 +211,9 @@ def find_tissue(coords, ubins=100, expand=0.1, order='yx', threshold=0.1, smp_sh
 
 
 class Roi:
-    def __init__(self, xlims=None, ylims=None, extent=None, center=None, edge_size=None, polygon=None, name='ROI', sub_rois=None):
+    def __init__(
+        self, xlims=None, ylims=None, extent=None, center=None, edge_size=None, polygon=None, name='ROI', sub_rois=None
+    ):
         self.name = name
 
         if center and edge_size and not polygon and not (xlims and ylims) and not extent:
@@ -245,7 +250,14 @@ class Roi:
             self.sub_rois = self.subtile_roi(n=sub_rois, labels='abc')
 
     def _make_polygon(self):
-        return Polygon([(self.xlims[0], self.ylims[0]), (self.xlims[1], self.ylims[0]), (self.xlims[1], self.ylims[1]), (self.xlims[0], self.ylims[1])])
+        return Polygon(
+            [
+                (self.xlims[0], self.ylims[0]),
+                (self.xlims[1], self.ylims[0]),
+                (self.xlims[1], self.ylims[1]),
+                (self.xlims[0], self.ylims[1]),
+            ]
+        )
 
     def scale(self, factor):
         scaled_roi = scale(self.polygon, xfact=factor, yfact=factor, origin='center')
@@ -286,7 +298,18 @@ class Roi:
         return sub_rois
 
 
-def add_rois(ax, rois=list, color='white', lw=2, order='xy', label=True, label_position='top_left', prefix='ROI ', font_size=12, pad=0.05):
+def add_rois(
+    ax,
+    rois=list,
+    color='white',
+    lw=2,
+    order='xy',
+    label=True,
+    label_position='top_left',
+    prefix='ROI ',
+    font_size=12,
+    pad=0.05,
+):
     import matplotlib.patches as patches
 
     if not isinstance(rois, list):
@@ -352,8 +375,36 @@ def add_rois(ax, rois=list, color='white', lw=2, order='xy', label=True, label_p
                 tx, ty = x + w / 2, y + h / 2
                 ha, va = 'center', 'center'
             else:
-                print("Invalid label_position. Use one of ['top_left', 'top_right', 'bottom_left', 'bottom_right', 'top_center', 'bottom_center', 'center'].")
+                print(
+                    "Invalid label_position. Use one of ['top_left', 'top_right', 'bottom_left', 'bottom_right', 'top_center', 'bottom_center', 'center']."
+                )
                 return
 
             # Add the label text to the axis.
-            ax.text(tx, ty, label_text, color=color, fontsize=font_size, fontweight='bold', verticalalignment=va, horizontalalignment=ha, zorder=11)
+            ax.text(
+                tx,
+                ty,
+                label_text,
+                color=color,
+                fontsize=font_size,
+                fontweight='bold',
+                verticalalignment=va,
+                horizontalalignment=ha,
+                zorder=11,
+            )
+
+
+def _create_custom_out(sample: G4Xoutput, out_dir=None, parent_folder=None, file_name=None):
+    if out_dir is None:
+        custom_out = sample.run_base / parent_folder / 'custom'
+    else:
+        custom_out = Path(out_dir) / parent_folder / 'custom'
+
+    if not custom_out.exists():
+        os.makedirs(custom_out)
+    else:
+        shutil.rmtree(custom_out)
+        os.makedirs(custom_out)
+
+    outfile = custom_out / file_name
+    return outfile

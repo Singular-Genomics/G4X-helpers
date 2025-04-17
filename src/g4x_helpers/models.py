@@ -1,11 +1,9 @@
-import glob
 import json
 import logging
 import os
-import re
-from dataclasses import InitVar, asdict, dataclass, field
+from dataclasses import InitVar, dataclass  # , asdict, field
 from pathlib import Path
-from typing import Any, Generator, Iterable, Iterator, List, Literal, Optional, Tuple, Union
+from typing import Optional, Union  # , Tuple, Any, Generator, Iterable, Iterator, List, Literal
 
 import anndata
 import glymur
@@ -15,16 +13,17 @@ import pandas as pd
 import polars as pl
 import scanpy as sc
 import tifffile
+from geopandas.geodataframe import GeoDataFrame
 from packaging import version
 
+import g4x_helpers.segmentation as reseg
 import g4x_helpers.utils as utils
-from g4x_helpers.utils import setup_logger
 
 glymur.set_option('lib.num_threads', 16)
 
 
 @dataclass()
-class G4XOutput:
+class G4Xoutput:
     run_base: Union[Path, str]
     sample_id: str = None
     log_level: InitVar[int] = logging.INFO
@@ -41,6 +40,11 @@ class G4XOutput:
         with open(self.run_base / 'run_meta.json', 'r') as f:
             self.run_meta = json.load(f)
 
+        self._populate_attrs()
+        self._get_shape()
+        self._get_cell_coords()
+        self._get_tissue_crop()
+
         if self.transcript_panel:
             transcript_panel = pd.read_csv(self.run_base / 'transcript_panel.csv', index_col=0, header=0)
             self.transcript_panel_dict = transcript_panel.to_dict()['panel_type']
@@ -50,10 +54,6 @@ class G4XOutput:
             protein_panel = pd.read_csv(self.run_base / 'protein_panel.csv', index_col=0, header=0)
             self.protein_panel_dict = protein_panel.to_dict()['panel_type']
             self.proteins = list(self.protein_panel_dict.keys())
-
-        self._get_shape()
-        self._get_cell_coords()
-        self._get_tissue_crop()
 
         roi_data = utils.Roi(extent=self.extent, name='data')
         roi_tissue = utils.Roi(extent=self.tissue_extent, name='tissue', sub_rois=2)
@@ -66,60 +66,26 @@ class G4XOutput:
             'D': roi_tissue.sub_rois[3],
         }
 
-    def __repr__(self):
-        return f"""
-        G4XOutput for {self.sample_id} located at {self.run_base}.
-            contains transcript: {self.includes_transcript}
-            contains protein: {self.includes_protein}
-        """
-    # region properties
-    @property
-    def machine(self) -> str:
-        return self.run_meta.get('machine', None)
-
-    @property
-    def run_id(self) -> str:
-        return self.run_meta.get('run_id', None)
-
-    @property
-    def fc(self) -> str:
-        return self.run_meta.get('fc', None)
-
-    @property
-    def lane(self) -> str:
-        return self.run_meta.get('lane', None)
-
-    @property
-    def platform(self) -> str:
-        return self.run_meta.get('platform', None)
-
-    @property
-    def transcript_panel(self) -> dict:
-        return self.run_meta.get('transcript_panel', None)
-
-    @property
-    def protein_panel(self) -> dict:
-        return self.run_meta.get('protein_panel', None)
-
-    @property
-    def software(self) -> str:
-        return self.run_meta.get('software', None)
-
-    @property
-    def software_version(self) -> str:
-        return self.run_meta.get('software_version', None)
-
     @property
     def logger(self) -> logging.Logger:
         return logging.getLogger(f'{self.sample_id}_G4XOutput')
 
-    @property
-    def includes_transcript(self) -> bool:
-        return self.transcript_panel is not None
+    def _populate_attrs(self):
+        for key in (
+            'machine',
+            'run_id',
+            'fc',
+            'lane',
+            'platform',
+            'software',
+            'software_version',
+            'transcript_panel',
+            'protein_panel',
+        ):
+            setattr(self, key, self.run_meta.get(key))
 
-    @property
-    def includes_protein(self) -> bool:
-        return self.protein_panel is not None
+        self.includes_transcript = True if self.transcript_panel is not None else False
+        self.includes_protein = True if self.protein_panel is not None else False
 
     # region methods
     def setup_logger(
@@ -131,7 +97,7 @@ class G4XOutput:
         file_level: Optional[int] = logging.INFO,
         clear_handlers: Optional[bool] = True,
     ) -> None:
-        _ = setup_logger(
+        _ = utils.setup_logger(
             f'{self.sample_id}_G4XOutput',
             stream_logger=stream_logger,
             stream_level=stream_level,
@@ -140,7 +106,7 @@ class G4XOutput:
             clear_handlers=clear_handlers,
         )
 
-    def thumb(self, size=3, ax=None, crop=True, scale=1, show_tissue_bounds=True, background=True):
+    def thumb(self, size=3, ax=None, crop='tissue', scale=1, show_tissue_bounds=True, background=True):
         if ax is None:
             fig, ax = plt.subplots(figsize=(size, size), dpi=300, layout='compressed')
 
@@ -175,7 +141,9 @@ class G4XOutput:
         ax.set_xticks([])
         ax.set_yticks([])
 
-    def load_adata(self, *, remove_nontargeting: Optional[bool] = True, load_clustering: Optional[bool] = True) -> anndata.AnnData:
+    def load_adata(
+        self, *, remove_nontargeting: Optional[bool] = True, load_clustering: Optional[bool] = True
+    ) -> anndata.AnnData:
         adata = sc.read_h5ad(self.run_base / 'single_cell_data' / 'feature_matrix.h5')
 
         # TODO this may conflict with the last line?!
@@ -205,7 +173,7 @@ class G4XOutput:
         if not self.protein_panel:
             self.logger.error('No protein results.')
             return None
-        assert protein in self.protein_panel, print(f'{protein} not in protein panel.')
+        assert protein in self.proteins, print(f'{protein} not in protein panel.')
         return self._get_image('protein', f'{protein}.*')
 
     def load_he_image(self) -> np.ndarray:
@@ -245,7 +213,55 @@ class G4XOutput:
                 contents['files'].append(item)
 
         return contents
-    
+
+    def run_g4x_segmentation(
+        self, labels: GeoDataFrame | np.ndarray, out_dir=None, include_channels=None, exclude_channels=None
+    ):
+        mask = labels
+
+        if isinstance(mask, GeoDataFrame):
+            print('Rasterizing provided GeoDataFrame')
+            mask = reseg.rasterize_polygons(gdf=mask, target_shape=self.shape)
+
+        print('Extracting mask properties')
+        segmentation_props = reseg.get_mask_properties(self, mask)
+
+        print('Assigning transcripts to mask labels')
+        reads_new_labels = reseg.assign_tx_to_mask_labels(self, mask)
+
+        print('Extracting image signals')
+        cell_by_protein = reseg.extract_image_signals(
+            self, mask, include_channels=include_channels, exclude_channels=exclude_channels
+        )
+
+        print('Building output data structures')
+        cell_metadata = reseg._make_cell_metadata(segmentation_props, cell_by_protein)
+        cell_by_gene = reseg._make_cell_by_gene(segmentation_props, reads_new_labels)
+        adata = reseg._make_adata(cell_by_gene, cell_metadata)
+
+        if out_dir:
+            print(f'Saving output files to {out_dir}')
+        else:
+            print(f'No output directory specified, saving to ["custom"] directories in {self.run_base}.')
+
+        outfile = utils._create_custom_out(self, out_dir, 'segmentation', 'segmentation_mask.npz')
+        np.savez(outfile, cell_labels=mask)
+
+        outfile = utils._create_custom_out(self, out_dir, 'rna', 'transcript_table.csv.gz')
+        reads_new_labels.write_csv(outfile)
+
+        outfile = utils._create_custom_out(self, out_dir, 'single_cell_data', 'cell_by_transcript.csv.gz')
+        cell_by_gene.write_csv(outfile)
+
+        outfile = utils._create_custom_out(self, out_dir, 'single_cell_data', 'cell_by_protein.csv.gz')
+        cell_by_protein.write_csv(outfile)
+
+        outfile = utils._create_custom_out(self, out_dir, 'single_cell_data', 'feature_matrix.h5')
+        adata.write_h5ad(outfile)
+
+        outfile = utils._create_custom_out(self, out_dir, 'single_cell_data', 'cell_metadata.csv.gz')
+        adata.obs.to_csv(outfile)
+
     # region internal
     def _get_image(self, parent_directory: str, pattern: str) -> np.ndarray:
         img_path = next((self.run_base / parent_directory).glob(pattern), None)
@@ -298,7 +314,30 @@ class G4XOutput:
 
             return (x0, x1, y0, y1)
 
-        lims = utils.find_tissue(self.cell_coords, ubins=ubins, threshold=threshold, expand=expand, order=order, smp_shape=self.shape, **kwargs)
+        lims = utils.find_tissue(
+            self.cell_coords,
+            ubins=ubins,
+            threshold=threshold,
+            expand=expand,
+            order=order,
+            smp_shape=self.shape,
+            **kwargs,
+        )
         self.tissue_lims = lims['lims']
         self.tissue_center = lims['centroid']
         self.tissue_extent = lims_to_extent(lims['lims'])
+
+    def __repr__(self):
+        machine_num = self.machine.removeprefix('g4-').lstrip('0')
+        mac_run_id = f'G{machine_num.zfill(2)}-{self.run_id}'
+
+        repr_string = f'G4X_output @ {self.run_base}\n'
+        repr_string += f'Sample: \033[1m{self.sample_id}\033[0m of {mac_run_id}, {self.fc}\n\n'
+
+        if self.includes_transcript:
+            repr_string += f'Transcript panel with {len(self.genes)} genes\t[{", ".join(self.genes[0:5])} ... ]\n'
+
+        if self.includes_protein:
+            repr_string += f'Protein panel with {len(self.proteins)} proteins\t[{", ".join(self.proteins[0:5])} ... ]\n'
+
+        return repr_string
