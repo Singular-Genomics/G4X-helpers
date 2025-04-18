@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "g4x_helpers"
+description = "Python helpers for G4X."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+  { name = "Kenneth Gouin III", email = "kennethg@singulargenomics.com" },
+]
+requires-python = ">=3.10,<3.11"
+# declare *all* dynamic fields here at once:
+dynamic = ["version", "dependencies"]
+
+classifiers = [
+  "Private :: Do Not Upload",
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+urls = { Homepage = "https://github.com/Singular-Genomics/G4X-helpers" }
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+include-package-data = true
+zip-safe = false
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# *One* dynamic table, with both version and dependencies:
+[tool.setuptools.dynamic]
+version      = { attr = "g4x_helpers.__version__" }
+dependencies = { file = ["requirements.txt"] }
