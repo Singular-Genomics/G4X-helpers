@@ -36,5 +36,5 @@ where = ["src"]
 
 # *One* dynamic table, with both version and dependencies:
 [tool.setuptools.dynamic]
-version      = { attr = "g4x_helpers.version.__version__" }
+version      = { attr = "g4x_helpers.__version__" }
 dependencies = { file = ["requirements.txt"] }
