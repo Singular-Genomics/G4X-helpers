@@ -309,6 +309,21 @@ _loc = Literal[
     'lower right',
 ]
 
+def _round_scale(scale_size):
+    # list of (upper‐bound, rounding increment)
+    thresholds = [
+        (25,   5),
+        (100, 10),
+        (500, 50),
+        (1000,100),
+        (10000,500),
+    ]
+    # find the first threshold your size falls under
+    for bound, inc in thresholds:
+        if scale_size < bound:
+            return round(scale_size / inc) * inc
+    # fallback for anything ≥ 10000
+    return round(scale_size / 1000) * 1000
 
 def scale_bar(
     ax,

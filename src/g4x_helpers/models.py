@@ -111,49 +111,28 @@ class G4Xoutput:
             clear_handlers=clear_handlers,
         )
 
-    def thumb(
-        self, size=3, ax=None, crop='tissue', scale=1, scale_bar: bool = True, show_tissue_bounds=True, background=True
-    ):
-        if ax is None:
-            fig, ax = plt.subplots(figsize=(size, size), dpi=300, layout='compressed')
+    def thumb(self, size=4, ax=None, view='tissue', scale=1, scale_bar: bool = True, show_tissue_bounds=True):
+        if view is None:
+            view = 'data'
+
+        ax = self.plot_signal(
+            'h_and_e',
+            size=size,
+            ax=ax,
+            view=view,
+            scale_bar=scale_bar,
+            thumbnail=True,
+            clip=False,
+            scale=scale,
+            return_ax=True,
+        )
 
         ax.set_title(self.sample_id)
 
-        if not hasattr(self, 'he_thumb'):
-            self.he_thumb = self._get_image(parent_directory='h_and_e', pattern='h_and_e_thumbnail.jpg')
-        plot_image = self.he_thumb.copy()
-
-        roi = self.rois['data'] if crop == 'data' else self.rois[crop]
-
-        # if background:
-        #     if isinstance(background, bool):
-        #         background = '#F7F3F9'  # HE Image background color
-        #     ax.set_facecolor(background)
-
-        if scale != 1:
-            roi = roi.scale(scale)
-
-        display_size = np.max([roi.width / 5, roi.height / 5])
-        plot_image = g4pl.downsample_mask(plot_image, ax=ax, mask_length=display_size, downsample='auto')
-
-        ax.imshow(plot_image, extent=self.rois['data'].extent, origin='lower')
-
         if show_tissue_bounds:
-            if crop == 'data':
+            if view == 'data':
                 crop_roi = self.rois['tissue']
                 crop_roi.add_to_plot(ax, color='orange', label=True, pad=-0.1, label_position='top_center')
-
-        if scale_bar:
-            um = roi.width * 0.3125
-            rounded_scale = round((um / 10) / 50) * 100
-            g4pl.scale_bar(
-                ax, length=rounded_scale, unit='micron', theme='light', background=True, lw=1, background_alpha=0.75
-            )
-
-        ax.set_xlim(roi.xlims)
-        ax.set_ylim(roi.ylims)
-        ax.set_xticks([])
-        ax.set_yticks([])
 
     def load_adata(
         self, *, remove_nontargeting: Optional[bool] = True, load_clustering: Optional[bool] = True
@@ -280,7 +259,7 @@ class G4Xoutput:
         outfile = utils._create_custom_out(self, out_dir, 'single_cell_data', 'cell_metadata.csv.gz')
         adata.obs.to_csv(outfile)
 
-    def plot_signals(self, signals, size=3, crop='tissue', thumbnail=True, **kwargs):
+    def plot_signals(self, signals, size=3, view='tissue', thumbnail=True, **kwargs):
         if not isinstance(signals, list):
             signals = [signals]
 
@@ -290,10 +269,19 @@ class G4Xoutput:
             axs = [axs]
 
         for ax, signal in zip(axs, signals):
-            self.plot_signal(signal=signal, size=size, ax=ax, crop=crop, thumbnail=thumbnail, **kwargs)
+            self.plot_signal(signal=signal, size=size, ax=ax, view=view, thumbnail=thumbnail, **kwargs)
 
     def plot_signal(
-        self, signal=None, size=4.5, ax=None, crop='tissue', scale_bar=True, thumbnail=False, clip=True, scale=1
+        self,
+        signal=None,
+        view='tissue',
+        scale=1,
+        size=4.5,
+        clip=True,
+        scale_bar=True,
+        thumbnail=False,
+        ax=None,
+        return_ax=False,
     ):
         if ax is None:
             fig, ax = plt.subplots(figsize=(size, size), layout='compressed')
@@ -316,34 +304,38 @@ class G4Xoutput:
         elif isinstance(clip, tuple):
             vmin, vmax = clip
 
-        roi = self.rois['data'] if crop == 'data' else self.rois[crop]
+        roi = self.rois['data'] if view is None else self.rois[view]
 
         if scale != 1:
             roi = roi.scale(scale)
 
-        fct = 5 if thumbnail else 1
-        roi_size = np.max([roi.width / fct, roi.height / fct])
+        # fct = 5 if thumbnail else 1
+        # roi_size = np.max([roi.width / fct, roi.height / fct])
 
-        plot_image = g4pl.downsample_mask(plot_image, mask_length=roi_size, ax=ax, downsample='auto')
+        crop_arr = roi._crop_array(plot_image, thumbnail=thumbnail)
+        plot_image = g4pl.downsample_mask(crop_arr, mask_length=None, ax=ax, downsample='auto')
 
         # print(f'Plotting {signal} with vmin={vmin}, vmax={vmax} and size {plot_image.shape}')
-        im = ax.imshow(
-            plot_image, vmin=vmin, vmax=vmax, cmap=g4pl.cm.lipari, extent=self.rois['data'].extent, origin='lower'
-        )
-        g4pl._add_colorbar(ax=ax, cax=im, loc='bottom')
+        im = ax.imshow(plot_image, vmin=vmin, vmax=vmax, cmap=g4pl.cm.lipari, extent=roi.extent_array, origin='lower')
+
+        if signal != 'h_and_e':
+            g4pl._add_colorbar(ax=ax, cax=im, loc='bottom')
         # fig.colorbar(im, ax=ax, orientation='horizontal', pad=0.025, fraction=0.05, aspect=35)
 
         if scale_bar:
             um = roi.width * 0.3125
-            rounded_scale = round((um / 10) / 50) * 100
+            rounded_scale = g4pl._round_scale(um / 5)
+            theme = 'light' if signal == 'h_and_e' else 'dark'
             g4pl.scale_bar(
-                ax, length=rounded_scale, unit='micron', theme='dark', background=True, lw=1, background_alpha=0.5
+                ax, length=rounded_scale, unit='micron', theme=theme, background=True, lw=1, background_alpha=0.5
             )
 
-        ax.set_xlim(roi.xlims)
-        ax.set_ylim(roi.ylims)
+        roi._limit_ax(ax)
         ax.set_xticks([])
         ax.set_yticks([])
+
+        if return_ax:
+            return ax
 
     def load_image(self, signal=str, thumbnail=False):
         def _get_image(img_file):
@@ -358,7 +350,8 @@ class G4Xoutput:
             folder = 'protein'
 
         img_folder = self.run_base / folder
-        filename = f'{signal}_thumbnail.png' if thumbnail else f'{signal}.jp2'
+        th_suffix = '.jpg' if signal == 'h_and_e' else '.png'
+        filename = f'{signal}_thumbnail{th_suffix}' if thumbnail else f'{signal}.jp2'
         img_file = img_folder / filename
 
         if thumbnail and signal not in self.cached_thumbs:

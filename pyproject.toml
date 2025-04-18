@@ -4,46 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "g4x_helpers"
-dynamic = ["version"]       # ← declare version is dynamic
 description = "Python helpers for G4X."
 readme = "README.md"
 license = { text = "MIT" }
-
 authors = [
   { name = "Kenneth Gouin III", email = "kennethg@singulargenomics.com" },
 ]
-
 requires-python = ">=3.10,<3.11"
-
-dependencies = [
-  "charset-normalizer~=2.1.1",
-  "click~=8.0",
-  "click-logging~=1.0",
-  "h5py~=3.8.0",
-  "jinja2~=3.1.2",
-  "mypy~=1.0.0",
-  "myst-parser~=2.0.0",
-  "numba~=0.60.0",
-  "numexpr==2.8.4",
-  "numpy==1.24.1",
-  "pandas~=2.2.0",
-  "polars~=1.8.2",
-  "protobuf~=4.25.2",
-  "psutil~=5.9.0",
-  "pydantic~=1.9.0",
-  "s3fs~=2023.4.0",
-  "smart-open~=6.2.0",
-  "sphinx~=7.2.0",
-  "sphinx-rtd-theme~=1.3.0",
-  "traitlets~=5.14.0",
-  "scanpy~=1.11.1",
-  "Glymur~=0.13.8",
-  "tifffile~=2025.3.30",
-  "geopandas~=1.0.1",
-  "scikit-image~=0.25.2",
-  "rasterio~=1.4.3",
-  "cmcrameri~=1.9"
-]
+# declare *all* dynamic fields here at once:
+dynamic = ["version", "dependencies"]
 
 classifiers = [
   "Private :: Do Not Upload",
@@ -62,12 +31,10 @@ package-dir = { "" = "src" }
 include-package-data = true
 zip-safe = false
 
-# placeholder for future standalone modules:
-# py-modules = ["foo", "bar"]
-
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# *One* dynamic table, with both version and dependencies:
 [tool.setuptools.dynamic]
-# use a dot-only path so it passes the 'python-qualified-identifier' check
-version = { attr = "g4x_helpers.version.__version__" }
+version      = { attr = "g4x_helpers.version.__version__" }
+dependencies = { file = ["requirements.txt"] }

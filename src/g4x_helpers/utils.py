@@ -175,7 +175,7 @@ def _create_custom_out(sample: 'G4Xoutput', out_dir=None, parent_folder=None, fi
     if out_dir is None:
         custom_out = sample.run_base / parent_folder / 'custom'
     else:
-        custom_out = Path(out_dir) / parent_folder / 'custom'
+        custom_out = Path(out_dir) / parent_folder
 
     if not custom_out.exists():
         os.makedirs(custom_out)
@@ -220,6 +220,7 @@ class Roi:
         self.width = self.xlims[1] - self.xlims[0]
         self.height = self.ylims[1] - self.ylims[0]
         self.extent = (self.xlims[0], self.xlims[1], self.ylims[0], self.ylims[1])
+        self.extent_array = np.array(self.extent).astype(np.int32)
         self.lims = (self.xlims, self.ylims)
         self.order = 'xy'
 
@@ -273,6 +274,18 @@ class Roi:
                 label += 1
 
         return sub_rois
+
+    def _crop_array(self, array, thumbnail=False):
+        fct = 1 if not thumbnail else 5
+
+        xlim = (self.extent_array[0:2] / fct).astype(int)
+        ylim = (self.extent_array[2:4] / fct).astype(int)
+
+        return array[ylim[0] : ylim[1], xlim[0] : xlim[1]]
+
+    def _limit_ax(self, ax):
+        ax.set_xlim(self.xlims)
+        ax.set_ylim(self.ylims)
 
     def add_to_plot(
         self,
