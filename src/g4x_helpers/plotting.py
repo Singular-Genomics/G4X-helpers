@@ -73,23 +73,24 @@ else:
 mpl_inline.set_matplotlib_formats(inl_format, facecolor='none', bbox_inches='tight', dpi=inline_dpi)
 
 
-def montage_plot(n_plots: int=None, 
-                 n_rows: int=None,
-                 n_cols: int=None,
-                 design: Optional[List[List[int]]] = None,
-                 w_ratios: list=None, 
-                 h_ratios: list=None, 
-                 wspace: float=None, 
-                 hspace: float=None,
-                 show_labels: bool=False,
-                 label_loc: str='ul',
-                 figure = None,
-                 title: str=None,
-                 layout: str='constrained',
-                 figsize: list=[6,6],
-                 panel_size: float=None,
-                 return_fig=False
-                 ):
+def montage_plot(
+    n_plots: int = None,
+    n_rows: int = None,
+    n_cols: int = None,
+    design: Optional[List[List[int]]] = None,
+    w_ratios: list = None,
+    h_ratios: list = None,
+    wspace: float = None,
+    hspace: float = None,
+    show_labels: bool = False,
+    label_loc: str = 'ul',
+    figure=None,
+    title: str = None,
+    layout: str = 'constrained',
+    figsize: list = [6, 6],
+    panel_size: float = None,
+    return_fig=False,
+):
     """
     Complex subplot layout from a list-of-list design.
 
@@ -103,7 +104,7 @@ def montage_plot(n_plots: int=None,
 
     placing -1 into the design will create a blank space
     """
-    
+
     def _build_design(n_plots, n_rows, n_cols):
         if n_plots == 1:
             design = [[0]]
@@ -120,7 +121,7 @@ def montage_plot(n_plots: int=None,
                 design.append(row)
 
         return design
-    
+
     if not figure:
         figure = plt.figure(figsize=figsize, layout=layout)
 
@@ -128,12 +129,12 @@ def montage_plot(n_plots: int=None,
 
     if design is None and n_plots is None and n_rows is None and n_cols is None:
         n_plots = 1
-        #raise ValueError('Please specify either a design or the number of plots via `n_plots` and/or `n_rows|n_cols`.')
+        # raise ValueError('Please specify either a design or the number of plots via `n_plots` and/or `n_rows|n_cols`.')
 
     # If design is provided, use it to determine rows and columns
     if design is not None:
         if not all(isinstance(row, list) for row in design):
-            raise ValueError("Design should be a list of lists.")
+            raise ValueError('Design should be a list of lists.')
         n_rows = len(design)
         n_cols = len(design[0])
 
@@ -147,21 +148,25 @@ def montage_plot(n_plots: int=None,
         elif n_cols is not None and n_rows is None:
             n_rows = math.ceil(n_plots / n_cols)
 
-        design = _build_design(n_plots=n_plots, n_rows=n_rows, n_cols=n_cols)        
+        design = _build_design(n_plots=n_plots, n_rows=n_rows, n_cols=n_cols)
 
     elif n_plots is None and n_rows is not None and n_cols is not None:
         n_plots = n_cols * n_rows
 
         design = _build_design(n_plots=n_plots, n_rows=n_rows, n_cols=n_cols)
 
-
     if panel_size is not None:
         figure.set_size_inches(n_cols * panel_size, n_cols * panel_size)
-    
-    grid = gridspec.GridSpec(nrows=n_rows, ncols=n_cols, 
-                             figure=figure, 
-                             width_ratios=w_ratios, height_ratios=h_ratios,
-                             wspace=wspace, hspace=hspace)
+
+    grid = gridspec.GridSpec(
+        nrows=n_rows,
+        ncols=n_cols,
+        figure=figure,
+        width_ratios=w_ratios,
+        height_ratios=h_ratios,
+        wspace=wspace,
+        hspace=hspace,
+    )
 
     arr = np.array(design)
     ax_labels = np.unique(arr)
@@ -174,13 +179,13 @@ def montage_plot(n_plots: int=None,
             ax_row = np.where(arr == plot)[0]
             ax_col = np.where(arr == plot)[1]
 
-            plot_grids = grid[min(ax_row):max(ax_row)+1, min(ax_col):max(ax_col)+1]
+            plot_grids = grid[min(ax_row) : max(ax_row) + 1, min(ax_col) : max(ax_col) + 1]
             plot_layout.append(plt.subplot(plot_grids))
 
     if show_labels is not False:
         if show_labels == 'abc':
             ax_labels = [chr(65 + num) for num in ax_labels]
-        
+
         for i, ax in enumerate(plot_layout):
             place_text(ax, ax_labels[i], offset=15, size=20, loc=label_loc)
 
@@ -244,20 +249,6 @@ def downsample_mask(mask, mask_length=None, ax=None, display_size=None, downsamp
     return sampled_mask
 
 
-_unit = Literal['micron', 'px']
-_loc = Literal[
-    'upper left',
-    'upper center',
-    'upper right',
-    'center left',
-    'center',
-    'center right',
-    'lower left',
-    'lower center',
-    'lower right',
-]
-
-
 def place_text(ax, label, offset=20, loc='tl', size=20, weight='bold', color=None, **kwargs):
     if color is None:
         color = plt.rcParams['text.color']
@@ -303,6 +294,20 @@ def place_text(ax, label, offset=20, loc='tl', size=20, weight='bold', color=Non
         zorder=100,
         **kwargs,
     )
+
+
+_unit = Literal['micron', 'px']
+_loc = Literal[
+    'upper left',
+    'upper center',
+    'upper right',
+    'center left',
+    'center',
+    'center right',
+    'lower left',
+    'lower center',
+    'lower right',
+]
 
 
 def scale_bar(
