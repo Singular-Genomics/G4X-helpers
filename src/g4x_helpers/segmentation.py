@@ -1,4 +1,7 @@
-from typing import Optional, Union
+# from g4x_helpers.models import G4Xoutput
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional, Union
 
 import anndata as ad
 import numpy as np
@@ -12,15 +15,17 @@ from rasterio.transform import Affine
 from shapely.geometry import Polygon
 from skimage.measure._regionprops import RegionProperties
 
-from g4x_helpers.models import G4Xoutput
+if TYPE_CHECKING:
+    # This import is only for type checkers (mypy, PyCharm, etc.), not at runtime
+    from g4x_helpers.models import G4Xoutput
 
 
-def _make_cell_metadata(segmentation_props, cell_by_protein):
+def _make_cell_metadata(segmentation_props: pl.DataFrame, cell_by_protein: pl.DataFrame) -> pl.DataFrame:
     cell_metadata = segmentation_props.join(cell_by_protein, on='segmentation_cell_id', how='left')
     return cell_metadata
 
 
-def _make_cell_by_gene(segmentation_props, reads_new_labels):
+def _make_cell_by_gene(segmentation_props: pl.DataFrame, reads_new_labels: pl.DataFrame) -> pl.DataFrame:
     cell_by_gene = (
         reads_new_labels.filter(pl.col('segmentation_label') != 0)
         .group_by('segmentation_cell_id', 'gene_name')
@@ -36,7 +41,8 @@ def _make_cell_by_gene(segmentation_props, reads_new_labels):
     )
     return cell_by_gene
 
-def _make_adata(cell_by_gene, cell_metadata):
+
+def _make_adata(cell_by_gene: pl.DataFrame, cell_metadata: pl.DataFrame) -> ad.AnnData:
     X = cell_by_gene.drop('segmentation_cell_id').to_numpy()
 
     adata = ad.AnnData(X=X, obs=cell_metadata.drop('segmentation_label').to_pandas())
@@ -45,11 +51,11 @@ def _make_adata(cell_by_gene, cell_metadata):
     adata.var['modality'] = 'tx'
 
     sc.pp.calculate_qc_metrics(adata, inplace=True, percent_top=None)
-    
+
     return adata
 
 
-def get_mask_properties(sample: G4Xoutput, mask: np.ndarray):
+def get_mask_properties(sample: 'G4Xoutput', mask: np.ndarray) -> pl.DataFrame:
     props = skimage.measure.regionprops(mask)
 
     prop_dict = []
@@ -66,7 +72,15 @@ def get_mask_properties(sample: G4Xoutput, mask: np.ndarray):
             cell_x = centroid[0]
             cell_y = centroid[1]
 
-        prop_dict.append({'segmentation_label': label, 'segmentation_cell_id': f'{sample.sample_id}-{label}', 'area': area, 'cell_x': cell_x, 'cell_y': cell_y})
+        prop_dict.append(
+            {
+                'segmentation_label': label,
+                'segmentation_cell_id': f'{sample.sample_id}-{label}',
+                'area': area,
+                'cell_x': cell_x,
+                'cell_y': cell_y,
+            }
+        )
         # prop_dict.append({'segmentation_label': label, 'area': area, 'cell_x': cell_x, 'cell_y': cell_y})
 
     prop_dict_df = pl.DataFrame(prop_dict)
@@ -74,7 +88,7 @@ def get_mask_properties(sample: G4Xoutput, mask: np.ndarray):
     return prop_dict_df
 
 
-def assign_tx_to_mask_labels(sample: G4Xoutput, mask: np.ndarray):
+def assign_tx_to_mask_labels(sample: 'G4Xoutput', mask: np.ndarray) -> pl.DataFrame:
     reads = sample.load_transcript_table(return_polars=True)
 
     if sample._get_coord_order() == 'yx':
@@ -86,7 +100,9 @@ def assign_tx_to_mask_labels(sample: G4Xoutput, mask: np.ndarray):
     cell_ids = mask[tx_coords[:, 0].astype(int), tx_coords[:, 1].astype(int)]
 
     reads = reads.with_columns(pl.lit(cell_ids).alias('segmentation_label'))
-    reads = reads.with_columns((f'{sample.sample_id}-' + pl.col('segmentation_label').cast(pl.String)).alias('segmentation_cell_id'))
+    reads = reads.with_columns(
+        (f'{sample.sample_id}-' + pl.col('segmentation_label').cast(pl.String)).alias('segmentation_cell_id')
+    )
 
     return reads
 
@@ -112,18 +128,18 @@ def image_mask_intensity_extraction(
     intensity_means = np.bincount(mask_flat, weights=img_flat)[1:] / np.bincount(mask_flat)[1:]
 
     if lazy:
-        prop_tab = pl.LazyFrame({'label': np.arange(start=1, stop=mask_flat.max() + 1), channel_label: intensity_means}).with_columns(
-            (pl.lit(label_prefix) + pl.col('label').cast(pl.Utf8)).cast(pl.Categorical).alias('label')
-        )
+        prop_tab = pl.LazyFrame(
+            {'label': np.arange(start=1, stop=mask_flat.max() + 1), channel_label: intensity_means}
+        ).with_columns((pl.lit(label_prefix) + pl.col('label').cast(pl.Utf8)).cast(pl.Categorical).alias('label'))
     else:
-        prop_tab = pl.DataFrame({'label': np.arange(start=1, stop=mask_flat.max() + 1), channel_label: intensity_means}).with_columns(
-            (pl.lit(label_prefix) + pl.col('label').cast(pl.Utf8)).cast(pl.Categorical).alias('label')
-        )
+        prop_tab = pl.DataFrame(
+            {'label': np.arange(start=1, stop=mask_flat.max() + 1), channel_label: intensity_means}
+        ).with_columns((pl.lit(label_prefix) + pl.col('label').cast(pl.Utf8)).cast(pl.Categorical).alias('label'))
 
     return prop_tab
 
 
-def join_lazy_frames(lf_left, lf_right):
+def join_frames(lf_left, lf_right):
     return lf_left.join(lf_right, on='label', how='inner')
 
 
@@ -155,7 +171,7 @@ def _vectorize_mask(mask: np.ndarray, nudge: bool = True) -> GeoDataFrame:
     return gdf
 
 
-def rasterize_polygons(gdf, target_shape):
+def rasterize_polygons(gdf: GeoDataFrame, target_shape: tuple) -> np.ndarray:
     height, width = target_shape
     transform = Affine.identity()
 
@@ -172,7 +188,13 @@ def rasterize_polygons(gdf, target_shape):
     return label_array
 
 
-def extract_image_signals(sample: G4Xoutput, mask: np.ndarray, lazy: bool = False, include_channels: list = None, exclude_channels: list = None):
+def extract_image_signals(
+    sample: 'G4Xoutput',
+    mask: np.ndarray,
+    lazy: bool = False,
+    include_channels: list = None,
+    exclude_channels: list = None,
+) -> Union[pl.DataFrame, pl.LazyFrame]:
     if include_channels:
         signal_list = include_channels
     else:
@@ -208,8 +230,8 @@ def extract_image_signals(sample: G4Xoutput, mask: np.ndarray, lazy: bool = Fals
             if i == 0:
                 signal_df = prop_tab
             else:
-                signal_df = join_lazy_frames(signal_df, prop_tab)
+                signal_df = join_frames(signal_df, prop_tab)
 
-    signal_df = signal_df.cast({'label': pl.String}).rename({'label' : 'segmentation_cell_id'})
+    signal_df = signal_df.cast({'label': pl.String}).rename({'label': 'segmentation_cell_id'})
 
     return signal_df

@@ -1,14 +1,23 @@
+from __future__ import annotations
+
+from typing import (
+    TYPE_CHECKING,
+    Optional,
+    Union,
+)  # , Any, Callable, Generator, Iterable, Iterator, List, Literal, Tuple
+
+if TYPE_CHECKING:
+    # This import is only for type checkers (mypy, PyCharm, etc.), not at runtime
+    from g4x_helpers.models import G4Xoutput
+
 import logging
 import os
 import shutil
 from pathlib import Path
-from typing import Optional, Union  # , Any, Callable, Generator, Iterable, Iterator, List, Literal, Tuple
 
 import numpy as np
 from shapely.affinity import scale, translate
 from shapely.geometry import Polygon
-
-from .models import G4Xoutput
 
 
 def setup_logger(
@@ -79,54 +88,6 @@ def setup_logger(
         logger.addHandler(fh)
 
     return logger
-
-
-def downsample_mask(mask, mask_length=None, ax=None, display_size=None, downsample='auto'):
-    def get_ax_size(ax):
-        fig = ax.get_figure()
-
-        bbox = ax.get_position()
-        fig_width, fig_height = fig.get_size_inches()
-        width_in = bbox.width * fig_width
-        height_in = bbox.height * fig_height
-
-        ax_dim = (width_in, height_in)
-        return ax_dim
-
-    if downsample is None:
-        return mask
-
-    elif isinstance(downsample, int):
-        downsample_fct = int(downsample)
-
-    elif downsample.startswith('auto'):
-        if downsample == 'auto':
-            target_ppi = 200
-        elif downsample.startswith('auto_'):
-            target_ppi = int(downsample.split('_')[-1])
-
-        if ax is None and display_size is None:
-            raise ValueError("Either ax or display_size must be provided when downsample is 'auto'")
-        elif ax is None and display_size:
-            panel_size = display_size
-        elif ax and display_size is None:
-            ax_dim = get_ax_size(ax)
-            panel_size = np.array(ax_dim).max()
-
-        if mask_length is None:
-            mask_length = np.array(mask.shape).max()
-
-        downsample_fct = int((mask_length / panel_size) / target_ppi)
-        # print(f'Downsample factor: {downsample_fct}')
-
-    else:
-        raise ValueError("downsample must be None, int or 'auto'")
-
-    if downsample_fct > 0:
-        sampled_mask = mask[::downsample_fct, ::downsample_fct].copy()
-    else:
-        sampled_mask = mask.copy()
-    return sampled_mask
 
 
 def find_tissue(coords, ubins=100, expand=0.1, order='yx', threshold=0.1, smp_shape=(19200, 15232)):
@@ -208,6 +169,22 @@ def find_tissue(coords, ubins=100, expand=0.1, order='yx', threshold=0.1, smp_sh
     final_centroid = ((new_roi_1_min + new_roi_1_max) // 2, (new_roi_2_min + new_roi_2_max) // 2)
 
     return {'lims': final_lims, 'centroid': final_centroid}
+
+
+def _create_custom_out(sample: 'G4Xoutput', out_dir=None, parent_folder=None, file_name=None):
+    if out_dir is None:
+        custom_out = sample.run_base / parent_folder / 'custom'
+    else:
+        custom_out = Path(out_dir) / parent_folder / 'custom'
+
+    if not custom_out.exists():
+        os.makedirs(custom_out)
+    else:
+        shutil.rmtree(custom_out)
+        os.makedirs(custom_out)
+
+    outfile = custom_out / file_name
+    return outfile
 
 
 class Roi:
@@ -297,35 +274,21 @@ class Roi:
 
         return sub_rois
 
+    def add_to_plot(
+        self,
+        ax,
+        color='white',
+        lw=2,
+        label=True,
+        label_position='top_left',
+        prefix='ROI ',
+        font_size=12,
+        pad=0.05,
+        fontweight='bold',
+    ):
+        import matplotlib.patches as patches
 
-def add_rois(
-    ax,
-    rois=list,
-    color='white',
-    lw=2,
-    order='xy',
-    label=True,
-    label_position='top_left',
-    prefix='ROI ',
-    font_size=12,
-    pad=0.05,
-):
-    import matplotlib.patches as patches
-
-    if not isinstance(rois, list):
-        rois = [rois]
-
-    for idx, roi in enumerate(rois):
-        if hasattr(roi, 'lims'):
-            xvals, yvals = roi.lims
-        else:
-            if order == 'xy':
-                xvals, yvals = roi[0], roi[1]
-            elif order == 'yx':
-                yvals, xvals = roi[0], roi[1]
-            elif order not in ['xy', 'yx']:
-                print("order must be specified as 'xy' or 'yx'")
-                return
+        xvals, yvals = self.lims
 
         x, y = xvals[0], yvals[0]
         w, h = xvals[1] - x, yvals[1] - y
@@ -335,8 +298,8 @@ def add_rois(
 
         # If label is True, add a label at the desired location using relative padding.
         if label:
-            if hasattr(roi, 'name'):
-                label_text = roi.name
+            if hasattr(self, 'name'):
+                label_text = self.name
                 if label_text == 'A':
                     label_position = 'top_left'
                 elif label_text == 'B':
@@ -347,7 +310,7 @@ def add_rois(
                     label_position = 'bottom_right'
 
             else:
-                label_text = f'{prefix}{idx + 1}'
+                label_text = f'{prefix}'
             # Calculate relative padding in data units.
             pad_x = pad * w
             pad_y = pad * h
@@ -387,24 +350,8 @@ def add_rois(
                 label_text,
                 color=color,
                 fontsize=font_size,
-                fontweight='bold',
+                fontweight=fontweight,
                 verticalalignment=va,
                 horizontalalignment=ha,
                 zorder=11,
             )
-
-
-def _create_custom_out(sample: G4Xoutput, out_dir=None, parent_folder=None, file_name=None):
-    if out_dir is None:
-        custom_out = sample.run_base / parent_folder / 'custom'
-    else:
-        custom_out = Path(out_dir) / parent_folder / 'custom'
-
-    if not custom_out.exists():
-        os.makedirs(custom_out)
-    else:
-        shutil.rmtree(custom_out)
-        os.makedirs(custom_out)
-
-    outfile = custom_out / file_name
-    return outfile

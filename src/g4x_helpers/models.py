@@ -16,6 +16,7 @@ import tifffile
 from geopandas.geodataframe import GeoDataFrame
 from packaging import version
 
+import g4x_helpers.plotting as g4pl
 import g4x_helpers.segmentation as reseg
 import g4x_helpers.utils as utils
 
@@ -62,9 +63,13 @@ class G4Xoutput:
             'tissue': roi_tissue,
             'A': roi_tissue.sub_rois[0],
             'B': roi_tissue.sub_rois[1],
-            'C': roi_tissue.sub_rois[2],
-            'D': roi_tissue.sub_rois[3],
+            'C': roi_tissue.scale(0.5),
+            'D': roi_tissue.sub_rois[2],
+            'E': roi_tissue.sub_rois[3],
         }
+
+        self.cached_images = {}
+        self.cached_thumbs = {}
 
     @property
     def logger(self) -> logging.Logger:
@@ -106,7 +111,9 @@ class G4Xoutput:
             clear_handlers=clear_handlers,
         )
 
-    def thumb(self, size=3, ax=None, crop='tissue', scale=1, show_tissue_bounds=True, background=True):
+    def thumb(
+        self, size=3, ax=None, crop='tissue', scale=1, scale_bar: bool = True, show_tissue_bounds=True, background=True
+    ):
         if ax is None:
             fig, ax = plt.subplots(figsize=(size, size), dpi=300, layout='compressed')
 
@@ -127,14 +134,21 @@ class G4Xoutput:
             roi = roi.scale(scale)
 
         display_size = np.max([roi.width / 5, roi.height / 5])
-        plot_image = utils.downsample_mask(plot_image, ax=ax, mask_length=display_size, downsample='auto')
+        plot_image = g4pl.downsample_mask(plot_image, ax=ax, mask_length=display_size, downsample='auto')
 
         ax.imshow(plot_image, extent=self.rois['data'].extent, origin='lower')
 
         if show_tissue_bounds:
             if crop == 'data':
                 crop_roi = self.rois['tissue']
-                utils.add_rois(ax, [crop_roi], color='orange', label=False)
+                crop_roi.add_to_plot(ax, color='orange', label=True, pad=-0.1, label_position='top_center')
+
+        if scale_bar:
+            um = roi.width * 0.3125
+            rounded_scale = round((um / 10) / 50) * 100
+            g4pl.scale_bar(
+                ax, length=rounded_scale, unit='micron', theme='light', background=True, lw=1, background_alpha=0.75
+            )
 
         ax.set_xlim(roi.xlims)
         ax.set_ylim(roi.ylims)
@@ -214,6 +228,10 @@ class G4Xoutput:
 
         return contents
 
+    def add_roi(self, roi_name: str, xlims: tuple, ylims: tuple):
+        add_roi = utils.Roi(xlims=xlims, ylims=ylims, name=roi_name)
+        self.rois[roi_name] = add_roi
+
     def run_g4x_segmentation(
         self, labels: GeoDataFrame | np.ndarray, out_dir=None, include_channels=None, exclude_channels=None
     ):
@@ -261,6 +279,111 @@ class G4Xoutput:
 
         outfile = utils._create_custom_out(self, out_dir, 'single_cell_data', 'cell_metadata.csv.gz')
         adata.obs.to_csv(outfile)
+
+    def plot_signals(self, signals, size=3, crop='tissue', thumbnail=True, **kwargs):
+        if not isinstance(signals, list):
+            signals = [signals]
+
+        axs = g4pl.montage_plot(len(signals), panel_size=size, n_cols=4, layout='compressed', hspace=0.1)
+
+        if len(signals) == 1:
+            axs = [axs]
+
+        for ax, signal in zip(axs, signals):
+            self.plot_signal(signal=signal, size=size, ax=ax, crop=crop, thumbnail=thumbnail, **kwargs)
+
+    def plot_signal(
+        self, signal=None, size=4.5, ax=None, crop='tissue', scale_bar=True, thumbnail=False, clip=True, scale=1
+    ):
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(size, size), layout='compressed')
+        else:
+            fig = ax.figure
+
+        ax.set_title(signal)
+
+        if not thumbnail and signal in self.cached_images:  # print(f'Using cached image for {signal}')
+            plot_image, vmax, vmin = self.cached_images[signal].values()
+
+        elif thumbnail and signal in self.cached_thumbs:  # print(f'Using cached thumb for {signal}')
+            plot_image, vmax, vmin = self.cached_thumbs[signal].values()
+
+        else:  # print(f'Loading image for {signal}')
+            plot_image, vmax, vmin = self.load_image(signal, thumbnail=thumbnail).values()
+
+        if not clip:
+            vmax = vmin = None
+        elif isinstance(clip, tuple):
+            vmin, vmax = clip
+
+        roi = self.rois['data'] if crop == 'data' else self.rois[crop]
+
+        if scale != 1:
+            roi = roi.scale(scale)
+
+        fct = 5 if thumbnail else 1
+        roi_size = np.max([roi.width / fct, roi.height / fct])
+
+        plot_image = g4pl.downsample_mask(plot_image, mask_length=roi_size, ax=ax, downsample='auto')
+
+        # print(f'Plotting {signal} with vmin={vmin}, vmax={vmax} and size {plot_image.shape}')
+        im = ax.imshow(
+            plot_image, vmin=vmin, vmax=vmax, cmap=g4pl.cm.lipari, extent=self.rois['data'].extent, origin='lower'
+        )
+        g4pl._add_colorbar(ax=ax, cax=im, loc='bottom')
+        # fig.colorbar(im, ax=ax, orientation='horizontal', pad=0.025, fraction=0.05, aspect=35)
+
+        if scale_bar:
+            um = roi.width * 0.3125
+            rounded_scale = round((um / 10) / 50) * 100
+            g4pl.scale_bar(
+                ax, length=rounded_scale, unit='micron', theme='dark', background=True, lw=1, background_alpha=0.5
+            )
+
+        ax.set_xlim(roi.xlims)
+        ax.set_ylim(roi.ylims)
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    def load_image(self, signal=str, thumbnail=False):
+        def _get_image(img_file):
+            if img_file.suffix == '.png':
+                return plt.imread(img_file)
+            else:
+                return glymur.Jp2k(img_file)[:]
+
+        if signal in ('h_and_e', 'nuclear', 'eosin'):
+            folder = 'h_and_e'
+        else:
+            folder = 'protein'
+
+        img_folder = self.run_base / folder
+        filename = f'{signal}_thumbnail.png' if thumbnail else f'{signal}.jp2'
+        img_file = img_folder / filename
+
+        if thumbnail and signal not in self.cached_thumbs:
+            image = _get_image(img_file)
+
+            vmax = np.quantile(image, 0.995)
+            vmin = vmax * 0.05
+
+            self.cached_thumbs[signal] = {'img': image, 'vmax': vmax, 'vmin': vmin}
+            return self.cached_thumbs[signal]
+
+        elif not thumbnail and signal not in self.cached_images:
+            image = _get_image(img_file)
+
+            vmax = np.quantile(image, 0.995)
+            vmin = vmax * 0.05
+
+            self.cached_images[signal] = {'img': image, 'vmax': vmax, 'vmin': vmin}
+            return self.cached_images[signal]
+
+        elif thumbnail and signal in self.cached_thumbs:
+            return self.cached_thumbs[signal]
+
+        elif not thumbnail and signal in self.cached_images:
+            return self.cached_images[signal]
 
     # region internal
     def _get_image(self, parent_directory: str, pattern: str) -> np.ndarray:
