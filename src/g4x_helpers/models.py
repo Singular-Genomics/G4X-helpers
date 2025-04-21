@@ -5,7 +5,7 @@ from dataclasses import InitVar, dataclass  # , asdict, field
 from pathlib import Path
 from typing import Optional, Union  # , Tuple, Any, Generator, Iterable, Iterator, List, Literal
 
-import anndata
+import anndata as ad
 import glymur
 import matplotlib.pyplot as plt
 import numpy as np
@@ -136,7 +136,7 @@ class G4Xoutput:
 
     def load_adata(
         self, *, remove_nontargeting: Optional[bool] = True, load_clustering: Optional[bool] = True
-    ) -> anndata.AnnData:
+    ) -> ad.AnnData:
         adata = sc.read_h5ad(self.run_base / 'single_cell_data' / 'feature_matrix.h5')
 
         # TODO this may conflict with the last line?!
