@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from typing import (
     TYPE_CHECKING,
+    List,
     Optional,
+    Tuple,
     Union,
-)  # , Any, Callable, Generator, Iterable, Iterator, List, Literal, Tuple
+)  # , Any, Callable, Generator, Iterable, Iterator, Literal
 
 if TYPE_CHECKING:
     # This import is only for type checkers (mypy, PyCharm, etc.), not at runtime
@@ -15,9 +17,14 @@ import os
 import shutil
 from pathlib import Path
 
+import matplotlib.colors as mcolors
 import numpy as np
+from scipy.ndimage import generic_filter
+from scipy.stats import median_abs_deviation
 from shapely.affinity import scale, translate
 from shapely.geometry import Polygon
+from skimage import exposure
+from skimage.filters import threshold_otsu
 
 
 def setup_logger(
@@ -189,7 +196,15 @@ def _create_custom_out(sample: 'G4Xoutput', out_dir=None, parent_folder=None, fi
 
 class Roi:
     def __init__(
-        self, xlims=None, ylims=None, extent=None, center=None, edge_size=None, polygon=None, name='ROI', sub_rois=None
+        self,
+        xlims: Optional[Tuple[int, int]] = None,
+        ylims: Optional[Tuple[int, int]] = None,
+        extent: Optional[List[int]] = None,
+        center: Optional[Tuple[int, int]] = None,
+        edge_size: Optional[int] = None,
+        polygon: Optional[Polygon] = None,
+        name: str = 'ROI',
+        sub_rois: Optional[int] = None,
     ):
         self.name = name
 
@@ -324,37 +339,31 @@ class Roi:
 
             else:
                 label_text = f'{prefix}'
+
             # Calculate relative padding in data units.
             pad_x = pad * w
             pad_y = pad * h
 
-            # Determine text coordinates and alignments based on label_position.
-            if label_position == 'top_left':
-                tx, ty = x + pad_x, y + h - pad_y
-                ha, va = 'left', 'top'
-            elif label_position == 'top_right':
-                tx, ty = x + w - pad_x, y + h - pad_y
-                ha, va = 'right', 'top'
-            elif label_position == 'bottom_left':
-                tx, ty = x + pad_x, y + pad_y
-                ha, va = 'left', 'bottom'
-            elif label_position == 'bottom_right':
-                tx, ty = x + w - pad_x, y + pad_y
-                ha, va = 'right', 'bottom'
-            elif label_position == 'top_center':
-                tx, ty = x + w / 2, y + h - pad_y
-                ha, va = 'center', 'top'
-            elif label_position == 'bottom_center':
-                tx, ty = x + w / 2, y + pad_y
-                ha, va = 'center', 'bottom'
-            elif label_position == 'center':
-                tx, ty = x + w / 2, y + h / 2
-                ha, va = 'center', 'center'
-            else:
-                print(
-                    "Invalid label_position. Use one of ['top_left', 'top_right', 'bottom_left', 'bottom_right', 'top_center', 'bottom_center', 'center']."
-                )
-                return
+            position_map = {
+                'top_left': (lambda x, y, w, h, pad_x, pad_y: (x + pad_x, y + h - pad_y), 'left', 'top'),
+                'top_right': (lambda x, y, w, h, pad_x, pad_y: (x + w - pad_x, y + h - pad_y), 'right', 'top'),
+                'bottom_left': (lambda x, y, w, h, pad_x, pad_y: (x + pad_x, y + pad_y), 'left', 'bottom'),
+                'bottom_right': (lambda x, y, w, h, pad_x, pad_y: (x + w - pad_x, y + pad_y), 'right', 'bottom'),
+                'top_center': (lambda x, y, w, h, pad_x, pad_y: (x + w / 2, y + h - pad_y), 'center', 'top'),
+                'bottom_center': (lambda x, y, w, h, pad_x, pad_y: (x + w / 2, y + pad_y), 'center', 'bottom'),
+                'center': (lambda x, y, w, h, pad_x, pad_y: (x + w / 2, y + h / 2), 'center', 'center'),
+            }
+
+            def get_label_position(label_position, x, y, w, h, pad_x, pad_y):
+                entry = position_map.get(label_position)
+                if entry is None:
+                    print('Invalid label_position. Use one of', list(position_map.keys()))
+                    return
+                position_fn, ha, va = entry
+                tx, ty = position_fn(x, y, w, h, pad_x, pad_y)
+                return tx, ty, ha, va
+
+            tx, ty, ha, va = get_label_position(label_position, x, y, w, h, pad_x, pad_y)
 
             # Add the label text to the axis.
             ax.text(
@@ -368,3 +377,134 @@ class Roi:
                 horizontalalignment=ha,
                 zorder=11,
             )
+
+
+def _normalize(array):
+    min_val = array.min()
+    max_val = array.max()
+    return (array - min_val) / (max_val - min_val) if max_val > min_val else array
+
+
+def _apply_thresholds(array, tmin, tmax):
+    array = np.clip(array, a_min=tmin, a_max=tmax)
+    array_normed = _normalize(array)
+
+    return array_normed
+
+
+def _additive_blend(prot_arrays, marker_colors, clip_mode='hard'):
+    rgb_images = []
+    for i in range(len(prot_arrays)):
+        rgb_images.append(np.stack([prot_arrays[i]] * 3, axis=-1) * np.array(marker_colors[i]))
+
+    blended_image = np.zeros_like(rgb_images[0])
+
+    for img in rgb_images:
+        blended_image += img
+
+    if clip_mode == 'hard':
+        blended_image = np.clip(blended_image, 0, 255).astype(np.uint8)
+    elif clip_mode == 'soft':
+        blended_image = _normalize(blended_image) * 255
+        blended_image = blended_image.astype(np.uint8)
+    elif clip_mode is None:
+        pass
+
+    return blended_image
+
+
+def blend_protein_images(sample, roi=None, query=None, marker_colors=None, cutoffs='global'):
+    
+    # ___> gather images
+    signals = []
+    for q in query:
+        
+        img, vmin, vmax = sample.load_image(q, thumbnail=False, return_th=True)
+        pinfo = {'name': q, 'img': img, 'vmin': vmin, 'vmax': vmax}
+
+        signals.append(pinfo)
+
+    # ___> process images
+    processed_arrays = {}
+    for protein, color in zip(signals, marker_colors):
+        if roi is None:
+            cropped_array = protein['img']
+        else:
+            cropped_array = roi._crop_array(protein['img'])
+
+        if cutoffs == 'global':
+            vmin, vmax = protein['vmin'], protein['vmax']
+        elif cutoffs == 'local':
+            vmin, vmax = get_cutoffs_histogram(cropped_array, low_frac=0.5, high_frac=0.995)
+        else:
+            vmin, vmax = cutoffs
+
+        th_array = _apply_thresholds(cropped_array, vmin, vmax)
+        processed_arrays[protein['name']] = {'img': th_array, 'vmin': vmin, 'vmax': vmax, 'color': color}
+
+    arrays = [value['img'] for key, value in processed_arrays.items() if 'img' in value]
+    protein_colors = [np.array(mcolors.to_rgb(c)) * 255 for c in marker_colors]
+    blended_image = _additive_blend(arrays, protein_colors, clip_mode='hard')
+
+    for key in processed_arrays:
+        if 'img' in processed_arrays[key]:
+            del processed_arrays[key]['img']
+
+    processed_arrays['blended'] = blended_image
+
+    return processed_arrays
+
+
+def get_cutoffs_quantile(image, lower=0.05, upper=0.995):
+    vmin, vmax = np.quantile(image, lower), np.quantile(image, upper)
+    return vmin, vmax
+
+
+def get_cutoffs_min_ratio(image, lower=0.05, upper=0.995):
+    vmax = np.quantile(image, upper)
+    vmin = vmax * lower
+    return vmin, vmax
+
+
+def get_cutoffs_otsu(image, upper_quantile=0.995):
+    vmin = threshold_otsu(image)
+    vmax = np.quantile(image, upper_quantile)
+    return vmin, vmax
+
+
+def get_cutoffs_robust(image, z_thresh=3.5):
+    flat = image.flatten()
+    med = np.median(flat)
+    mad = median_abs_deviation(flat, scale='normal')
+    z_scores = (flat - med) / mad
+    filtered = flat[(z_scores > -z_thresh) & (z_scores < z_thresh)]
+    return np.min(filtered), np.max(filtered)
+
+
+def get_cutoffs_histogram(image, low_frac=0.001, high_frac=0.995):
+    hist, bin_edges = exposure.histogram(image)
+    cdf = np.cumsum(hist) / hist.sum()
+    vmin = bin_edges[np.searchsorted(cdf, low_frac)]
+    vmax = bin_edges[np.searchsorted(cdf, high_frac)]
+    return vmin, vmax
+
+
+def get_cutoffs_local_percentile(image, min_percentile=1, max_percentile=99, size=51):
+    def local_percentile(image, percentile, size=51):
+        def func(x):
+            return np.percentile(x, percentile)
+
+        return generic_filter(image, func, size=(size, size))
+
+    vmin_map = local_percentile(image, min_percentile, size)  # local low-end, could be noise
+    vmax_map = local_percentile(image, max_percentile, size)  # local high-end, reduces outliers
+
+    # clipped = np.clip(image, vmin_map, vmax_map)
+
+    vmin = np.mean(vmin_map)
+    vmax = np.mean(vmax_map)
+    return vmin, vmax
+
+
+def apply_clahe(image, kernel_size=(50, 50), clip_limit=0.01):
+    return exposure.equalize_adapthist(image, kernel_size=kernel_size, clip_limit=clip_limit)

@@ -2,8 +2,9 @@ import json
 import logging
 import os
 from dataclasses import InitVar, dataclass  # , asdict, field
+from functools import lru_cache
 from pathlib import Path
-from typing import Optional, Union  # , Tuple, Any, Generator, Iterable, Iterator, List, Literal
+from typing import Optional, Tuple, Union  # , Any, Generator, Iterable, Iterator, List, Literal
 
 import anndata as ad
 import glymur
@@ -68,9 +69,6 @@ class G4Xoutput:
             'E': roi_tissue.sub_rois[3],
         }
 
-        self.cached_images = {}
-        self.cached_thumbs = {}
-
     @property
     def logger(self) -> logging.Logger:
         return logging.getLogger(f'{self.sample_id}_G4XOutput')
@@ -134,6 +132,8 @@ class G4Xoutput:
                 crop_roi = self.rois['tissue']
                 crop_roi.add_to_plot(ax, color='orange', label=True, pad=-0.1, label_position='top_center')
 
+        plt.show()
+
     def load_adata(
         self, *, remove_nontargeting: Optional[bool] = True, load_clustering: Optional[bool] = True
     ) -> ad.AnnData:
@@ -167,16 +167,16 @@ class G4Xoutput:
             self.logger.error('No protein results.')
             return None
         assert protein in self.proteins, print(f'{protein} not in protein panel.')
-        return self._get_image('protein', f'{protein}.*')
+        return self.load_image(signal=protein, thumbnail=False, return_th=False)
 
     def load_he_image(self) -> np.ndarray:
-        return self._get_image('h_and_e', 'h_and_e.*')
+        return self.load_image(signal='h_and_e', thumbnail=False, return_th=False)
 
     def load_nuclear_image(self) -> np.ndarray:
-        return self._get_image('h_and_e', 'nuclear.*')
+        return self.load_image(signal='nuclear', thumbnail=False, return_th=False)
 
     def load_eosin_image(self) -> np.ndarray:
-        return self._get_image('h_and_e', 'eosin.*')
+        return self.load_image(signal='eosin', thumbnail=False, return_th=False)
 
     def load_segmentation(self, expanded: Optional[bool] = True) -> np.ndarray:
         arr = np.load(self.run_base / 'segmentation' / 'segmentation_mask.npz')
@@ -191,7 +191,7 @@ class G4Xoutput:
             reads = reads.to_pandas()
         return reads
 
-    def list_contents(self, subdir=None):
+    def list_content(self, subdir=None):
         if subdir is None:
             subdir = ''
 
@@ -268,8 +268,14 @@ class G4Xoutput:
         if len(signals) == 1:
             axs = [axs]
 
-        for ax, signal in zip(axs, signals):
-            self.plot_signal(signal=signal, size=size, ax=ax, view=view, thumbnail=thumbnail, **kwargs)
+        for i, (ax, signal) in enumerate(zip(axs, signals)):
+            if thumbnail:
+                cbar = True if i == len(signals) - 1 else False
+            else:
+                cbar = True
+            self.plot_signal(signal=signal, size=size, ax=ax, view=view, thumbnail=thumbnail, colorbar=cbar, **kwargs)
+
+        plt.show()
 
     def plot_signal(
         self,
@@ -279,27 +285,21 @@ class G4Xoutput:
         size=4.5,
         clip=True,
         scale_bar=True,
+        colorbar=True,
         thumbnail=False,
         ax=None,
         return_ax=False,
     ):
         if ax is None:
-            fig, ax = plt.subplots(figsize=(size, size), layout='compressed')
-        else:
-            fig = ax.figure
+            fig, ax = g4pl.montage_plot(1, panel_size=size, layout='compressed', return_fig=True)
+        # else:
+        #     fig = ax.figure
 
         ax.set_title(signal)
 
-        if not thumbnail and signal in self.cached_images:  # print(f'Using cached image for {signal}')
-            plot_image, vmax, vmin = self.cached_images[signal].values()
+        plot_image, vmax, vmin = self.load_image(signal, thumbnail=thumbnail, return_th=True)
 
-        elif thumbnail and signal in self.cached_thumbs:  # print(f'Using cached thumb for {signal}')
-            plot_image, vmax, vmin = self.cached_thumbs[signal].values()
-
-        else:  # print(f'Loading image for {signal}')
-            plot_image, vmax, vmin = self.load_image(signal, thumbnail=thumbnail).values()
-
-        if not clip:
+        if not clip or thumbnail:
             vmax = vmin = None
         elif isinstance(clip, tuple):
             vmin, vmax = clip
@@ -309,74 +309,88 @@ class G4Xoutput:
         if scale != 1:
             roi = roi.scale(scale)
 
-        # fct = 5 if thumbnail else 1
-        # roi_size = np.max([roi.width / fct, roi.height / fct])
-
         crop_arr = roi._crop_array(plot_image, thumbnail=thumbnail)
-        plot_image = g4pl.downsample_mask(crop_arr, mask_length=None, ax=ax, downsample='auto')
+        im = g4pl._show_image(crop_arr, roi, ax, vmin=vmin, vmax=vmax, cmap=g4pl.cm.lipari, scale_bar=scale_bar)
 
-        # print(f'Plotting {signal} with vmin={vmin}, vmax={vmax} and size {plot_image.shape}')
-        im = ax.imshow(plot_image, vmin=vmin, vmax=vmax, cmap=g4pl.cm.lipari, extent=roi.extent_array, origin='lower')
+        if signal != 'h_and_e' and colorbar:
+            loc = 'right' if thumbnail else 'bottom'
+            g4pl._add_colorbar(ax=ax, cax=im, loc=loc)
+            # fig.colorbar(im, ax=ax, orientation='vertical', pad=0.025, fraction=0.05, aspect=35)
 
-        if signal != 'h_and_e':
-            g4pl._add_colorbar(ax=ax, cax=im, loc='bottom')
-        # fig.colorbar(im, ax=ax, orientation='horizontal', pad=0.025, fraction=0.05, aspect=35)
-
-        if scale_bar:
-            um = roi.width * 0.3125
-            rounded_scale = g4pl._round_scale(um / 5)
-            theme = 'light' if signal == 'h_and_e' else 'dark'
-            g4pl.scale_bar(
-                ax, length=rounded_scale, unit='micron', theme=theme, background=True, lw=1, background_alpha=0.5
-            )
-
-        roi._limit_ax(ax)
         ax.set_xticks([])
         ax.set_yticks([])
 
         if return_ax:
             return ax
 
-    def load_image(self, signal=str, thumbnail=False):
-        def _get_image(img_file):
-            if img_file.suffix == '.png':
-                return plt.imread(img_file)
-            else:
-                return glymur.Jp2k(img_file)[:]
+    def blend_signals(self, query: list, colors: list, roi='tissue', scale=1, plot=True, size=4.5, ax=None):
+        roi = self.rois[roi].scale(scale)
 
-        if signal in ('h_and_e', 'nuclear', 'eosin'):
-            folder = 'h_and_e'
+        processed_arrays = utils.blend_protein_images(
+            self, roi=roi, query=query, marker_colors=colors, cutoffs='global'
+        )
+
+        if not plot:
+            return processed_arrays
         else:
-            folder = 'protein'
+            from matplotlib.lines import Line2D
 
-        img_folder = self.run_base / folder
-        th_suffix = '.jpg' if signal == 'h_and_e' else '.png'
-        filename = f'{signal}_thumbnail{th_suffix}' if thumbnail else f'{signal}.jp2'
-        img_file = img_folder / filename
+            image = processed_arrays['blended']
 
-        if thumbnail and signal not in self.cached_thumbs:
-            image = _get_image(img_file)
+            if ax is None:
+                ax = g4pl.montage_plot(1, panel_size=size)
 
-            vmax = np.quantile(image, 0.995)
-            vmin = vmax * 0.05
+            _ = g4pl._show_image(image, roi, ax, vmin=None, vmax=None, cmap=None)
 
-            self.cached_thumbs[signal] = {'img': image, 'vmax': vmax, 'vmin': vmin}
-            return self.cached_thumbs[signal]
+            # build one circular‐marker handle per channel
+            legend_elems = []
+            for p, props in processed_arrays.items():
+                if p == 'blended':
+                    continue
+                vmin, vmax, color = props['vmin'], props['vmax'], props['color']
+                label = f'{p:6s}{vmin:.0f}:{vmax:.0f}'
+                legend_elems.append(
+                    Line2D(
+                        [],
+                        [],
+                        linestyle='None',
+                        marker='o',
+                        markersize=8,
+                        markerfacecolor=color.lower(),
+                        markeredgecolor='none',
+                        label=label,
+                    )
+                )
 
-        elif not thumbnail and signal not in self.cached_images:
-            image = _get_image(img_file)
+            legend = ax.legend(
+                handles=legend_elems,
+                loc='lower right',
+                fontsize=5,
+                frameon=True,
+                handletextpad=0,
+                prop={'family': 'monospace', 'weight': 'normal'},
+                framealpha=0.9,
+                borderpad=0.5,
+                borderaxespad=1.0,
+            )
 
-            vmax = np.quantile(image, 0.995)
-            vmin = vmax * 0.05
+            frame = legend.get_frame()
+            frame.set_linewidth(0)  # Set the edge thickness
+            frame.set_boxstyle('round,pad=0.1, rounding_size=0')  # Set corner radius
 
-            self.cached_images[signal] = {'img': image, 'vmax': vmax, 'vmin': vmin}
-            return self.cached_images[signal]
+            ax.set_xticks([])
+            ax.set_yticks([])
+            plt.show()
 
-        elif thumbnail and signal in self.cached_thumbs:
-            return self.cached_thumbs[signal]
+    def load_image(
+        self, signal: str, thumbnail: bool = False, return_th: bool = False
+    ) -> Tuple[np.ndarray, float, float]:
+        img, vmin, vmax = _load_image_cached(self.run_base, signal, thumbnail)
 
-        elif not thumbnail and signal in self.cached_images:
-            return self.cached_images[signal]
+        if not return_th:
+            return img
+        else:
+            return img, vmin, vmax
 
     # region internal
     def _get_image(self, parent_directory: str, pattern: str) -> np.ndarray:
@@ -443,6 +457,11 @@ class G4Xoutput:
         self.tissue_center = lims['centroid']
         self.tissue_extent = lims_to_extent(lims['lims'])
 
+    def _clear_image_cache(self):
+        """Evict all cached images so subsequent calls re-read from disk."""
+        _load_image_cached.cache_clear()
+
+    # region dunder
     def __repr__(self):
         machine_num = self.machine.removeprefix('g4-').lstrip('0')
         mac_run_id = f'G{machine_num.zfill(2)}-{self.run_id}'
@@ -457,3 +476,30 @@ class G4Xoutput:
             repr_string += f'Protein panel with {len(self.proteins)} proteins\t[{", ".join(self.proteins[0:5])} ... ]\n'
 
         return repr_string
+
+
+# region static
+@lru_cache(maxsize=None)
+def _load_image_cached(run_base: str, signal: str, thumbnail: bool) -> Tuple[np.ndarray, float, float]:
+    """This is cached per (run_base, signal, thumbnail)."""
+    base = Path(run_base)
+
+    folder = 'h_and_e' if signal in ('h_and_e', 'nuclear', 'eosin') else 'protein'
+
+    p = base / folder
+    suffix = '.jpg' if (thumbnail and signal == 'h_and_e') else ('.png' if thumbnail else '.jp2')
+
+    fname = f'{signal}_thumbnail{suffix}' if thumbnail else f'{signal}.jp2'
+    img_file = p / fname
+
+    if img_file.suffix == '.png':
+        img = plt.imread(img_file)
+    else:
+        img = glymur.Jp2k(str(img_file))[:]
+
+    if signal != 'h_and_e':
+        vmin, vmax = utils.get_cutoffs_histogram(img, low_frac=0.5, high_frac=0.995)
+    else:
+        vmin = vmax = None
+
+    return img, vmin, vmax
