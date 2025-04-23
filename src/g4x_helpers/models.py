@@ -380,7 +380,9 @@ class G4Xoutput:
 
             ax.set_xticks([])
             ax.set_yticks([])
-            plt.show()
+            
+            if not ax:
+                plt.show()
 
     def load_image(
         self, signal: str, thumbnail: bool = False, return_th: bool = False
