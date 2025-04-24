@@ -132,7 +132,8 @@ class G4Xoutput:
                 crop_roi = self.rois['tissue']
                 crop_roi.add_to_plot(ax, color='orange', label=True, pad=-0.1, label_position='top_center')
 
-        plt.show()
+        if not ax:
+            plt.show()
 
     def load_adata(
         self, *, remove_nontargeting: Optional[bool] = True, load_clustering: Optional[bool] = True
@@ -207,9 +208,14 @@ class G4Xoutput:
 
         return contents
 
-    def add_roi(self, roi_name: str, xlims: tuple, ylims: tuple):
-        add_roi = utils.Roi(xlims=xlims, ylims=ylims, name=roi_name)
-        self.rois[roi_name] = add_roi
+    def add_roi(self, roi=None, roi_name: str=None, xlims: tuple=None, ylims: tuple=None):
+        if roi is None:
+            add_roi = utils.Roi(xlims=xlims, ylims=ylims, name=roi_name)
+            self.rois[roi_name] = add_roi
+        else:
+            self.rois[roi.name] = roi
+        
+        
 
     def run_g4x_segmentation(
         self, labels: GeoDataFrame | np.ndarray, out_dir=None, include_channels=None, exclude_channels=None

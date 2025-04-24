@@ -308,6 +308,7 @@ class Roi:
         color='white',
         lw=2,
         label=True,
+        scale=1,
         label_position='top_left',
         prefix='ROI ',
         font_size=12,
@@ -316,7 +317,10 @@ class Roi:
     ):
         import matplotlib.patches as patches
 
-        xvals, yvals = self.lims
+        #if scale != 1:
+        scaled_roi = self.scale(scale)
+        
+        xvals, yvals = scaled_roi.lims
 
         x, y = xvals[0], yvals[0]
         w, h = xvals[1] - x, yvals[1] - y
