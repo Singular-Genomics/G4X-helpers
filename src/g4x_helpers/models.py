@@ -87,8 +87,8 @@ class G4Xoutput:
         ):
             setattr(self, key, self.run_meta.get(key))
 
-        self.includes_transcript = True if self.transcript_panel is not None else False
-        self.includes_protein = True if self.protein_panel is not None else False
+        self.includes_transcript = False if self.transcript_panel == [] else True
+        self.includes_protein = False if self.protein_panel == [] else True
 
     # region methods
     def setup_logger(
@@ -129,8 +129,7 @@ class G4Xoutput:
 
         if show_tissue_bounds:
             if view == 'data':
-                crop_roi = self.rois['tissue']
-                crop_roi.add_to_plot(ax, color='orange', label=True, pad=-0.1, label_position='top_center')
+                self.rois['tissue'].add_to_plot(ax, color='0.2', label=True, pad=0.025, label_position='bottom_right')
 
         if not ax:
             plt.show()
@@ -208,14 +207,12 @@ class G4Xoutput:
 
         return contents
 
-    def add_roi(self, roi=None, roi_name: str=None, xlims: tuple=None, ylims: tuple=None):
+    def add_roi(self, roi=None, roi_name: str = None, xlims: tuple = None, ylims: tuple = None):
         if roi is None:
             add_roi = utils.Roi(xlims=xlims, ylims=ylims, name=roi_name)
             self.rois[roi_name] = add_roi
         else:
             self.rois[roi.name] = roi
-        
-        
 
     def run_g4x_segmentation(
         self, labels: GeoDataFrame | np.ndarray, out_dir=None, include_channels=None, exclude_channels=None
@@ -386,7 +383,7 @@ class G4Xoutput:
 
             ax.set_xticks([])
             ax.set_yticks([])
-            
+
             if not ax:
                 plt.show()
 
@@ -475,7 +472,10 @@ class G4Xoutput:
         mac_run_id = f'G{machine_num.zfill(2)}-{self.run_id}'
 
         repr_string = f'G4X_output @ {self.run_base}\n'
-        repr_string += f'Sample: \033[1m{self.sample_id}\033[0m of {mac_run_id}, {self.fc}\n\n'
+        repr_string += f'Sample: \033[1m{self.sample_id}\033[0m of {mac_run_id}, {self.fc}\n'
+
+        shp = (np.array(self.shape) * 0.3125) / 1000
+        repr_string += f'imaged area: ({shp[1]:.2f} x {shp[0]:.2f}) mm\n\n'
 
         if self.includes_transcript:
             repr_string += f'Transcript panel with {len(self.genes)} genes\t[{", ".join(self.genes[0:5])} ... ]\n'
