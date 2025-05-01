@@ -50,6 +50,18 @@ style_dict = {
     'xtick.minor.visible': True,
 }
 
+set25 = ['#72FFAB', '#A16CFD', '#FF7043', '#008FFF', '#D32F2F',
+         '#7CB342', '#7F34BE', '#FFCA28', '#0C8668', '#FB4695',
+         '#005EE1', '#90A4AE', '#28EDED', '#A17B64', '#FFFF58',
+         '#BC29AE', '#006D8F', '#FFBAFF', '#FFD091', '#5C6BC0',
+         '#F490B2', '#C6E1A6']
+
+palD3 = ['#1F77B4FF', '#FF7F0EFF', '#2CA02CFF', '#D62728FF', 
+         '#9467BDFF', '#8C564BFF', '#E377C2FF', '#7F7F7FFF', 
+         '#BCBD22FF', '#17BECFFF', '#AEC7E8FF', '#FFBB78FF', 
+         '#98DF8AFF', '#FF9896FF', '#C5B0D5FF', '#C49C94FF', 
+         '#F7B6D2FF', '#C7C7C7FF', '#DBDB8DFF', '#9EDAE5FF']
+
 plt.rcParams.update(style_dict)
 
 retina = True
@@ -450,3 +462,74 @@ def _add_colorbar(ax, cax, loc, title=''):
     )
     cbar = ax.figure.colorbar(cax, cax=axins, label='Test', orientation=orientation)
     cbar.set_label(title, fontsize=12, fontweight='bold')
+
+
+_legend_pos = Literal['right', 'bottom', 'inset_br', 'inset_bl', 'inset_tr', 'inset_tl']
+def _add_legend(
+    ax,
+    categories,
+    title: str = None,
+    palette=list,
+    loc: _legend_pos = 'right',
+    ncol: str = None,
+    text_size=12,
+    labelspacing=0.75,
+    handletextpad=0,
+    borderpad=0,
+    columnspacing=1,
+    handlelength=2,
+    handleheight=1,
+):
+    def calculate_ncol(in_size):
+        if in_size <= 2:
+            out = 8
+        elif in_size <= 4:
+            out = 6
+        elif in_size <= 6:
+            out = 5
+        elif in_size <= 8:
+            out = 4
+        elif in_size <= 10:
+            out = 3
+        else:
+            out = 2
+
+        return out
+
+    color_dict = {cat: palette[i] for i, cat in enumerate(categories)}
+
+    if loc in ['right', 'inset_tr', 'inset_tl', 'inset_br', 'inset_bl']:
+        if ncol is None:
+            ncol = 1 if len(categories) <= 14 else 2 if len(categories) <= 30 else 3
+        anchor = {'right': (1, 1), 'inset_tr': (1, 1), 'inset_tl': (0, 1), 'inset_br': (1, 0), 'inset_bl': (0, 0)}[loc]
+        loc = {'right': 'upper left', 'inset_tr': 'upper right', 'inset_tl': 'upper left', 'inset_br': 'lower right', 'inset_bl': 'lower left'}[loc]
+
+    elif loc == 'bottom':
+        if ncol is None:
+            longest_cat = np.max([len(category) for category in color_dict])
+            ncol = calculate_ncol(longest_cat)
+        loc = 'upper center'
+        anchor = (0.5, 0)
+
+    for label in categories:
+        ax.scatter([], [], c=color_dict[label], label=label)
+
+        legend = ax.legend(
+            title=title,
+            fontsize=text_size,
+            frameon=False,
+            loc=loc,
+            bbox_to_anchor=anchor,
+            bbox_transform=ax.transAxes,
+            ncol=ncol,
+            labelspacing=labelspacing,  # Space between legend entries
+            handletextpad=handletextpad,  # Space between handle and text
+            borderpad=borderpad,  # Space between legend border and content
+            columnspacing=columnspacing,  # Space between columns if ncol > 1
+            handlelength=handlelength,  # Length of legend handles
+            handleheight=handleheight,  # Height of legend handles
+        )
+
+    plt.setp(legend.get_title(), color=plt.rcParams['axes.labelcolor'], fontweight='bold', size=14)
+    legend._legend_box.align = 'left'
+
