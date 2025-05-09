@@ -2,7 +2,6 @@ import json
 import logging
 import os
 from dataclasses import InitVar, dataclass  # , asdict, field
-from functools import lru_cache
 from pathlib import Path
 from typing import Optional, Tuple, Union  # , Any, Generator, Iterable, Iterator, List, Literal
 
@@ -13,13 +12,14 @@ import numpy as np
 import pandas as pd
 import polars as pl
 import scanpy as sc
-import tifffile
 from geopandas.geodataframe import GeoDataFrame
 from packaging import version
 
 import g4x_helpers.plotting as g4pl
 import g4x_helpers.segmentation as reseg
 import g4x_helpers.utils as utils
+from g4x_helpers.dataclasses import Signal
+from g4x_helpers.dataclasses.Roi import Roi
 
 glymur.set_option('lib.num_threads', 16)
 
@@ -57,8 +57,8 @@ class G4Xoutput:
             self.protein_panel_dict = protein_panel.to_dict()['panel_type']
             self.proteins = list(self.protein_panel_dict.keys())
 
-        roi_data = utils.Roi(extent=self.extent, name='data')
-        roi_tissue = utils.Roi(extent=self.tissue_extent, name='tissue', sub_rois=2)
+        roi_data = Roi(extent=self.extent, name='data')
+        roi_tissue = Roi(extent=self.tissue_extent, name='tissue', sub_rois=2)
         self.rois = {
             'data': roi_data,
             'tissue': roi_tissue,
@@ -209,7 +209,7 @@ class G4Xoutput:
 
     def add_roi(self, roi=None, roi_name: str = None, xlims: tuple = None, ylims: tuple = None):
         if roi is None:
-            add_roi = utils.Roi(xlims=xlims, ylims=ylims, name=roi_name)
+            add_roi = Roi(xlims=xlims, ylims=ylims, name=roi_name)
             self.rois[roi_name] = add_roi
         else:
             self.rois[roi.name] = roi
@@ -262,7 +262,7 @@ class G4Xoutput:
         outfile = utils._create_custom_out(self, out_dir, 'single_cell_data', 'cell_metadata.csv.gz')
         adata.obs.to_csv(outfile)
 
-    def plot_signals(self, signals, size=3, view='tissue', thumbnail=True, **kwargs):
+    def plot_signals(self, signals, size=3, view='tissue', thumbnail=True, return_axs=False, **kwargs):
         if not isinstance(signals, list):
             signals = [signals]
 
@@ -278,7 +278,10 @@ class G4Xoutput:
                 cbar = True
             self.plot_signal(signal=signal, size=size, ax=ax, view=view, thumbnail=thumbnail, colorbar=cbar, **kwargs)
 
-        plt.show()
+        if return_axs:
+            return axs
+        else:
+            plt.show()
 
     def plot_signal(
         self,
@@ -313,7 +316,7 @@ class G4Xoutput:
             roi = roi.scale(scale)
 
         crop_arr = roi._crop_array(plot_image, thumbnail=thumbnail)
-        im = g4pl._show_image(crop_arr, roi, ax, vmin=vmin, vmax=vmax, cmap=g4pl.cm.lipari, scale_bar=scale_bar)
+        im = g4pl._show_image(crop_arr, ax, roi, vmin=vmin, vmax=vmax, cmap=g4pl.cm.lipari, scale_bar=scale_bar)
 
         if signal != 'h_and_e' and colorbar:
             loc = 'right' if thumbnail else 'bottom'
@@ -390,24 +393,25 @@ class G4Xoutput:
     def load_image(
         self, signal: str, thumbnail: bool = False, return_th: bool = False
     ) -> Tuple[np.ndarray, float, float]:
-        img, vmin, vmax = _load_image_cached(self.run_base, signal, thumbnail)
+        sigobj = self._get_signal_object(signal=signal, thumbnail=thumbnail)
 
         if not return_th:
-            return img
+            return sigobj.img
         else:
-            return img, vmin, vmax
+            return sigobj.img, sigobj.vmin, sigobj.vmax
 
     # region internal
-    def _get_image(self, parent_directory: str, pattern: str) -> np.ndarray:
-        img_path = next((self.run_base / parent_directory).glob(pattern), None)
-        if img_path is None:
-            self.logger.error('Image file does not exist.')
-            return None
-        if img_path.suffix in ('.jp2', '.jpg'):
-            img = glymur.Jp2k(img_path)[:]
+    def _get_signal_object(self, signal: str, thumbnail: bool = False) -> Signal.ImageSignal:
+        if thumbnail:
+            sigobj = Signal.ImageThumbnail(signal_name=signal, run_base=self.run_base)
         else:
-            img = tifffile.imread(img_path)
-        return img
+            sigobj = Signal.ImageSignal(
+                signal_name=signal,
+                run_base=self.run_base,
+                cutoff_method='histogram',
+                cutoff_kwargs={'low_frac': 0.5, 'high_frac': 0.995},
+            )
+        return sigobj
 
     def _get_coord_order(self, verbose: bool = False) -> str:
         critical_version = version.parse('2.11.1')
@@ -439,6 +443,7 @@ class G4Xoutput:
         self.cell_coords = pl.read_csv(cell_meta_path).select(coord_select).to_numpy()
 
     def _get_tissue_crop(self, ubins=100, threshold=0.1, expand=0.1, order='yx', **kwargs):
+        # TODO is this still necessary?
         def lims_to_extent(lims, lims_order='yx'):
             if lims_order == 'yx':
                 y0, y1 = lims[0]
@@ -464,7 +469,7 @@ class G4Xoutput:
 
     def _clear_image_cache(self):
         """Evict all cached images so subsequent calls re-read from disk."""
-        _load_image_cached.cache_clear()
+        utils._load_image_cached.cache_clear()
 
     # region dunder
     def __repr__(self):
@@ -486,28 +491,14 @@ class G4Xoutput:
         return repr_string
 
 
-# region static
-@lru_cache(maxsize=None)
-def _load_image_cached(run_base: str, signal: str, thumbnail: bool) -> Tuple[np.ndarray, float, float]:
-    """This is cached per (run_base, signal, thumbnail)."""
-    base = Path(run_base)
-
-    folder = 'h_and_e' if signal in ('h_and_e', 'nuclear', 'eosin') else 'protein'
-
-    p = base / folder
-    suffix = '.jpg' if (thumbnail and signal == 'h_and_e') else ('.png' if thumbnail else '.jp2')
-
-    fname = f'{signal}_thumbnail{suffix}' if thumbnail else f'{signal}.jp2'
-    img_file = p / fname
-
-    if img_file.suffix == '.png':
-        img = plt.imread(img_file)
-    else:
-        img = glymur.Jp2k(str(img_file))[:]
-
-    if signal != 'h_and_e':
-        vmin, vmax = utils.get_cutoffs_histogram(img, low_frac=0.5, high_frac=0.995)
-    else:
-        vmin = vmax = None
-
-    return img, vmin, vmax
+# region deprecated
+# def _get_image(self, parent_directory: str, pattern: str) -> np.ndarray:
+#     img_path = next((self.run_base / parent_directory).glob(pattern), None)
+#     if img_path is None:
+#         self.logger.error('Image file does not exist.')
+#         return None
+#     if img_path.suffix in ('.jp2', '.jpg'):
+#         img = glymur.Jp2k(img_path)[:]
+#     else:
+#         img = tifffile.imread(img_path)
+#     return img

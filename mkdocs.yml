@@ -1,0 +1,6 @@
+site_name: My Test Docs
+theme:
+  name: material
+
+nav:
+  - Home: index.md

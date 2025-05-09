@@ -6,8 +6,11 @@ import matplotlib_inline.backend_inline as mpl_inline
 import numpy as np
 from cmcrameri import cm  # noqa: F401
 from matplotlib import gridspec
+from matplotlib.axes import Axes
 from matplotlib.transforms import ScaledTranslation
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
+from g4x_helpers.dataclasses.Roi import Roi
 
 style_dict = {
     'axes.grid': False,
@@ -414,20 +417,30 @@ def _scale_bar(
 
     ax.add_artist(scale_bar)
 
-def _show_image(image, roi, ax, vmin=None, vmax=None, cmap=None, scale_bar=True):
+
+
+def _show_image(image: np.ndarray, ax: Axes, roi: Roi = None, vmin=None, vmax=None, cmap=None, scale_bar=True, **kwargs):
+    
     plot_image = downsample_mask(image, mask_length=None, ax=ax, downsample='auto')
-    im = ax.imshow(plot_image, vmin=vmin, vmax=vmax, cmap=cmap, extent=roi.extent_array, origin='lower')
-    roi._limit_ax(ax)
-
-    arr = plot_image / np.max(plot_image)
-
-    y, x = arr.shape[0], arr.shape[1]
-    ym, xm = int(y / 5), int(x / 5)
-
-    scale_corner_value = np.mean(arr[0:ym, 0:xm])
-
+    
+    if roi is None:
+        shp = image.shape
+        extent = (0, shp[1], 0, shp[0])
+    else:
+        roi._limit_ax(ax)
+        extent = roi.extent_array
+    
+    im = ax.imshow(plot_image, vmin=vmin, vmax=vmax, cmap=cmap, extent=extent, origin='lower', **kwargs)
+        
     if scale_bar:
-        um = roi.width * 0.3125
+        arr = plot_image / np.max(plot_image)
+        y, x = arr.shape[0], arr.shape[1]
+        ym, xm = int(y / 5), int(x / 5)
+
+        scale_corner_value = np.mean(arr[0:ym, 0:xm])
+
+        width = extent[1] - extent[0]
+        um = width * 0.3125
         rounded_scale = _round_scale(um / 5)
         theme = 'light' if scale_corner_value > 0.75 else 'dark'
         _scale_bar(

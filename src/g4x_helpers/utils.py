@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import (
     TYPE_CHECKING,
-    List,
     Optional,
     Tuple,
     Union,
@@ -15,16 +14,13 @@ if TYPE_CHECKING:
 import logging
 import os
 import shutil
+from functools import lru_cache
 from pathlib import Path
 
+import glymur
 import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
 import numpy as np
-from scipy.ndimage import generic_filter
-from scipy.stats import median_abs_deviation
-from shapely.affinity import scale, translate
-from shapely.geometry import Polygon
-from skimage import exposure
-from skimage.filters import threshold_otsu
 
 
 def setup_logger(
@@ -178,6 +174,31 @@ def find_tissue(coords, ubins=100, expand=0.1, order='yx', threshold=0.1, smp_sh
     return {'lims': final_lims, 'centroid': final_centroid}
 
 
+@lru_cache(maxsize=None)
+def _load_image_cached(run_base: str, signal: str, thumbnail: bool) -> Tuple[np.ndarray, float, float]:
+    """This is cached per (run_base, signal, thumbnail)."""
+    base = Path(run_base)
+
+    folder = 'h_and_e' if signal in ('h_and_e', 'nuclear', 'eosin') else 'protein'
+
+    p = base / folder
+    suffix = '.jpg' if (thumbnail and signal == 'h_and_e') else ('.png' if thumbnail else '.jp2')
+
+    fname = f'{signal}_thumbnail{suffix}' if thumbnail else f'{signal}.jp2'
+    img_file = p / fname
+
+    if img_file.suffix == '.png':
+        img = plt.imread(img_file)
+    else:
+        img = glymur.Jp2k(str(img_file))[:]
+    
+    return img
+
+
+def _get_extent(img):
+    shp = img.shape
+    return (0, shp[1], shp[0], 0)
+
 def _create_custom_out(sample: 'G4Xoutput', out_dir=None, parent_folder=None, file_name=None):
     if out_dir is None:
         custom_out = sample.run_base / parent_folder / 'custom'
@@ -192,195 +213,6 @@ def _create_custom_out(sample: 'G4Xoutput', out_dir=None, parent_folder=None, fi
 
     outfile = custom_out / file_name
     return outfile
-
-
-class Roi:
-    def __init__(
-        self,
-        xlims: Optional[Tuple[int, int]] = None,
-        ylims: Optional[Tuple[int, int]] = None,
-        extent: Optional[List[int]] = None,
-        center: Optional[Tuple[int, int]] = None,
-        edge_size: Optional[int] = None,
-        polygon: Optional[Polygon] = None,
-        name: str = 'ROI',
-        sub_rois: Optional[int] = None,
-    ):
-        self.name = name
-
-        if center and edge_size and not polygon and not (xlims and ylims) and not extent:
-            center = (center[0], center[1])
-            half_edge = edge_size / 2
-            self.xlims = (center[0] - half_edge, center[0] + half_edge)
-            self.ylims = (center[1] - half_edge, center[1] + half_edge)
-
-            self.polygon = self._make_polygon()
-
-        if not polygon and (xlims and ylims) or extent:
-            xlims = xlims if xlims else extent[0:2]
-            ylims = ylims if ylims else extent[2:4]
-
-            self.xlims = xlims
-            self.ylims = ylims
-
-            self.polygon = self._make_polygon()
-
-        elif polygon and not (xlims and ylims):
-            self.polygon = polygon
-            polygon_bounds = self.polygon.bounds
-            self.xlims = (polygon_bounds[0], polygon_bounds[2])
-            self.ylims = (polygon_bounds[1], polygon_bounds[3])
-
-        # Compute overall width and height
-        self.width = self.xlims[1] - self.xlims[0]
-        self.height = self.ylims[1] - self.ylims[0]
-        self.extent = (self.xlims[0], self.xlims[1], self.ylims[0], self.ylims[1])
-        self.extent_array = np.array(self.extent).astype(np.int32)
-        self.lims = (self.xlims, self.ylims)
-        self.order = 'xy'
-
-        if sub_rois:
-            self.sub_rois = self.subtile_roi(n=sub_rois, labels='abc')
-
-    def _make_polygon(self):
-        return Polygon(
-            [
-                (self.xlims[0], self.ylims[0]),
-                (self.xlims[1], self.ylims[0]),
-                (self.xlims[1], self.ylims[1]),
-                (self.xlims[0], self.ylims[1]),
-            ]
-        )
-
-    def scale(self, factor):
-        scaled_roi = scale(self.polygon, xfact=factor, yfact=factor, origin='center')
-        sc_roi = Roi(polygon=scaled_roi, name=None)
-        return sc_roi
-
-    def translate(self, xoff=0, yoff=0):
-        trans_roi = translate(self.polygon, xoff=xoff, yoff=yoff)
-        tr_roi = Roi(polygon=trans_roi, name=None)
-        return tr_roi
-
-    def subtile_roi(self, n=3, labels='123'):
-        scale_factor = 1 / n  # Each sub-ROI should have width and height 1/n of the original
-
-        scaled_roi = self.scale(scale_factor)
-
-        sub_rois = []
-        label = 1  # Initialize counter so the top-left sub-ROI becomes 1
-
-        # Reverse the vertical loop: This ensures we start with the top row
-        for j in reversed(range(n)):
-            for i in range(n):
-                # Compute the translation offsets relative to the overall ROI center.
-                offset_x = (i - (n - 1) / 2) * (self.width / n)
-                offset_y = (j - (n - 1) / 2) * (self.height / n)
-
-                if labels == 'abc':
-                    roi_label = chr(65 + (label - 1))
-                elif labels == '123':
-                    roi_label = str(label)
-
-                sub_roi = scaled_roi.translate(xoff=offset_x, yoff=offset_y)
-                sub_roi.name = roi_label
-                sub_rois.append(sub_roi)
-
-                label += 1
-
-        return sub_rois
-
-    def _crop_array(self, array, thumbnail=False):
-        fct = 1 if not thumbnail else 5
-
-        xlim = (self.extent_array[0:2] / fct).astype(int)
-        ylim = (self.extent_array[2:4] / fct).astype(int)
-
-        return array[ylim[0] : ylim[1], xlim[0] : xlim[1]]
-
-    def _limit_ax(self, ax):
-        ax.set_xlim(self.xlims)
-        ax.set_ylim(self.ylims)
-
-    def add_to_plot(
-        self,
-        ax,
-        color='white',
-        lw=2,
-        label=True,
-        scale=1,
-        label_position='top_left',
-        prefix='ROI ',
-        font_size=12,
-        pad=0.05,
-        fontweight='bold',
-    ):
-        import matplotlib.patches as patches
-
-        #if scale != 1:
-        scaled_roi = self.scale(scale)
-        
-        xvals, yvals = scaled_roi.lims
-
-        x, y = xvals[0], yvals[0]
-        w, h = xvals[1] - x, yvals[1] - y
-
-        rect = patches.Rectangle((x, y), w, h, linewidth=lw, edgecolor=color, facecolor='none', zorder=10)
-        ax.add_patch(rect)
-
-        # If label is True, add a label at the desired location using relative padding.
-        if label:
-            if hasattr(self, 'name'):
-                label_text = self.name
-                if label_text == 'A':
-                    label_position = 'top_left'
-                elif label_text == 'B':
-                    label_position = 'top_right'
-                elif label_text == 'C':
-                    label_position = 'bottom_left'
-                elif label_text == 'D':
-                    label_position = 'bottom_right'
-
-            else:
-                label_text = f'{prefix}'
-
-            # Calculate relative padding in data units.
-            pad_x = pad * w
-            pad_y = pad * h
-
-            position_map = {
-                'top_left': (lambda x, y, w, h, pad_x, pad_y: (x + pad_x, y + h - pad_y), 'left', 'top'),
-                'top_right': (lambda x, y, w, h, pad_x, pad_y: (x + w - pad_x, y + h - pad_y), 'right', 'top'),
-                'bottom_left': (lambda x, y, w, h, pad_x, pad_y: (x + pad_x, y + pad_y), 'left', 'bottom'),
-                'bottom_right': (lambda x, y, w, h, pad_x, pad_y: (x + w - pad_x, y + pad_y), 'right', 'bottom'),
-                'top_center': (lambda x, y, w, h, pad_x, pad_y: (x + w / 2, y + h - pad_y), 'center', 'top'),
-                'bottom_center': (lambda x, y, w, h, pad_x, pad_y: (x + w / 2, y + pad_y), 'center', 'bottom'),
-                'center': (lambda x, y, w, h, pad_x, pad_y: (x + w / 2, y + h / 2), 'center', 'center'),
-            }
-
-            def get_label_position(label_position, x, y, w, h, pad_x, pad_y):
-                entry = position_map.get(label_position)
-                if entry is None:
-                    print('Invalid label_position. Use one of', list(position_map.keys()))
-                    return
-                position_fn, ha, va = entry
-                tx, ty = position_fn(x, y, w, h, pad_x, pad_y)
-                return tx, ty, ha, va
-
-            tx, ty, ha, va = get_label_position(label_position, x, y, w, h, pad_x, pad_y)
-
-            # Add the label text to the axis.
-            ax.text(
-                tx,
-                ty,
-                label_text,
-                color=color,
-                fontsize=font_size,
-                fontweight=fontweight,
-                verticalalignment=va,
-                horizontalalignment=ha,
-                zorder=11,
-            )
 
 
 def _normalize(array):
@@ -418,6 +250,7 @@ def _additive_blend(prot_arrays, marker_colors, clip_mode='hard'):
 
 
 def blend_protein_images(sample, roi=None, query=None, marker_colors=None, cutoffs='global'):
+    from .dataclasses.Signal import get_cutoffs_histogram
     
     # ___> gather images
     signals = []
@@ -458,57 +291,247 @@ def blend_protein_images(sample, roi=None, query=None, marker_colors=None, cutof
 
     return processed_arrays
 
-
-def get_cutoffs_quantile(image, lower=0.05, upper=0.995):
-    vmin, vmax = np.quantile(image, lower), np.quantile(image, upper)
-    return vmin, vmax
-
-
-def get_cutoffs_min_ratio(image, lower=0.05, upper=0.995):
-    vmax = np.quantile(image, upper)
-    vmin = vmax * lower
-    return vmin, vmax
+# region migrated
+# def get_cutoffs_quantile(image, lower=0.05, upper=0.995):
+#     vmin, vmax = np.quantile(image, lower), np.quantile(image, upper)
+#     return vmin, vmax
 
 
-def get_cutoffs_otsu(image, upper_quantile=0.995):
-    vmin = threshold_otsu(image)
-    vmax = np.quantile(image, upper_quantile)
-    return vmin, vmax
+# def get_cutoffs_min_ratio(image, lower=0.05, upper=0.995):
+#     vmax = np.quantile(image, upper)
+#     vmin = vmax * lower
+#     return vmin, vmax
 
 
-def get_cutoffs_robust(image, z_thresh=3.5):
-    flat = image.flatten()
-    med = np.median(flat)
-    mad = median_abs_deviation(flat, scale='normal')
-    z_scores = (flat - med) / mad
-    filtered = flat[(z_scores > -z_thresh) & (z_scores < z_thresh)]
-    return np.min(filtered), np.max(filtered)
+# def get_cutoffs_otsu(image, upper_quantile=0.995):
+#     vmin = threshold_otsu(image)
+#     vmax = np.quantile(image, upper_quantile)
+#     return vmin, vmax
 
 
-def get_cutoffs_histogram(image, low_frac=0.001, high_frac=0.995):
-    hist, bin_edges = exposure.histogram(image)
-    cdf = np.cumsum(hist) / hist.sum()
-    vmin = bin_edges[np.searchsorted(cdf, low_frac)]
-    vmax = bin_edges[np.searchsorted(cdf, high_frac)]
-    return vmin, vmax
+# def get_cutoffs_robust(image, z_thresh=3.5):
+#     flat = image.flatten()
+#     med = np.median(flat)
+#     mad = median_abs_deviation(flat, scale='normal')
+#     z_scores = (flat - med) / mad
+#     filtered = flat[(z_scores > -z_thresh) & (z_scores < z_thresh)]
+#     return np.min(filtered), np.max(filtered)
 
 
-def get_cutoffs_local_percentile(image, min_percentile=1, max_percentile=99, size=51):
-    def local_percentile(image, percentile, size=51):
-        def func(x):
-            return np.percentile(x, percentile)
-
-        return generic_filter(image, func, size=(size, size))
-
-    vmin_map = local_percentile(image, min_percentile, size)  # local low-end, could be noise
-    vmax_map = local_percentile(image, max_percentile, size)  # local high-end, reduces outliers
-
-    # clipped = np.clip(image, vmin_map, vmax_map)
-
-    vmin = np.mean(vmin_map)
-    vmax = np.mean(vmax_map)
-    return vmin, vmax
+# def get_cutoffs_histogram(image, low_frac=0.001, high_frac=0.995):
+#     hist, bin_edges = exposure.histogram(image)
+#     cdf = np.cumsum(hist) / hist.sum()
+#     vmin = bin_edges[np.searchsorted(cdf, low_frac)]
+#     vmax = bin_edges[np.searchsorted(cdf, high_frac)]
+#     return vmin, vmax
 
 
-def apply_clahe(image, kernel_size=(50, 50), clip_limit=0.01):
-    return exposure.equalize_adapthist(image, kernel_size=kernel_size, clip_limit=clip_limit)
+# def get_cutoffs_local_percentile(image, min_percentile=1, max_percentile=99, size=51):
+#     def local_percentile(image, percentile, size=51):
+#         def func(x):
+#             return np.percentile(x, percentile)
+
+#         return generic_filter(image, func, size=(size, size))
+
+#     vmin_map = local_percentile(image, min_percentile, size)  # local low-end, could be noise
+#     vmax_map = local_percentile(image, max_percentile, size)  # local high-end, reduces outliers
+
+#     # clipped = np.clip(image, vmin_map, vmax_map)
+
+#     vmin = np.mean(vmin_map)
+#     vmax = np.mean(vmax_map)
+#     return vmin, vmax
+
+
+# def apply_clahe(image, kernel_size=(50, 50), clip_limit=0.01):
+#     return exposure.equalize_adapthist(image, kernel_size=kernel_size, clip_limit=clip_limit)
+
+
+# class Roi:
+#     def __init__(
+#         self,
+#         xlims: Optional[Tuple[int, int]] = None,
+#         ylims: Optional[Tuple[int, int]] = None,
+#         extent: Optional[List[int]] = None,
+#         center: Optional[Tuple[int, int]] = None,
+#         edge_size: Optional[int] = None,
+#         polygon: Optional[Polygon] = None,
+#         name: str = 'ROI',
+#         sub_rois: Optional[int] = None,
+#     ):
+#         self.name = name
+
+#         if center and edge_size and not polygon and not (xlims and ylims) and not extent:
+#             center = (center[0], center[1])
+#             half_edge = edge_size / 2
+#             self.xlims = (center[0] - half_edge, center[0] + half_edge)
+#             self.ylims = (center[1] - half_edge, center[1] + half_edge)
+
+#             self.polygon = self._make_polygon()
+
+#         if not polygon and (xlims and ylims) or extent:
+#             xlims = xlims if xlims else extent[0:2]
+#             ylims = ylims if ylims else extent[2:4]
+
+#             self.xlims = xlims
+#             self.ylims = ylims
+
+#             self.polygon = self._make_polygon()
+
+#         elif polygon and not (xlims and ylims):
+#             self.polygon = polygon
+#             polygon_bounds = self.polygon.bounds
+#             self.xlims = (polygon_bounds[0], polygon_bounds[2])
+#             self.ylims = (polygon_bounds[1], polygon_bounds[3])
+
+#         # Compute overall width and height
+#         self.width = self.xlims[1] - self.xlims[0]
+#         self.height = self.ylims[1] - self.ylims[0]
+#         self.extent = (self.xlims[0], self.xlims[1], self.ylims[0], self.ylims[1])
+#         self.extent_array = np.array(self.extent).astype(np.int32)
+#         self.lims = (self.xlims, self.ylims)
+#         self.order = 'xy'
+
+#         if sub_rois:
+#             self.sub_rois = self.subtile_roi(n=sub_rois, labels='abc')
+
+#     def _make_polygon(self):
+#         return Polygon(
+#             [
+#                 (self.xlims[0], self.ylims[0]),
+#                 (self.xlims[1], self.ylims[0]),
+#                 (self.xlims[1], self.ylims[1]),
+#                 (self.xlims[0], self.ylims[1]),
+#             ]
+#         )
+
+#     def scale(self, factor):
+#         scaled_roi = scale(self.polygon, xfact=factor, yfact=factor, origin='center')
+#         sc_roi = Roi(polygon=scaled_roi, name=None)
+#         return sc_roi
+
+#     def translate(self, xoff=0, yoff=0):
+#         trans_roi = translate(self.polygon, xoff=xoff, yoff=yoff)
+#         tr_roi = Roi(polygon=trans_roi, name=None)
+#         return tr_roi
+
+#     def subtile_roi(self, n=3, labels='123'):
+#         scale_factor = 1 / n  # Each sub-ROI should have width and height 1/n of the original
+
+#         scaled_roi = self.scale(scale_factor)
+
+#         sub_rois = []
+#         label = 1  # Initialize counter so the top-left sub-ROI becomes 1
+
+#         # Reverse the vertical loop: This ensures we start with the top row
+#         for j in reversed(range(n)):
+#             for i in range(n):
+#                 # Compute the translation offsets relative to the overall ROI center.
+#                 offset_x = (i - (n - 1) / 2) * (self.width / n)
+#                 offset_y = (j - (n - 1) / 2) * (self.height / n)
+
+#                 if labels == 'abc':
+#                     roi_label = chr(65 + (label - 1))
+#                 elif labels == '123':
+#                     roi_label = str(label)
+
+#                 sub_roi = scaled_roi.translate(xoff=offset_x, yoff=offset_y)
+#                 sub_roi.name = roi_label
+#                 sub_rois.append(sub_roi)
+
+#                 label += 1
+
+#         return sub_rois
+
+#     def _crop_array(self, array, thumbnail=False):
+#         fct = 1 if not thumbnail else 5
+
+#         xlim = (self.extent_array[0:2] / fct).astype(int)
+#         ylim = (self.extent_array[2:4] / fct).astype(int)
+
+#         return array[ylim[0] : ylim[1], xlim[0] : xlim[1]]
+
+#     def _limit_ax(self, ax):
+#         ax.set_xlim(self.xlims)
+#         ax.set_ylim(self.ylims)
+
+#     def add_to_plot(
+#         self,
+#         ax,
+#         color='white',
+#         lw=2,
+#         label=True,
+#         scale=1,
+#         label_position='top_left',
+#         prefix='ROI ',
+#         font_size=12,
+#         pad=0.05,
+#         fontweight='bold',
+#     ):
+#         import matplotlib.patches as patches
+
+#         #if scale != 1:
+#         scaled_roi = self.scale(scale)
+        
+#         xvals, yvals = scaled_roi.lims
+
+#         x, y = xvals[0], yvals[0]
+#         w, h = xvals[1] - x, yvals[1] - y
+
+#         rect = patches.Rectangle((x, y), w, h, linewidth=lw, edgecolor=color, facecolor='none', zorder=10)
+#         ax.add_patch(rect)
+
+#         # If label is True, add a label at the desired location using relative padding.
+#         if label:
+#             if hasattr(self, 'name'):
+#                 label_text = self.name
+#                 if label_text == 'A':
+#                     label_position = 'top_left'
+#                 elif label_text == 'B':
+#                     label_position = 'top_right'
+#                 elif label_text == 'C':
+#                     label_position = 'bottom_left'
+#                 elif label_text == 'D':
+#                     label_position = 'bottom_right'
+
+#             else:
+#                 label_text = f'{prefix}'
+
+#             # Calculate relative padding in data units.
+#             pad_x = pad * w
+#             pad_y = pad * h
+
+#             position_map = {
+#                 'top_left': (lambda x, y, w, h, pad_x, pad_y: (x + pad_x, y + h - pad_y), 'left', 'top'),
+#                 'top_right': (lambda x, y, w, h, pad_x, pad_y: (x + w - pad_x, y + h - pad_y), 'right', 'top'),
+#                 'bottom_left': (lambda x, y, w, h, pad_x, pad_y: (x + pad_x, y + pad_y), 'left', 'bottom'),
+#                 'bottom_right': (lambda x, y, w, h, pad_x, pad_y: (x + w - pad_x, y + pad_y), 'right', 'bottom'),
+#                 'top_center': (lambda x, y, w, h, pad_x, pad_y: (x + w / 2, y + h - pad_y), 'center', 'top'),
+#                 'bottom_center': (lambda x, y, w, h, pad_x, pad_y: (x + w / 2, y + pad_y), 'center', 'bottom'),
+#                 'center': (lambda x, y, w, h, pad_x, pad_y: (x + w / 2, y + h / 2), 'center', 'center'),
+#             }
+
+#             def get_label_position(label_position, x, y, w, h, pad_x, pad_y):
+#                 entry = position_map.get(label_position)
+#                 if entry is None:
+#                     print('Invalid label_position. Use one of', list(position_map.keys()))
+#                     return
+#                 position_fn, ha, va = entry
+#                 tx, ty = position_fn(x, y, w, h, pad_x, pad_y)
+#                 return tx, ty, ha, va
+
+#             tx, ty, ha, va = get_label_position(label_position, x, y, w, h, pad_x, pad_y)
+
+#             # Add the label text to the axis.
+#             ax.text(
+#                 tx,
+#                 ty,
+#                 label_text,
+#                 color=color,
+#                 fontsize=font_size,
+#                 fontweight=fontweight,
+#                 verticalalignment=va,
+#                 horizontalalignment=ha,
+#                 zorder=11,
+#             )
+

@@ -14,7 +14,6 @@ authors = [
   { name = "Florian Raths", email = "flo.rathsg@singulargenomics.com"}
 ]
 requires-python = ">=3.10,<3.11"
-# declare *all* dynamic fields here at once:
 dynamic = ["dependencies"]
 
 classifiers = [
@@ -29,6 +28,15 @@ classifiers = [
 
 urls = { Homepage = "https://github.com/Singular-Genomics/G4X-helpers" }
 
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
+    "ipywidgets>=8.1.6",
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.6.12",
+]
+
+
 [tool.setuptools]
 package-dir = { "" = "src" }
 include-package-data = true
@@ -37,6 +45,5 @@ zip-safe = false
 [tool.setuptools.packages.find]
 where = ["src"]
 
-# *One* dynamic table, with both version and dependencies:
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
