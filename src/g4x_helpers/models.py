@@ -69,6 +69,8 @@ class G4Xoutput:
             'E': roi_tissue.sub_rois[3],
         }
 
+        self.cached_signals = {}
+
     @property
     def logger(self) -> logging.Logger:
         return logging.getLogger(f'{self.sample_id}_G4XOutput')
@@ -304,7 +306,7 @@ class G4Xoutput:
         ax.set_title(signal)
 
         plot_image, vmax, vmin = self.load_image(signal, thumbnail=thumbnail, return_th=True)
-
+        
         if not clip or thumbnail:
             vmax = vmin = None
         elif isinstance(clip, tuple):
@@ -402,16 +404,23 @@ class G4Xoutput:
 
     # region internal
     def _get_signal_object(self, signal: str, thumbnail: bool = False) -> Signal.ImageSignal:
+        
         if thumbnail:
             sigobj = Signal.ImageThumbnail(signal_name=signal, run_base=self.run_base)
         else:
-            sigobj = Signal.ImageSignal(
-                signal_name=signal,
-                run_base=self.run_base,
-                cutoff_method='histogram',
-                cutoff_kwargs={'low_frac': 0.5, 'high_frac': 0.995},
-            )
-        return sigobj
+            if signal in self.cached_signals:
+                return self.cached_signals[signal]
+            else:
+                sigobj = Signal.ImageSignal(
+                    signal_name=signal,
+                    run_base=self.run_base,
+                    cutoff_method='histogram',
+                    cutoff_kwargs={'low_frac': 0.5, 'high_frac': 0.995},
+                )
+        
+                self.cached_signals[signal] = sigobj
+        
+                return sigobj
 
     def _get_coord_order(self, verbose: bool = False) -> str:
         critical_version = version.parse('2.11.1')
