@@ -406,7 +406,7 @@ class G4Xoutput:
     def _get_signal_object(self, signal: str, thumbnail: bool = False) -> Signal.ImageSignal:
         
         if thumbnail:
-            sigobj = Signal.ImageThumbnail(signal_name=signal, run_base=self.run_base)
+            return Signal.ImageThumbnail(signal_name=signal, run_base=self.run_base)
         else:
             if signal in self.cached_signals:
                 return self.cached_signals[signal]

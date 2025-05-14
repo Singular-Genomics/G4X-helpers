@@ -332,10 +332,10 @@ requires-dist = [
     { name = "cmcrameri", specifier = ">=1.9" },
     { name = "geopandas", specifier = ">=1.0.1" },
     { name = "glymur", specifier = ">=0.14.0.post1" },
-    { name = "matplotlib", specifier = ">=3.10.3" },
-    { name = "polars", specifier = ">=1.29.0" },
+    { name = "matplotlib", specifier = ">=3.7.0" },
+    { name = "polars", specifier = ">=1.8.2" },
     { name = "rasterio", specifier = ">=1.4.3" },
-    { name = "scanpy", specifier = ">=1.11.1" },
+    { name = "scanpy", specifier = ">=1.10.0" },
     { name = "scikit-image", specifier = ">=0.25.2" },
     { name = "shapely", specifier = ">=2.1.0" },
 ]

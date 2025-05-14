@@ -30,10 +30,10 @@ dependencies = [
     "cmcrameri>=1.9",
     "geopandas>=1.0.1",
     "glymur>=0.14.0.post1",
-    "matplotlib>=3.10.3",
-    "polars>=1.29.0",
+    "matplotlib>=3.7.0",
+    "polars>=1.8.2",
     "rasterio>=1.4.3",
-    "scanpy>=1.11.1",
+    "scanpy>=1.10.0",
     "scikit-image>=0.25.2",
     "shapely>=2.1.0",
 ]
