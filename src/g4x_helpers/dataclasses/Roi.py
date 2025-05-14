@@ -76,9 +76,14 @@ class Roi:
         sc_roi = Roi(polygon=scaled_roi, name=None)
         return sc_roi
 
-    def translate(self, xoff=0, yoff=0):
-        xoff_frac = self.width * xoff
-        yoff_frac = self.height * yoff
+    def translate(self, xoff=0, yoff=0, relative=True):
+        if relative:
+            xoff_frac = self.width * xoff
+            yoff_frac = self.height * yoff
+        else:
+            xoff_frac = xoff
+            yoff_frac = yoff
+        
         trans_roi = translate(self.polygon, xoff=xoff_frac, yoff=yoff_frac)
         tr_roi = Roi(polygon=trans_roi, name=None)
         return tr_roi
@@ -103,7 +108,7 @@ class Roi:
                 elif labels == '123':
                     roi_label = str(label)
 
-                sub_roi = scaled_roi.translate(xoff=offset_x, yoff=offset_y)
+                sub_roi = scaled_roi.translate(xoff=offset_x, yoff=offset_y, relative=False)
                 sub_roi.name = roi_label
                 sub_rois.append(sub_roi)
 

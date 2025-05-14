@@ -14,7 +14,6 @@ authors = [
   { name = "Florian Raths", email = "flo.rathsg@singulargenomics.com"}
 ]
 requires-python = ">=3.10,<3.11"
-dynamic = ["dependencies"]
 
 classifiers = [
   "Private :: Do Not Upload",
@@ -27,6 +26,17 @@ classifiers = [
 ]
 
 urls = { Homepage = "https://github.com/Singular-Genomics/G4X-helpers" }
+dependencies = [
+    "cmcrameri>=1.9",
+    "geopandas>=1.0.1",
+    "glymur>=0.14.0.post1",
+    "matplotlib>=3.10.3",
+    "polars>=1.29.0",
+    "rasterio>=1.4.3",
+    "scanpy>=1.11.1",
+    "scikit-image>=0.25.2",
+    "shapely>=2.1.0",
+]
 
 [dependency-groups]
 dev = [
@@ -35,15 +45,3 @@ dev = [
     "mkdocs>=1.6.1",
     "mkdocs-material>=9.6.12",
 ]
-
-
-[tool.setuptools]
-package-dir = { "" = "src" }
-include-package-data = true
-zip-safe = false
-
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.setuptools.dynamic]
-dependencies = { file = ["requirements.txt"] }

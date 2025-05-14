@@ -209,13 +209,14 @@ def extract_image_signals(
         print(f'Extracting {signal_name} signal...')
         if signal_name not in exclude_channels:
             if signal_name in ('nuclear', 'eosin'):
-                parent_directory = 'h_and_e'
+                # parent_directory = 'h_and_e'
                 channel_name_map = {'nuclear': 'nuclearstain', 'eosin': 'cytoplasmicstain'}
             else:
-                parent_directory = 'protein'
+                # parent_directory = 'protein'
                 channel_name_map = {protein: protein for protein in sample.proteins}
 
-            signal_img = sample._get_image(parent_directory=parent_directory, pattern=f'{signal_name}.jp2')
+            signal_img = sample.load_image('PanCK', thumbnail=False)
+            # signal_img = sample._get_image(parent_directory=parent_directory, pattern=f'{signal_name}.jp2')
             ch_label = f'{channel_name_map[signal_name]}_intensity_mean'
 
             prop_tab = image_mask_intensity_extraction(

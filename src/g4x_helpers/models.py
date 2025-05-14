@@ -346,7 +346,7 @@ class G4Xoutput:
             if ax is None:
                 ax = g4pl.montage_plot(1, panel_size=size)
 
-            _ = g4pl._show_image(image, roi, ax, vmin=None, vmax=None, cmap=None)
+            _ = g4pl._show_image(image, ax, roi, vmin=None, vmax=None, cmap=None)
 
             # build one circular‐marker handle per channel
             legend_elems = []

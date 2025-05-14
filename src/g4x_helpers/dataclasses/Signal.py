@@ -50,7 +50,8 @@ class ImageSignal:
         self.shape = self.img.shape
 
         if self.vmin is None and self.vmax is None:
-            self.vmin, self.vmax = self.get_cutoffs(method=self.cutoff_method, **self.cutoff_kwargs)
+            if self.signal_name != 'h_and_e':
+                self.vmin, self.vmax = self.get_cutoffs(method=self.cutoff_method, **self.cutoff_kwargs)
         else:
             self.cutoff_method = 'manual'
             self.cutoff_kwargs = {}
