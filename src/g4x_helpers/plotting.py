@@ -53,17 +53,53 @@ style_dict = {
     'xtick.minor.visible': True,
 }
 
-set25 = ['#72FFAB', '#A16CFD', '#FF7043', '#008FFF', '#D32F2F',
-         '#7CB342', '#7F34BE', '#FFCA28', '#0C8668', '#FB4695',
-         '#005EE1', '#90A4AE', '#28EDED', '#A17B64', '#FFFF58',
-         '#BC29AE', '#006D8F', '#FFBAFF', '#FFD091', '#5C6BC0',
-         '#F490B2', '#C6E1A6']
+set25 = [
+    '#72FFAB',
+    '#A16CFD',
+    '#FF7043',
+    '#008FFF',
+    '#D32F2F',
+    '#7CB342',
+    '#7F34BE',
+    '#FFCA28',
+    '#0C8668',
+    '#FB4695',
+    '#005EE1',
+    '#90A4AE',
+    '#28EDED',
+    '#A17B64',
+    '#FFFF58',
+    '#BC29AE',
+    '#006D8F',
+    '#FFBAFF',
+    '#FFD091',
+    '#5C6BC0',
+    '#F490B2',
+    '#C6E1A6',
+]
 
-palD3 = ['#1F77B4FF', '#FF7F0EFF', '#2CA02CFF', '#D62728FF', 
-         '#9467BDFF', '#8C564BFF', '#E377C2FF', '#7F7F7FFF', 
-         '#BCBD22FF', '#17BECFFF', '#AEC7E8FF', '#FFBB78FF', 
-         '#98DF8AFF', '#FF9896FF', '#C5B0D5FF', '#C49C94FF', 
-         '#F7B6D2FF', '#C7C7C7FF', '#DBDB8DFF', '#9EDAE5FF']
+palD3 = [
+    '#1F77B4FF',
+    '#FF7F0EFF',
+    '#2CA02CFF',
+    '#D62728FF',
+    '#9467BDFF',
+    '#8C564BFF',
+    '#E377C2FF',
+    '#7F7F7FFF',
+    '#BCBD22FF',
+    '#17BECFFF',
+    '#AEC7E8FF',
+    '#FFBB78FF',
+    '#98DF8AFF',
+    '#FF9896FF',
+    '#C5B0D5FF',
+    '#C49C94FF',
+    '#F7B6D2FF',
+    '#C7C7C7FF',
+    '#DBDB8DFF',
+    '#9EDAE5FF',
+]
 
 plt.rcParams.update(style_dict)
 
@@ -99,7 +135,7 @@ def montage_plot(
     hspace: float = None,
     show_labels: bool = False,
     label_loc: str = 'ul',
-    figure=None,
+    figure = None,
     title: str = None,
     layout: str = 'constrained',
     figsize: list = [6, 6],
@@ -324,14 +360,15 @@ _loc = Literal[
     'lower right',
 ]
 
+
 def _round_scale(scale_size):
     # list of (upper‐bound, rounding increment)
     thresholds = [
-        (25,   5),
+        (25, 5),
         (100, 10),
         (500, 50),
-        (1000,100),
-        (10000,500),
+        (1000, 100),
+        (10000, 500),
     ]
     # find the first threshold your size falls under
     for bound, inc in thresholds:
@@ -339,6 +376,7 @@ def _round_scale(scale_size):
             return round(scale_size / inc) * inc
     # fallback for anything ≥ 10000
     return round(scale_size / 1000) * 1000
+
 
 def _scale_bar(
     ax,
@@ -418,20 +456,20 @@ def _scale_bar(
     ax.add_artist(scale_bar)
 
 
-
-def _show_image(image: np.ndarray, ax: Axes, roi: Roi = None, vmin=None, vmax=None, cmap=None, scale_bar=True, **kwargs):
-    
+def _show_image(
+    image: np.ndarray, ax: Axes, roi: Roi = None, vmin=None, vmax=None, cmap=None, scale_bar=True, **kwargs
+):
     plot_image = downsample_mask(image, mask_length=None, ax=ax, downsample='auto')
-    
+
     if roi is None:
         shp = image.shape
         extent = (0, shp[1], 0, shp[0])
     else:
         roi._limit_ax(ax)
         extent = roi.extent_array
-    
+
     im = ax.imshow(plot_image, vmin=vmin, vmax=vmax, cmap=cmap, extent=extent, origin='lower', **kwargs)
-        
+
     if scale_bar:
         arr = plot_image / np.max(plot_image)
         y, x = arr.shape[0], arr.shape[1]
@@ -443,11 +481,10 @@ def _show_image(image: np.ndarray, ax: Axes, roi: Roi = None, vmin=None, vmax=No
         um = width * 0.3125
         rounded_scale = _round_scale(um / 5)
         theme = 'light' if scale_corner_value > 0.75 else 'dark'
-        _scale_bar(
-            ax, length=rounded_scale, unit='micron', theme=theme, background=True, lw=1, background_alpha=0.5
-        )
+        _scale_bar(ax, length=rounded_scale, unit='micron', theme=theme, background=True, lw=1, background_alpha=0.5)
 
     return im
+
 
 def _add_colorbar(ax, cax, loc, title=''):
     if loc == 'right':
@@ -478,6 +515,8 @@ def _add_colorbar(ax, cax, loc, title=''):
 
 
 _legend_pos = Literal['right', 'bottom', 'inset_br', 'inset_bl', 'inset_tr', 'inset_tl']
+
+
 def _add_legend(
     ax,
     categories,
@@ -515,7 +554,13 @@ def _add_legend(
         if ncol is None:
             ncol = 1 if len(categories) <= 14 else 2 if len(categories) <= 30 else 3
         anchor = {'right': (1, 1), 'inset_tr': (1, 1), 'inset_tl': (0, 1), 'inset_br': (1, 0), 'inset_bl': (0, 0)}[loc]
-        loc = {'right': 'upper left', 'inset_tr': 'upper right', 'inset_tl': 'upper left', 'inset_br': 'lower right', 'inset_bl': 'lower left'}[loc]
+        loc = {
+            'right': 'upper left',
+            'inset_tr': 'upper right',
+            'inset_tl': 'upper left',
+            'inset_br': 'lower right',
+            'inset_bl': 'lower left',
+        }[loc]
 
     elif loc == 'bottom':
         if ncol is None:
@@ -545,4 +590,3 @@ def _add_legend(
 
     plt.setp(legend.get_title(), color=plt.rcParams['axes.labelcolor'], fontweight='bold', size=14)
     legend._legend_box.align = 'left'
-

@@ -32,6 +32,7 @@ dependencies = [
     "glymur>=0.14.0.post1",
     "matplotlib>=3.7.0",
     "polars>=1.8.2",
+    "pyarrow>=20.0.0",
     "rasterio>=1.4.3",
     "scanpy>=1.10.0",
     "scikit-image>=0.25.2",

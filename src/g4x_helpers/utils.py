@@ -202,17 +202,20 @@ def _get_extent(img):
 
 def _create_custom_out(sample: 'G4Xoutput', out_dir=None, parent_folder=None, file_name=None):
     if out_dir is None:
-        custom_out = sample.run_base / parent_folder / 'custom'
+        custom_out = sample.run_base / parent_folder / 'custom_segmentation'
     else:
         custom_out = Path(out_dir) / parent_folder
 
-    if not custom_out.exists():
-        os.makedirs(custom_out)
-    else:
-        shutil.rmtree(custom_out)
-        os.makedirs(custom_out)
+    # Ensure the directory exists
+    custom_out.mkdir(parents=True, exist_ok=True)
 
+    # Prepare output file path
     outfile = custom_out / file_name
+
+    # If the output file already exists, delete it
+    if outfile.exists():
+        outfile.unlink()
+
     return outfile
 
 

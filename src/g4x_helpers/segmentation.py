@@ -45,7 +45,10 @@ def _make_cell_by_gene(segmentation_props: pl.DataFrame, reads_new_labels: pl.Da
 def _make_adata(cell_by_gene: pl.DataFrame, cell_metadata: pl.DataFrame) -> ad.AnnData:
     X = cell_by_gene.drop('segmentation_cell_id').to_numpy()
 
-    adata = ad.AnnData(X=X, obs=cell_metadata.drop('segmentation_label').to_pandas())
+    obs_df = cell_metadata.drop('segmentation_label').to_pandas()
+    obs_df.index = obs_df.index.astype(str)
+
+    adata = ad.AnnData(X=X, obs=obs_df)
 
     adata.var['gene_id'] = cell_by_gene.columns[1:]
     adata.var['modality'] = 'tx'

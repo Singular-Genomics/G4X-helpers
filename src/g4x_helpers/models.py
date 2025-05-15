@@ -251,7 +251,7 @@ class G4Xoutput:
 
         outfile = utils._create_custom_out(self, out_dir, 'rna', 'transcript_table.csv.gz')
         reads_new_labels.write_csv(outfile)
-
+        
         outfile = utils._create_custom_out(self, out_dir, 'single_cell_data', 'cell_by_transcript.csv.gz')
         cell_by_gene.write_csv(outfile)
 
