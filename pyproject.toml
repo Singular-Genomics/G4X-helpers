@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "g4x_helpers"
-version = "0.1.0"
+version = "0.1.1"
 
 description = "Python helpers for G4X."
 readme = "README.md"
@@ -34,6 +34,7 @@ dependencies = [
     "polars>=1.8.2",
     "pyarrow>=20.0.0",
     "rasterio>=1.4.3",
+    "ray>=2.46.0",
     "scanpy>=1.10.0",
     "scikit-image>=0.25.2",
     "shapely>=2.1.0",
