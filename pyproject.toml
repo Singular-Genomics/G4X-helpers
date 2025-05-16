@@ -46,3 +46,6 @@ dev = [
   "mkdocs>=1.6.1",
   "mkdocs-material>=9.6.12",
 ]
+
+[project.scripts]
+resegment = "g4x_helpers.entrypoint:launch_resegmentation"

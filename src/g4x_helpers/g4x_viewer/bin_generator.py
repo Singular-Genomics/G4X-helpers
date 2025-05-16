@@ -1,10 +1,10 @@
 from collections import deque
-from typing import Optional
-
+from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import ray
+import random
 from numba import njit
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
@@ -12,8 +12,28 @@ from scipy.spatial import distance_matrix
 from skimage.measure import approximate_polygon
 from skimage.morphology import dilation, disk, erosion
 from tqdm import tqdm
-
+from anndata import AnnData
 from . import CellMasksSchema_pb2 as CellMasksSchema
+
+
+def generate_cluster_palette(clusters: list, max_colors: int = 256) -> dict:
+    unique_clusters = [c for c in np.unique(clusters) if c != '-1']
+    n_clusters = len(unique_clusters)
+
+    if n_clusters <= 10:
+        base_cmap = plt.get_cmap('tab10')
+    elif n_clusters <= 20:
+        base_cmap = plt.get_cmap('tab20')
+    else:
+        base_cmap = plt.get_cmap('hsv', min(max_colors, n_clusters))
+
+    cluster_palette = {
+        str(cluster): [int(255 * c) for c in base_cmap(i / n_clusters)[:3]]
+        for i, cluster in enumerate(unique_clusters)
+    }
+    cluster_palette["-1"] = [int(191), int(191), int(191)]
+
+    return cluster_palette
 
 
 @njit
@@ -157,21 +177,52 @@ def refine_polygon(k, cx, cy, sorted_nonzero_values_ref, sorted_rows_ref, sorted
     return pointsToSingleSmoothPath(points, tolerance=2.0)
 
 
-def get_border(mask: np.ndarray, *, s: Optional[int] = 1) -> np.ndarray:
+def get_border(mask: np.ndarray, s: int = 1) -> np.ndarray:
     d = dilation(mask, disk(s))
-
     border = (mask != d).astype(np.uint8)
-
     return border
 
 
-def seg_converter(adata_clustered, adata_orig, arr, cluster_key, outpath):
-    border = get_border(arr)
-    arr[border > 0] = 0
-    eroded_mask = erosion(arr, disk(1))
-    outlines = arr - eroded_mask
+def seg_converter(
+    adata: AnnData,
+    seg_mask: np.ndarray,
+    outpath: str | Path,
+    *,
+    cluster_info: str| Path | None = None,
+    cluster_key: str | None = None,
+    emb_key: str | None = None,
+    protein_list: list[str] | None = None,
+    n_threads: int = 4
+) -> None:
+
+    if cluster_info is None:
+        clusters_available = False
+        obs_df = adata.obs.copy()
+    else:
+        clusters_available = True
+        clustered_df = pd.read_csv(cluster_info, index_col= 0, header= 0)
+        if clustered_df.shape[1] > 1:
+            assert cluster_key is not None, "ERROR: multiple columns detected in cluster_info, cluster_key must be provided."
+        else:
+            cluster_key = clustered_df.columns[0]
+        orig_df = adata.obs.copy()
+
+        ## these are cells that were filtered out during clustering
+        orig_df = orig_df.loc[list(set(orig_df.index) - set(clustered_df.index)), :].copy()
+        for col in list(set(clustered_df.columns) - set(orig_df.columns)):
+            orig_df[col] = '-1'
+
+        obs_df = pd.concat([clustered_df, orig_df])
+        obs_df.sort_index(inplace=True)
+
+    ## initialize segmentation data
+    ## we create polygons to define the boundaries of each cell mask
+    border = get_border(seg_mask)
+    seg_mask[border > 0] = 0
+    eroded_mask = erosion(seg_mask, disk(1))
+    outlines = seg_mask - eroded_mask
     sparse_matrix = csr_matrix(outlines)
-    del arr, border, eroded_mask, outlines
+    del seg_mask, border, eroded_mask, outlines
     nonzero_values = sparse_matrix.data
     nonzero_row_indices, nonzero_col_indices = sparse_matrix.nonzero()
     sorted_indices = np.argsort(nonzero_values)
@@ -180,16 +231,6 @@ def seg_converter(adata_clustered, adata_orig, arr, cluster_key, outpath):
     sorted_cols = nonzero_col_indices[sorted_indices]
 
     ## add single-cell info
-    clustered_df = adata_clustered.obs.copy()
-    orig_df = adata_orig.obs.copy()
-
-    ## these are cells that were filtered out during clustering
-    orig_df = orig_df.loc[list(set(orig_df.index) - set(clustered_df.index)), :].copy()
-    for col in list(set(clustered_df.columns) - set(orig_df.columns)):
-        orig_df[col] = '-1'
-
-    obs_df = pd.concat([clustered_df, orig_df])
-    obs_df.sort_index(inplace=True)
     cell_ids = obs_df.index.tolist()
     num_cells = len(cell_ids)
     centroid_y = obs_df['cell_x'].tolist()
@@ -197,30 +238,33 @@ def seg_converter(adata_clustered, adata_orig, arr, cluster_key, outpath):
     areas = obs_df['nuclei_expanded_area'].tolist()
     total_counts = obs_df['total_counts'].tolist()
     total_genes = obs_df['n_genes_by_counts'].tolist()
-    leiden_cols = sorted([x for x in obs_df.columns if cluster_key in x])
-    clusters = obs_df[leiden_cols[0]].tolist()
-
-    ## make color palette for clusters
-    tab10 = plt.get_cmap('tab10')
-    cluster_palette = {
-        'color_map': [
-            {'clusterId': str(x), 'color': [int(y * 255) for y in tab10(i % 10)][:3]}
-            for i, x in enumerate(np.unique(clusters))
-            if x != '-1'
-        ]
-    }
-    ## filtered cells will be gray
-    filtered_cell_color = [int(191), int(191), int(191)]
-    default_color = [int(31), int(119), int(180)]
-    cluster_palette['color_map'].append({'clusterId': '-1', 'color': filtered_cell_color})
-    mapping_palette = {x['clusterId']: x['color'] for x in cluster_palette['color_map']}
-    cluster_colors = obs_df[leiden_cols[0]].astype(str).map(mapping_palette).tolist()
+    if clusters_available:
+        clusters = obs_df[cluster_key].tolist()
+        cluster_palette = generate_cluster_palette(clusters)
+        cluster_colors = obs_df[cluster_key].astype(str).map(cluster_palette).tolist()
+    else:
+        cmap = plt.get_cmap('hsv', 100)
+        clusters = ["-1"] * num_cells
+        cluster_colors = [[int(255 * x) for x in cmap(i % 100)[:3]] for i in range(num_cells)]
+        random.shuffle(cluster_colors)
+    if protein_list:
+        prot_vals = list(obs_df[protein_list].to_dict(orient= 'index').values())
+    else:
+        prot_vals = [{} for _ in range(num_cells)]
+    if emb_key:
+        umap_x = obs_df[f"{emb_key}_0"].to_numpy()
+        umap_y = obs_df[f"{emb_key}_1"].to_numpy()
+    else:
+        umap_x = np.zeros(num_cells)
+        umap_y = np.zeros(num_cells)
 
     ## refine polygons
-    # logger.debug(f"{sample_id}: refining polygons")
-
     ray.init(
-        num_cpus=32, logging_level='WARNING', include_dashboard=False, address='local', _node_ip_address='127.0.0.1'
+        num_cpus=n_threads,
+        logging_level='WARNING',
+        include_dashboard=False,
+        address='local',
+        _node_ip_address='127.0.0.1'
     )
 
     sorted_nonzero_values_ref = ray.put(sorted_nonzero_values)
@@ -234,7 +278,7 @@ def seg_converter(adata_clustered, adata_orig, arr, cluster_key, outpath):
 
     ray.shutdown()
 
-    ## do conversion and save to bin file
+    ## do conversion
     # logger.debug(f"{sample_id}: Converting data to protobuff format...")
     segmentation_source = {
         'xs': [[y[0] for y in x] for x in polygons],
@@ -246,8 +290,13 @@ def seg_converter(adata_clustered, adata_orig, arr, cluster_key, outpath):
         'centroid_y': centroid_y,
         'total_tx': total_counts,
         'total_genes': total_genes,
-        'cluster_id': clusters,
+        'cluster_id': clusters
     }
+    if protein_list:
+        segmentation_source['protein'] = prot_vals
+    if emb_key:
+        segmentation_source['umap_x'] = umap_x
+        segmentation_source['umap_y'] = umap_y
 
     outputCellSegmentation = CellMasksSchema.CellMasks()
 
@@ -264,6 +313,9 @@ def seg_converter(adata_clustered, adata_orig, arr, cluster_key, outpath):
             cellTotalGenes = segmentation_source['total_genes'][index]
             cellArea = segmentation_source['area'][index]
             clusterId = segmentation_source['cluster_id'][index]
+            cellProt = segmentation_source["protein"][index]
+            cellUmapX = segmentation_source["umap_x"][index]
+            cellUmapY = segmentation_source["umap_y"][index]
         except Exception as e:
             # logger.exception(e)
             pass
@@ -275,12 +327,22 @@ def seg_converter(adata_clustered, adata_orig, arr, cluster_key, outpath):
         outputMaskData.totalCounts = str(cellTotalCounts)
         outputMaskData.totalGenes = str(cellTotalGenes)
         outputMaskData.clusterId = str(clusterId)
+        outputMaskData.umapValues.umapX = cellUmapX
+        outputMaskData.umapValues.umapY = cellUmapY
+        outputMaskData.proteins.update(cellProt)
 
-    for cluster_id, color in mapping_palette.items():
+    if clusters_available:
+        for cluster_id, color in cluster_palette.items():
+            entry = CellMasksSchema.ColormapEntry()
+            entry.clusterId = cluster_id
+            entry.color.extend(color)
+            outputCellSegmentation.colormap.append(entry)
+    else:
         entry = CellMasksSchema.ColormapEntry()
-        entry.clusterId = cluster_id
-        entry.color.extend(color)
-        outputCellSegmentation.colormap.append(entry)
+        entry.clusterId = '-1'
+        entry.color.extend([int(31), int(119), int(180)])
+        outputCellSegmentation.colormap.append(entry)   
 
+    ## write to file
     with open(outpath, 'wb') as file:
         file.write(outputCellSegmentation.SerializeToString())

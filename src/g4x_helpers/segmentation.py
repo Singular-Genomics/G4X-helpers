@@ -193,7 +193,7 @@ def rasterize_polygons(gdf: GeoDataFrame, target_shape: tuple) -> np.ndarray:
 
 
 def extract_image_signals(
-    sample: 'G4Xoutput',
+    sample: G4Xoutput,
     mask: np.ndarray,
     lazy: bool = False,
     include_channels: list = None,

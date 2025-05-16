@@ -13,8 +13,12 @@ if TYPE_CHECKING:
 
 import logging
 import os
-
+import glymur
 from pathlib import Path
+from functools import lru_cache
+import numpy as np
+import matplotlib.pyplot as plt
+glymur.set_option('lib.num_threads', 8)
 
 def setup_logger(
     logger_name: str,
@@ -84,3 +88,24 @@ def setup_logger(
         logger.addHandler(fh)
 
     return logger
+
+
+@lru_cache(maxsize=None)
+def load_image_cached(run_base: str, signal: str, thumbnail: bool) -> Tuple[np.ndarray, float, float]:
+    """This is cached per (run_base, signal, thumbnail)."""
+    run_base = Path(run_base)
+
+    folder = 'h_and_e' if signal in ('h_and_e', 'nuclear', 'eosin') else 'protein'
+
+    p = run_base / folder
+    suffix = '.jpg' if (thumbnail and signal == 'h_and_e') else ('.png' if thumbnail else '.jp2')
+
+    fname = f'{signal}_thumbnail{suffix}' if thumbnail else f'{signal}.jp2'
+    img_file = p / fname
+
+    if img_file.suffix == '.png':
+        img = plt.imread(img_file)
+    else:
+        img = glymur.Jp2k(str(img_file))[:]
+
+    return img
