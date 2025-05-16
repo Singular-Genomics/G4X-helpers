@@ -27,7 +27,6 @@ classifiers = [
 
 urls = { Homepage = "https://github.com/Singular-Genomics/G4X-helpers" }
 dependencies = [
-  "cmcrameri>=1.9",
   "geopandas>=1.0.1",
   "glymur>=0.13.0",
   "matplotlib>=3.7.0",
