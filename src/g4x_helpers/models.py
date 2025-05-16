@@ -193,7 +193,7 @@ class G4Xoutput:
         else:
             self.logger.info(f'No output directory specified, saving to ["custom"] directories in {self.run_base}.')
 
-        outfile = reseg._create_custom_out(self, out_dir, 'segmentation', 'segmentation_mask.npz')
+        outfile = reseg._create_custom_out(self, out_dir, 'segmentation', 'segmentation_mask_updated.npz')
         self.logger.debug(f"segmentation mask --> {outfile}")
         np.savez(outfile, cell_labels=mask)
 

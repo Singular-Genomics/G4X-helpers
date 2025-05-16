@@ -188,19 +188,19 @@ def seg_converter(
     seg_mask: np.ndarray,
     outpath: str | Path,
     *,
-    cluster_info: str| Path | None = None,
+    metadata: str| Path | None = None,
     cluster_key: str | None = None,
     emb_key: str | None = None,
     protein_list: list[str] | None = None,
     n_threads: int = 4
 ) -> None:
 
-    if cluster_info is None:
+    if metadata is None:
         clusters_available = False
         obs_df = adata.obs.copy()
     else:
         clusters_available = True
-        clustered_df = pd.read_csv(cluster_info, index_col= 0, header= 0)
+        clustered_df = pd.read_csv(metadata, index_col= 0, header= 0)
         if clustered_df.shape[1] > 1:
             assert cluster_key is not None, "ERROR: multiple columns detected in cluster_info, cluster_key must be provided."
         else:
