@@ -1,7 +1,7 @@
 # from g4x_helpers.models import G4Xoutput
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union, List
 
 from pathlib import Path
 import anndata as ad
@@ -196,18 +196,16 @@ def extract_image_signals(
     sample: G4Xoutput,
     mask: np.ndarray,
     lazy: bool = False,
-    include_channels: list = None,
-    exclude_channels: list = None,
+    exclude_channels: Optional[List[str]] = None,
 ) -> Union[pl.DataFrame, pl.LazyFrame]:
-    if include_channels:
-        signal_list = include_channels
-    else:
-        signal_list = ['nuclear', 'eosin'] + sample.proteins
+    
+    signal_list = ['nuclear', 'eosin'] + sample.proteins
 
-    if isinstance(exclude_channels, (str, type(None))):
-        exclude_channels = [exclude_channels]
+    if exclude_channels is not None:
+        if isinstance(exclude_channels, str):
+            exclude_channels = [exclude_channels]
 
-    signal_list = [item for item in signal_list if item not in exclude_channels]
+        signal_list = [item for item in signal_list if item not in exclude_channels]
 
     for i, signal_name in enumerate(signal_list):
         print(f'Extracting {signal_name} signal...')
@@ -219,8 +217,7 @@ def extract_image_signals(
                 # parent_directory = 'protein'
                 channel_name_map = {protein: protein for protein in sample.proteins}
 
-            signal_img = sample.load_image('PanCK', thumbnail=False)
-            # signal_img = sample._get_image(parent_directory=parent_directory, pattern=f'{signal_name}.jp2')
+            signal_img = sample.load_image(signal_name)
             ch_label = f'{channel_name_map[signal_name]}_intensity_mean'
 
             prop_tab = image_mask_intensity_extraction(

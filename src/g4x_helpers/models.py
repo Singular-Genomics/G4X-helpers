@@ -4,6 +4,8 @@ import os
 from dataclasses import InitVar, dataclass  # , asdict, field
 from pathlib import Path
 
+from typing import List, Optional, Union
+
 import anndata as ad
 import glymur
 import matplotlib.pyplot as plt
@@ -12,6 +14,7 @@ import pandas as pd
 import polars as pl
 import scanpy as sc
 from geopandas.geodataframe import GeoDataFrame
+from packaging import version
 
 import g4x_helpers.g4x_viewer.bin_generator as bin_gen
 import g4x_helpers.segmentation as reseg
@@ -149,8 +152,7 @@ class G4Xoutput:
         labels: GeoDataFrame | np.ndarray,
         *,
         out_dir: str | Path | None = None,
-        include_channels: list[str] | None = None,
-        exclude_channels: list[str] | None = None,
+        exclude_channels: Optional[List[str]] = None,
         gen_bin_file: bool = True,
         n_threads: int = 4,
     ) -> None:
@@ -174,7 +176,7 @@ class G4Xoutput:
 
         self.logger.info('Extracting image signals')
         cell_by_protein = reseg.extract_image_signals(
-            self, mask, include_channels=include_channels, exclude_channels=exclude_channels
+            self, mask, exclude_channels=exclude_channels
         )
 
         self.logger.info('Building output data structures')
@@ -211,6 +213,13 @@ class G4Xoutput:
         self.logger.debug(f'cell metadata --> {outfile}')
         adata.obs.to_csv(outfile)
 
+        if include_channels is not None:
+            final_set = include_channels
+        else:
+            final_set = [p for p in self.proteins if p not in exclude_channels]
+        
+        final_set = ['nuclear', 'eosin'] + final_set
+        
         if gen_bin_file:
             self.logger.info('Making G4X-Viewer bin file.')
             outfile = reseg._create_custom_out(self, out_dir, 'g4x_viewer', f'{self.sample_id}.bin')
@@ -218,7 +227,7 @@ class G4Xoutput:
                 adata=adata,
                 seg_mask=mask,
                 outpath=outfile,
-                protein_list=[f'{x}_intensity_mean' for x in self.proteins],
+                protein_list=[f'{x}_intensity_mean' for x in final_set],
                 n_threads=n_threads,
             )
             self.logger.debug(f'G4X-Viewer bin --> {outfile}')
@@ -228,6 +237,23 @@ class G4Xoutput:
         return img
 
     # region internal
+    def _get_shape(self):
+        img_path = self.run_base / 'h_and_e/nuclear.jp2'
+        img = glymur.Jp2k(img_path)
+        return img.shape
+    
+    def _get_coord_order(self, verbose: bool = False) -> str:
+        critical_version = version.parse('2.11.1')
+
+        detected_caretta_version = version.parse(self.software_version)
+        if verbose:
+            self.logger.debug(f'Detected Caretta version: {detected_caretta_version}')
+
+        if detected_caretta_version >= critical_version:
+            return 'yx'
+        else:
+            return 'xy'
+    
     def _clear_image_cache(self):
         """Evict all cached images so subsequent calls re-read from disk."""
         utils.load_image_cached.cache_clear()
@@ -248,6 +274,7 @@ class G4Xoutput:
 
         self.includes_transcript = False if self.transcript_panel == [] else True
         self.includes_protein = False if self.protein_panel == [] else True
+        self.shape = self._get_shape()
 
     # region dunder
     def __repr__(self):
