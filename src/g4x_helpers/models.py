@@ -3,7 +3,6 @@ import logging
 import os
 from dataclasses import InitVar, dataclass  # , asdict, field
 from pathlib import Path
-
 from typing import List, Optional, Union
 
 import anndata as ad
@@ -20,7 +19,7 @@ import g4x_helpers.g4x_viewer.bin_generator as bin_gen
 import g4x_helpers.segmentation as reseg
 import g4x_helpers.utils as utils
 
-glymur.set_option('lib.num_threads', 8)
+glymur.set_option('lib.num_threads', 24)
 
 
 @dataclass()
@@ -157,6 +156,19 @@ class G4Xoutput:
         n_threads: int = 4,
     ) -> None:
         mask = labels
+
+        signal_list = ['nuclear', 'eosin'] + self.proteins
+
+        if exclude_channels is not None:
+            self.logger.info(f'Not processing channels: {", ".join(exclude_channels)}')
+            if isinstance(exclude_channels, str):
+                exclude_channels = [exclude_channels]
+
+            signal_list = [item for item in signal_list if item not in exclude_channels]
+        else:
+            self.logger.info('Processing all channels.')
+            
+
         if out_dir is None:
             self.logger.warning('out_dir was not specified, so files will be updated in-place.')
             out_dir = self.run_base
@@ -175,9 +187,7 @@ class G4Xoutput:
         reads_new_labels = reseg.assign_tx_to_mask_labels(self, mask)
 
         self.logger.info('Extracting image signals')
-        cell_by_protein = reseg.extract_image_signals(
-            self, mask, exclude_channels=exclude_channels
-        )
+        cell_by_protein = reseg.extract_image_signals(self, mask, signal_list=signal_list)
 
         self.logger.info('Building output data structures')
         cell_metadata = reseg._make_cell_metadata(segmentation_props, cell_by_protein)
@@ -213,13 +223,7 @@ class G4Xoutput:
         self.logger.debug(f'cell metadata --> {outfile}')
         adata.obs.to_csv(outfile)
 
-        if include_channels is not None:
-            final_set = include_channels
-        else:
-            final_set = [p for p in self.proteins if p not in exclude_channels]
-        
-        final_set = ['nuclear', 'eosin'] + final_set
-        
+        protein_only_list = [p for p in signal_list if p not in ['nuclear', 'eosin']]
         if gen_bin_file:
             self.logger.info('Making G4X-Viewer bin file.')
             outfile = reseg._create_custom_out(self, out_dir, 'g4x_viewer', f'{self.sample_id}.bin')
@@ -227,7 +231,7 @@ class G4Xoutput:
                 adata=adata,
                 seg_mask=mask,
                 outpath=outfile,
-                protein_list=[f'{x}_intensity_mean' for x in final_set],
+                protein_list=[f'{x}_intensity_mean' for x in protein_only_list],
                 n_threads=n_threads,
             )
             self.logger.debug(f'G4X-Viewer bin --> {outfile}')
@@ -241,7 +245,7 @@ class G4Xoutput:
         img_path = self.run_base / 'h_and_e/nuclear.jp2'
         img = glymur.Jp2k(img_path)
         return img.shape
-    
+
     def _get_coord_order(self, verbose: bool = False) -> str:
         critical_version = version.parse('2.11.1')
 
@@ -253,7 +257,7 @@ class G4Xoutput:
             return 'yx'
         else:
             return 'xy'
-    
+
     def _clear_image_cache(self):
         """Evict all cached images so subsequent calls re-read from disk."""
         utils.load_image_cached.cache_clear()

@@ -293,13 +293,15 @@ def seg_converter(
         'centroid_y': centroid_y,
         'total_tx': total_counts,
         'total_genes': total_genes,
-        'cluster_id': clusters
+        'cluster_id': clusters,
+        'umap_x': umap_x,
+        'umap_y': umap_y,
     }
     if protein_list:
         segmentation_source['protein'] = prot_vals
-    if emb_key:
-        segmentation_source['umap_x'] = umap_x
-        segmentation_source['umap_y'] = umap_y
+    # if emb_key:
+    #     segmentation_source['umap_x'] = umap_x
+    #     segmentation_source['umap_y'] = umap_y
 
     outputCellSegmentation = CellMasksSchema.CellMasks()
 

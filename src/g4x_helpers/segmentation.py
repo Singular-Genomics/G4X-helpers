@@ -1,9 +1,9 @@
 # from g4x_helpers.models import G4Xoutput
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Union, List
-
 from pathlib import Path
+from typing import TYPE_CHECKING, List, Optional, Union
+
 import anndata as ad
 import numpy as np
 import polars as pl
@@ -196,43 +196,37 @@ def extract_image_signals(
     sample: G4Xoutput,
     mask: np.ndarray,
     lazy: bool = False,
-    exclude_channels: Optional[List[str]] = None,
+    signal_list: Optional[List[str]] = None,
 ) -> Union[pl.DataFrame, pl.LazyFrame]:
     
-    signal_list = ['nuclear', 'eosin'] + sample.proteins
-
-    if exclude_channels is not None:
-        if isinstance(exclude_channels, str):
-            exclude_channels = [exclude_channels]
-
-        signal_list = [item for item in signal_list if item not in exclude_channels]
+    if signal_list is None:
+        signal_list = ['nuclear', 'eosin'] + sample.proteins
 
     for i, signal_name in enumerate(signal_list):
         print(f'Extracting {signal_name} signal...')
-        if signal_name not in exclude_channels:
-            if signal_name in ('nuclear', 'eosin'):
-                # parent_directory = 'h_and_e'
-                channel_name_map = {'nuclear': 'nuclearstain', 'eosin': 'cytoplasmicstain'}
-            else:
-                # parent_directory = 'protein'
-                channel_name_map = {protein: protein for protein in sample.proteins}
+        
+        if signal_name in ('nuclear', 'eosin'):
+            channel_name_map = {'nuclear': 'nuclearstain', 'eosin': 'cytoplasmicstain'}
+        else:
+            channel_name_map = {protein: protein for protein in sample.proteins}
 
-            signal_img = sample.load_image(signal_name)
-            ch_label = f'{channel_name_map[signal_name]}_intensity_mean'
+        signal_img = sample.load_image(signal_name)
+        
+        ch_label = f'{channel_name_map[signal_name]}_intensity_mean'
 
-            prop_tab = image_mask_intensity_extraction(
-                mask,
-                signal_img,
-                bead_mask=None,
-                label_prefix=f'{sample.sample_id}-',
-                channel_label=ch_label,
-                lazy=lazy,
-            )
+        prop_tab = image_mask_intensity_extraction(
+            mask,
+            signal_img,
+            bead_mask=None,
+            label_prefix=f'{sample.sample_id}-',
+            channel_label=ch_label,
+            lazy=lazy,
+        )
 
-            if i == 0:
-                signal_df = prop_tab
-            else:
-                signal_df = join_frames(signal_df, prop_tab)
+        if i == 0:
+            signal_df = prop_tab
+        else:
+            signal_df = join_frames(signal_df, prop_tab)
 
     signal_df = signal_df.cast({'label': pl.String}).rename({'label': 'segmentation_cell_id'})
 
