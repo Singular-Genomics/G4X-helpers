@@ -1,10 +1,12 @@
+import random
 from collections import deque
 from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import ray
-import random
+from anndata import AnnData
 from numba import njit
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
@@ -12,7 +14,7 @@ from scipy.spatial import distance_matrix
 from skimage.measure import approximate_polygon
 from skimage.morphology import dilation, disk, erosion
 from tqdm import tqdm
-from anndata import AnnData
+
 from . import CellMasksSchema_pb2 as CellMasksSchema
 
 
@@ -235,7 +237,8 @@ def seg_converter(
     num_cells = len(cell_ids)
     centroid_y = obs_df['cell_x'].tolist()
     centroid_x = obs_df['cell_y'].tolist()
-    areas = obs_df['nuclei_expanded_area'].tolist()
+    # areas = obs_df['nuclei_expanded_area'].tolist()
+    areas = obs_df['area'].tolist()
     total_counts = obs_df['total_counts'].tolist()
     total_genes = obs_df['n_genes_by_counts'].tolist()
     if clusters_available:
@@ -290,13 +293,15 @@ def seg_converter(
         'centroid_y': centroid_y,
         'total_tx': total_counts,
         'total_genes': total_genes,
-        'cluster_id': clusters
+        'cluster_id': clusters,
+        'umap_x': umap_x,
+        'umap_y': umap_y,
     }
     if protein_list:
         segmentation_source['protein'] = prot_vals
-    if emb_key:
-        segmentation_source['umap_x'] = umap_x
-        segmentation_source['umap_y'] = umap_y
+    # if emb_key:
+    #     segmentation_source['umap_x'] = umap_x
+    #     segmentation_source['umap_y'] = umap_y
 
     outputCellSegmentation = CellMasksSchema.CellMasks()
 

@@ -3,9 +3,11 @@ import logging
 import os
 from dataclasses import InitVar, dataclass  # , asdict, field
 from pathlib import Path
+from typing import List, Optional, Union
 
 import anndata as ad
 import glymur
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import polars as pl
@@ -13,13 +15,11 @@ import scanpy as sc
 from geopandas.geodataframe import GeoDataFrame
 from packaging import version
 
-import matplotlib.pyplot as plt
-
+import g4x_helpers.g4x_viewer.bin_generator as bin_gen
 import g4x_helpers.segmentation as reseg
 import g4x_helpers.utils as utils
-import g4x_helpers.g4x_viewer.bin_generator as bin_gen
 
-glymur.set_option('lib.num_threads', 8)
+glymur.set_option('lib.num_threads', 24)
 
 
 @dataclass()
@@ -41,8 +41,7 @@ class G4Xoutput:
             self.run_meta = json.load(f)
 
         self._populate_attrs()
-        self._get_shape()
-        
+
         if self.transcript_panel:
             transcript_panel = pd.read_csv(self.run_base / 'transcript_panel.csv', index_col=0, header=0)
             self.transcript_panel_dict = transcript_panel.to_dict()['panel_type']
@@ -77,9 +76,7 @@ class G4Xoutput:
             clear_handlers=clear_handlers,
         )
 
-    def load_adata(
-        self, *, remove_nontargeting: bool = True, load_clustering: bool = True
-    ) -> ad.AnnData:
+    def load_adata(self, *, remove_nontargeting: bool = True, load_clustering: bool = True) -> ad.AnnData:
         adata = sc.read_h5ad(self.run_base / 'single_cell_data' / 'feature_matrix.h5')
 
         adata.obs_names = adata.obs['cell_id']
@@ -154,18 +151,29 @@ class G4Xoutput:
         labels: GeoDataFrame | np.ndarray,
         *,
         out_dir: str | Path | None = None,
-        include_channels: list[str] | None = None,
-        exclude_channels: list[str] | None = None,
+        exclude_channels: Optional[List[str]] = None,
         gen_bin_file: bool = True,
-        n_threads: int = 4
+        n_threads: int = 4,
     ) -> None:
-        
         mask = labels
+
+        signal_list = ['nuclear', 'eosin'] + self.proteins
+
+        if exclude_channels is not None:
+            self.logger.info(f'Not processing channels: {", ".join(exclude_channels)}')
+            if isinstance(exclude_channels, str):
+                exclude_channels = [exclude_channels]
+
+            signal_list = [item for item in signal_list if item not in exclude_channels]
+        else:
+            self.logger.info('Processing all channels.')
+            
+
         if out_dir is None:
-            self.logger.warning("out_dir was not specified, so files will be updated in-place.")
+            self.logger.warning('out_dir was not specified, so files will be updated in-place.')
             out_dir = self.run_base
         else:
-            self.logger.info(f"Using provided output directory: {out_dir}")
+            self.logger.info(f'Using provided output directory: {out_dir}')
             out_dir = Path(out_dir)
 
         if isinstance(mask, GeoDataFrame):
@@ -179,9 +187,7 @@ class G4Xoutput:
         reads_new_labels = reseg.assign_tx_to_mask_labels(self, mask)
 
         self.logger.info('Extracting image signals')
-        cell_by_protein = reseg.extract_image_signals(
-            self, mask, include_channels=include_channels, exclude_channels=exclude_channels
-        )
+        cell_by_protein = reseg.extract_image_signals(self, mask, signal_list=signal_list)
 
         self.logger.info('Building output data structures')
         cell_metadata = reseg._make_cell_metadata(segmentation_props, cell_by_protein)
@@ -194,47 +200,52 @@ class G4Xoutput:
             self.logger.info(f'No output directory specified, saving to ["custom"] directories in {self.run_base}.')
 
         outfile = reseg._create_custom_out(self, out_dir, 'segmentation', 'segmentation_mask_updated.npz')
-        self.logger.debug(f"segmentation mask --> {outfile}")
+        self.logger.debug(f'segmentation mask --> {outfile}')
         np.savez(outfile, cell_labels=mask)
 
         outfile = reseg._create_custom_out(self, out_dir, 'rna', 'transcript_table.csv.gz')
-        self.logger.debug(f"transcript table --> {outfile}")
+        self.logger.debug(f'transcript table --> {outfile}')
         reads_new_labels.write_csv(outfile)
-        
+
         outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'cell_by_transcript.csv.gz')
-        self.logger.debug(f"cell x transcript --> {outfile}")
+        self.logger.debug(f'cell x transcript --> {outfile}')
         cell_by_gene.write_csv(outfile)
 
         outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'cell_by_protein.csv.gz')
-        self.logger.debug(f"cell x protein --> {outfile}")
+        self.logger.debug(f'cell x protein --> {outfile}')
         cell_by_protein.write_csv(outfile)
 
         outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'feature_matrix.h5')
-        self.logger.debug(f"single-cell h5 --> {outfile}")
+        self.logger.debug(f'single-cell h5 --> {outfile}')
         adata.write_h5ad(outfile)
 
         outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'cell_metadata.csv.gz')
-        self.logger.debug(f"cell metadata --> {outfile}")
+        self.logger.debug(f'cell metadata --> {outfile}')
         adata.obs.to_csv(outfile)
 
+        protein_only_list = [p for p in signal_list if p not in ['nuclear', 'eosin']]
         if gen_bin_file:
             self.logger.info('Making G4X-Viewer bin file.')
-            outfile = reseg._create_custom_out(self, out_dir, 'g4x_viewer', f"{self.sample_id}.bin")
+            outfile = reseg._create_custom_out(self, out_dir, 'g4x_viewer', f'{self.sample_id}.bin')
             _ = bin_gen.seg_converter(
-                adata= adata,
-                seg_mask= mask,
-                outpath= outfile,
-                protein_list= [f"{x}_intensity_mean" for x in self.proteins],
-                n_threads= n_threads
+                adata=adata,
+                seg_mask=mask,
+                outpath=outfile,
+                protein_list=[f'{x}_intensity_mean' for x in protein_only_list],
+                n_threads=n_threads,
             )
-            self.logger.debug(f"G4X-Viewer bin --> {outfile}")
+            self.logger.debug(f'G4X-Viewer bin --> {outfile}')
 
-    def load_image(
-        self, signal: str, thumbnail: bool = False) -> tuple[np.ndarray, float, float]:
+    def load_image(self, signal: str, thumbnail: bool = False) -> tuple[np.ndarray, float, float]:
         img = utils.load_image_cached(self.run_base, signal, thumbnail=thumbnail)
         return img
 
     # region internal
+    def _get_shape(self):
+        img_path = self.run_base / 'h_and_e/nuclear.jp2'
+        img = glymur.Jp2k(img_path)
+        return img.shape
+
     def _get_coord_order(self, verbose: bool = False) -> str:
         critical_version = version.parse('2.11.1')
 
@@ -246,11 +257,6 @@ class G4Xoutput:
             return 'yx'
         else:
             return 'xy'
-
-    def _get_shape(self):
-        img = self.load_nuclear_image()
-        self.shape = img.shape
-        self.extent = (0, self.shape[1], 0, self.shape[0])
 
     def _clear_image_cache(self):
         """Evict all cached images so subsequent calls re-read from disk."""
@@ -272,6 +278,7 @@ class G4Xoutput:
 
         self.includes_transcript = False if self.transcript_panel == [] else True
         self.includes_protein = False if self.protein_panel == [] else True
+        self.shape = self._get_shape()
 
     # region dunder
     def __repr__(self):
