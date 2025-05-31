@@ -159,7 +159,7 @@ class G4Xoutput:
 
     def load_image_by_type(
         self,
-        image_type: Literal["protein", "h_and_e", "nuclear", "cytoplasmic"],
+        image_type: Literal["protein", "h_and_e", "nuclear", "eosin"],
         thumbnail: bool = False,
         protein: str | None = None
     ) -> np.ndarray:
@@ -177,7 +177,7 @@ class G4Xoutput:
             pattern_base = {
                 "h_and_e": "h_and_e",
                 "nuclear": "nuclear",
-                "cytoplasmic": "cytoplasmic"
+                "eosin": "eosin"
             }.get(image_type)
 
             if not pattern_base:
@@ -198,8 +198,8 @@ class G4Xoutput:
     def load_nuclear_image(self, thumbnail: bool = False) -> np.ndarray:
         return self.load_image_by_type("nuclear", thumbnail=thumbnail)
 
-    def load_cytoplasmic_image(self, thumbnail: bool = False) -> np.ndarray:
-        return self.load_image_by_type("cytoplasmic", thumbnail=thumbnail)
+    def load_eosin_image(self, thumbnail: bool = False) -> np.ndarray:
+        return self.load_image_by_type("eosin", thumbnail=thumbnail)
 
     def load_segmentation(self, expanded: bool = True) -> np.ndarray:
         arr = np.load(self.run_base / 'segmentation' / 'segmentation_mask.npz')
@@ -241,7 +241,7 @@ class G4Xoutput:
     ) -> None:
         mask = labels
 
-        signal_list = ['nuclear', 'cytoplasmic'] + self.proteins
+        signal_list = ['nuclear', 'eosin'] + self.proteins
 
         if exclude_channels is not None:
             self.logger.info(f'Not processing channels: {", ".join(exclude_channels)}')
@@ -306,7 +306,7 @@ class G4Xoutput:
         self.logger.debug(f'cell metadata --> {outfile}')
         adata.obs.to_csv(outfile)
 
-        protein_only_list = [p for p in signal_list if p not in ['nuclear', 'cytoplasmic']]
+        protein_only_list = [p for p in signal_list if p not in ['nuclear', 'eosin']]
         if gen_bin_file:
             self.logger.info('Making G4X-Viewer bin file.')
             outfile = reseg._create_custom_out(self, out_dir, 'g4x_viewer', f'{self.sample_id}.bin')

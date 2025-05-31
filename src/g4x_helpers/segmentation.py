@@ -200,16 +200,16 @@ def extract_image_signals(
 ) -> pl.DataFrame | pl.LazyFrame:
     
     if signal_list is None:
-        signal_list = ['nuclear', 'cytoplasmic'] + sample.proteins
+        signal_list = ['nuclear', 'eosin'] + sample.proteins
 
     channel_name_map = {protein: protein for protein in sample.proteins}
     channel_name_map["nuclear"] = "nuclearstain"
-    channel_name_map["cytoplasmic"] = "cytoplasmicstain"
+    channel_name_map["eosin"] = "cytoplasmicstain"
 
     for i, signal_name in enumerate(signal_list):
         # print(f'Extracting {signal_name} signal...')
 
-        if signal_name not in ["nuclear", "cytoplasmic"]:
+        if signal_name not in ["nuclear", "eosin"]:
             image_type = "protein"
             protein = signal_name
         else:
