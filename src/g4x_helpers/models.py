@@ -3,10 +3,11 @@ import logging
 import os
 from dataclasses import InitVar, dataclass  # , asdict, field
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Literal
 
 import anndata as ad
 import glymur
+import tifffile
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -14,21 +15,22 @@ import polars as pl
 import scanpy as sc
 from geopandas.geodataframe import GeoDataFrame
 from packaging import version
+from functools import lru_cache
 
 import g4x_helpers.g4x_viewer.bin_generator as bin_gen
 import g4x_helpers.segmentation as reseg
 import g4x_helpers.utils as utils
 
-glymur.set_option('lib.num_threads', 24)
+glymur.set_option('lib.num_threads', 8)
 
 
 @dataclass()
 class G4Xoutput:
     run_base: Path | str
-    sample_id: str = None
+    sample_id: str | None = None
     log_level: InitVar[int] = logging.INFO
 
-    def __post_init__(self, log_level):
+    def __post_init__(self, log_level: int):
         self.run_base = Path(self.run_base)
 
         if self.sample_id is None:
@@ -39,8 +41,10 @@ class G4Xoutput:
 
         with open(self.run_base / 'run_meta.json', 'r') as f:
             self.run_meta = json.load(f)
-
-        self._populate_attrs()
+        
+        arr = self.load_segmentation()
+        self.shape = arr.shape
+        del arr
 
         if self.transcript_panel:
             transcript_panel = pd.read_csv(self.run_base / 'transcript_panel.csv', index_col=0, header=0)
@@ -52,10 +56,62 @@ class G4Xoutput:
             self.protein_panel_dict = protein_panel.to_dict()['panel_type']
             self.proteins = list(self.protein_panel_dict.keys())
 
+    # region dunder
+    def __repr__(self):
+        machine_num = self.machine.removeprefix('g4-').lstrip('0')
+        mac_run_id = f'G{machine_num.zfill(2)}-{self.run_id}'
+
+        repr_string = f'G4X_output @ {self.run_base}\n'
+        repr_string += f'Sample: \033[1m{self.sample_id}\033[0m of {mac_run_id}, {self.fc}\n'
+
+        shp = (np.array(self.shape) * 0.3125) / 1000
+        repr_string += f'imaged area: ({shp[1]:.2f} x {shp[0]:.2f}) mm\n\n'
+
+        if self.includes_transcript:
+            repr_string += f'Transcript panel with {len(self.genes)} genes\t[{", ".join(self.genes[0:5])} ... ]\n'
+
+        if self.includes_protein:
+            repr_string += f'Protein panel with {len(self.proteins)} proteins\t[{", ".join(self.proteins[0:5])} ... ]\n'
+
+        return repr_string
+    
     # region properties
     @property
+    def machine(self) -> str:
+        return self.run_meta.get('machine', None)
+    @property
+    def run_id(self) -> str:
+        return self.run_meta.get('run_id', None)
+    @property
+    def fc(self) -> str:
+        return self.run_meta.get('fc', None)
+    @property
+    def lane(self) -> str:
+        return self.run_meta.get('lane', None)
+    @property
+    def platform(self) -> str:
+        return self.run_meta.get('platform', None)
+    @property
+    def transcript_panel(self) -> dict:
+        return self.run_meta.get('transcript_panel', None)
+    @property
+    def protein_panel(self) -> dict:
+        return self.run_meta.get('protein_panel', None)
+    @property
+    def software(self) -> str:
+        return self.run_meta.get('software', None)
+    @property
+    def software_version(self) -> str:
+        return self.run_meta.get('software_version', None)
+    @property
     def logger(self) -> logging.Logger:
-        return logging.getLogger(f'{self.sample_id}_G4XOutput')
+        return logging.getLogger(f"{self.sample_id}_G4XOutput")
+    @property
+    def includes_transcript(self) -> bool:
+        return self.transcript_panel is not None
+    @property
+    def includes_protein(self) -> bool:
+        return self.protein_panel is not None
 
     # region methods
     def setup_logger(
@@ -101,21 +157,49 @@ class G4Xoutput:
         adata.obs_names = f'{self.sample_id}-' + adata.obs['cell_id'].str.split('-').str[1]
         return adata
 
-    def load_protein_image(self, protein: str) -> np.ndarray:
-        if not self.protein_panel:
-            self.logger.error('No protein results.')
-            return None
-        assert protein in self.proteins, self.logger.error(f'{protein} not in protein panel.')
-        return self.load_image(signal=protein)
+    def load_image_by_type(
+        self,
+        image_type: Literal["protein", "h_and_e", "nuclear", "cytoplasmic"],
+        thumbnail: bool = False,
+        protein: str | None = None
+    ) -> np.ndarray:
+        
+        if image_type == "protein":
+            if not self.protein_panel:
+                self.logger.error("No protein results.")
+                return None
+            if protein is None or protein not in self.proteins:
+                self.logger.error(f"{protein} not in protein panel.")
+                return None
+            pattern = f"{protein}_thumbnail.*" if thumbnail else f"{protein}.*"
+            directory = "protein"
+        else:
+            pattern_base = {
+                "h_and_e": "h_and_e",
+                "nuclear": "nuclear",
+                "cytoplasmic": "cytoplasmic"
+            }.get(image_type)
 
-    def load_he_image(self) -> np.ndarray:
-        return self.load_image(signal='h_and_e')
+            if not pattern_base:
+                self.logger.error(f"Unknown image type: {image_type}")
+                return None
 
-    def load_nuclear_image(self) -> np.ndarray:
-        return self.load_image(signal='nuclear')
+            pattern = f"{pattern_base}_thumbnail.*" if thumbnail else f"{pattern_base}.*"
+            directory = "h_and_e"
 
-    def load_eosin_image(self) -> np.ndarray:
-        return self.load_image(signal='eosin')
+        return self._load_image(self.run_base, directory, pattern)
+
+    def load_protein_image(self, protein: str, thumbnail: bool = False) -> np.ndarray:
+        return self.load_image_by_type("protein", thumbnail=thumbnail, protein=protein)
+
+    def load_he_image(self, thumbnail: bool = False) -> np.ndarray:
+        return self.load_image_by_type("h_and_e", thumbnail=thumbnail)
+
+    def load_nuclear_image(self, thumbnail: bool = False) -> np.ndarray:
+        return self.load_image_by_type("nuclear", thumbnail=thumbnail)
+
+    def load_cytoplasmic_image(self, thumbnail: bool = False) -> np.ndarray:
+        return self.load_image_by_type("cytoplasmic", thumbnail=thumbnail)
 
     def load_segmentation(self, expanded: bool = True) -> np.ndarray:
         arr = np.load(self.run_base / 'segmentation' / 'segmentation_mask.npz')
@@ -151,13 +235,13 @@ class G4Xoutput:
         labels: GeoDataFrame | np.ndarray,
         *,
         out_dir: str | Path | None = None,
-        exclude_channels: Optional[List[str]] = None,
+        exclude_channels: list[str] | None = None,
         gen_bin_file: bool = True,
         n_threads: int = 4,
     ) -> None:
         mask = labels
 
-        signal_list = ['nuclear', 'eosin'] + self.proteins
+        signal_list = ['nuclear', 'cytoplasmic'] + self.proteins
 
         if exclude_channels is not None:
             self.logger.info(f'Not processing channels: {", ".join(exclude_channels)}')
@@ -168,7 +252,6 @@ class G4Xoutput:
         else:
             self.logger.info('Processing all channels.')
             
-
         if out_dir is None:
             self.logger.warning('out_dir was not specified, so files will be updated in-place.')
             out_dir = self.run_base
@@ -223,7 +306,7 @@ class G4Xoutput:
         self.logger.debug(f'cell metadata --> {outfile}')
         adata.obs.to_csv(outfile)
 
-        protein_only_list = [p for p in signal_list if p not in ['nuclear', 'eosin']]
+        protein_only_list = [p for p in signal_list if p not in ['nuclear', 'cytoplasmic']]
         if gen_bin_file:
             self.logger.info('Making G4X-Viewer bin file.')
             outfile = reseg._create_custom_out(self, out_dir, 'g4x_viewer', f'{self.sample_id}.bin')
@@ -236,14 +319,23 @@ class G4Xoutput:
             )
             self.logger.debug(f'G4X-Viewer bin --> {outfile}')
 
-    def load_image(self, signal: str, thumbnail: bool = False) -> tuple[np.ndarray, float, float]:
-        img = utils.load_image_cached(self.run_base, signal, thumbnail=thumbnail)
-        return img
-
     # region internal
+    @staticmethod
+    @lru_cache(maxsize=None)
+    def _load_image(run_base: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
+        img_path = next((run_base / parent_directory).glob(pattern), None)
+        if img_path is None:
+            raise FileNotFoundError(f"No file matching {pattern} found.")
+        if img_path.suffix == ".jp2" or img_path.suffix == ".jpg":
+            img = glymur.Jp2k(img_path)[:]
+        elif img_path.suffix == '.png':
+            img = plt.imread(img_path)
+        else:
+            img = tifffile.imread(img_path)
+        return img
+    
     def _get_shape(self):
-        img_path = self.run_base / 'h_and_e/nuclear.jp2'
-        img = glymur.Jp2k(img_path)
+        img = self.load_he_image()
         return img.shape
 
     def _get_coord_order(self, verbose: bool = False) -> str:
@@ -260,41 +352,4 @@ class G4Xoutput:
 
     def _clear_image_cache(self):
         """Evict all cached images so subsequent calls re-read from disk."""
-        utils.load_image_cached.cache_clear()
-
-    def _populate_attrs(self):
-        for key in (
-            'machine',
-            'run_id',
-            'fc',
-            'lane',
-            'platform',
-            'software',
-            'software_version',
-            'transcript_panel',
-            'protein_panel',
-        ):
-            setattr(self, key, self.run_meta.get(key, None))
-
-        self.includes_transcript = False if self.transcript_panel == [] else True
-        self.includes_protein = False if self.protein_panel == [] else True
-        self.shape = self._get_shape()
-
-    # region dunder
-    def __repr__(self):
-        machine_num = self.machine.removeprefix('g4-').lstrip('0')
-        mac_run_id = f'G{machine_num.zfill(2)}-{self.run_id}'
-
-        repr_string = f'G4X_output @ {self.run_base}\n'
-        repr_string += f'Sample: \033[1m{self.sample_id}\033[0m of {mac_run_id}, {self.fc}\n'
-
-        shp = (np.array(self.shape) * 0.3125) / 1000
-        repr_string += f'imaged area: ({shp[1]:.2f} x {shp[0]:.2f}) mm\n\n'
-
-        if self.includes_transcript:
-            repr_string += f'Transcript panel with {len(self.genes)} genes\t[{", ".join(self.genes[0:5])} ... ]\n'
-
-        if self.includes_protein:
-            repr_string += f'Protein panel with {len(self.proteins)} proteins\t[{", ".join(self.proteins[0:5])} ... ]\n'
-
-        return repr_string
+        self._load_image.cache_clear()

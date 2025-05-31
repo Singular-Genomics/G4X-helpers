@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import ray
-from anndata import AnnData
+import anndata as ad
 from numba import njit
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
@@ -186,7 +186,7 @@ def get_border(mask: np.ndarray, s: int = 1) -> np.ndarray:
 
 
 def seg_converter(
-    adata: AnnData,
+    adata: ad.AnnData,
     seg_mask: np.ndarray,
     outpath: str | Path,
     *,

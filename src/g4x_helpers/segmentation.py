@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional, Union
+from typing import TYPE_CHECKING
 
 import anndata as ad
 import numpy as np
@@ -115,11 +115,11 @@ def image_mask_intensity_extraction(
     mask: np.ndarray,
     img: np.ndarray,
     *,
-    bead_mask: Optional[np.ndarray] = None,
-    label_prefix: Optional[str] = '',
-    channel_label: Optional[str] = 'intensity_mean',
-    lazy: Optional[bool] = True,
-) -> Union[pl.DataFrame, pl.LazyFrame]:
+    bead_mask: np.ndarray | None = None,
+    label_prefix: str = '',
+    channel_label: str = 'intensity_mean',
+    lazy: bool = True,
+) -> pl.DataFrame | pl.LazyFrame:
     mask_flat = mask.ravel()
     img_flat = img.ravel()
 
@@ -196,21 +196,27 @@ def extract_image_signals(
     sample: G4Xoutput,
     mask: np.ndarray,
     lazy: bool = False,
-    signal_list: Optional[List[str]] = None,
-) -> Union[pl.DataFrame, pl.LazyFrame]:
+    signal_list: list[str] | None = None,
+) -> pl.DataFrame | pl.LazyFrame:
     
     if signal_list is None:
-        signal_list = ['nuclear', 'eosin'] + sample.proteins
+        signal_list = ['nuclear', 'cytoplasmic'] + sample.proteins
+
+    channel_name_map = {protein: protein for protein in sample.proteins}
+    channel_name_map["nuclear"] = "nuclearstain"
+    channel_name_map["cytoplasmic"] = "cytoplasmicstain"
 
     for i, signal_name in enumerate(signal_list):
-        print(f'Extracting {signal_name} signal...')
-        
-        if signal_name in ('nuclear', 'eosin'):
-            channel_name_map = {'nuclear': 'nuclearstain', 'eosin': 'cytoplasmicstain'}
-        else:
-            channel_name_map = {protein: protein for protein in sample.proteins}
+        # print(f'Extracting {signal_name} signal...')
 
-        signal_img = sample.load_image(signal_name)
+        if signal_name not in ["nuclear", "cytoplasmic"]:
+            image_type = "protein"
+            protein = signal_name
+        else:
+            image_type = signal_name
+            protein = None
+
+        signal_img = sample.load_image_by_type(image_type, thumbnail=False, protein=protein)
         
         ch_label = f'{channel_name_map[signal_name]}_intensity_mean'
 
@@ -233,7 +239,12 @@ def extract_image_signals(
     return signal_df
 
 
-def _create_custom_out(sample: 'G4Xoutput', out_dir=None, parent_folder=None, file_name=None):
+def _create_custom_out(
+    sample: 'G4Xoutput',
+    out_dir: Path | str | None = None,
+    parent_folder: Path | str | None = None,
+    file_name: str | None = None
+) -> Path:
     if out_dir is None:
         custom_out = sample.run_base / parent_folder / 'custom_segmentation'
     else:
