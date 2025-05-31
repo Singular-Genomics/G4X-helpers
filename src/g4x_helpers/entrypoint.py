@@ -4,7 +4,7 @@ import pandas as pd
 import geopandas
 from pathlib import Path
 from g4x_helpers.models import G4Xoutput
-from g4x_viewer.bin_generator import seg_converter
+from g4x_helpers.g4x_viewer.bin_generator import seg_converter
 
 SUPPORTED_MASK_FILETYPES = ['.npz', '.npy', '.geojson']
 
@@ -33,7 +33,7 @@ def launch_resegment():
     parser = argparse.ArgumentParser(allow_abbrev=False)
 
     parser.add_argument('--run_base', help='Path to G4X sample output folder', action='store', type=str, required=True)
-    parser.add_argument('--segmentation_mask', help=f'Path to new segmentation mask. Supported files types are {SUPPORTED_MASK_FILETYPES}.', action='store', type=str, required=True)
+    parser.add_argument('--segmentation_mask', help='Path to new segmentation mask. Supported files types are: .npy, .npz, .geojson.', action='store', type=str, required=True)
     parser.add_argument('--sample_id', help='sample_id (Optional)', action='store', type=str, required=False, default=None)
     parser.add_argument('--out_dir', help='Output directory where new files will be saved. If not provided, the files in run_base will be updated in-place.', action='store', type=str, required=False, default=None)
     parser.add_argument('--segmentation_mask_key', help='Key in npz where mask should be taken from (Optional)', action='store', type=str, required=False, default=None)
@@ -68,7 +68,7 @@ def launch_update_bin():
 
     parser.add_argument('--run_base', help='Path to G4X sample output folder', action='store', type=str, required=True)
     parser.add_argument('--out_path', help='Output file path', action='store', type=str, required=True)
-    parser.add_argument('--segmentation_mask', help='Path to a custom segmentation mask. Supported files types are {SUPPORTED_MASK_FILETYPES}. If not provided, will use the default one in the G4X output folder.', action='store', type=str, required=True)
+    parser.add_argument('--segmentation_mask', help='Path to a custom segmentation mask. Supported files types are: .npy, .npz, .geojson. If not provided, will use the default one in the G4X output folder.', action='store', type=str, required=True)
     parser.add_argument('--metadata', help='Path to metadata table where clustering and/or embedding information will extracted.', action='store', type=str, required=True)
     parser.add_argument('--cluster_key', help='Column name in metadata containing cluster IDs.', action='store', type=str, required=False, default=None)
     parser.add_argument('--emb_key', help='Column name in metadata containing embedding. Parser will look for emb_key_0 and emb_key_1', action='store', type=str, required=False, default=None)
