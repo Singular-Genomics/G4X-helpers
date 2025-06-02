@@ -171,8 +171,10 @@ class G4Xoutput:
     def load_image_by_type(
         self,
         image_type: Literal["protein", "h_and_e", "nuclear", "eosin"],
+        *,
         thumbnail: bool = False,
-        protein: str | None = None
+        protein: str | None = None,
+        cached: bool = False
     ) -> np.ndarray:
         
         if image_type == "protein":
@@ -198,19 +200,22 @@ class G4Xoutput:
             pattern = f"{pattern_base}_thumbnail.*" if thumbnail else f"{pattern_base}.*"
             directory = "h_and_e"
 
-        return self._load_image(self.run_base, directory, pattern)
+        if cached:
+            return self._load_image_cached(self.run_base, directory, pattern)
+        else:
+            return self._load_image(self.run_base, directory, pattern)
 
-    def load_protein_image(self, protein: str, thumbnail: bool = False) -> np.ndarray:
-        return self.load_image_by_type("protein", thumbnail=thumbnail, protein=protein)
+    def load_protein_image(self, protein: str, thumbnail: bool = False, cached: bool = False) -> np.ndarray:
+        return self.load_image_by_type("protein", thumbnail=thumbnail, protein=protein, cached=cached)
 
-    def load_he_image(self, thumbnail: bool = False) -> np.ndarray:
-        return self.load_image_by_type("h_and_e", thumbnail=thumbnail)
+    def load_he_image(self, thumbnail: bool = False, cached: bool = False) -> np.ndarray:
+        return self.load_image_by_type("h_and_e", thumbnail=thumbnail, cached=cached)
 
-    def load_nuclear_image(self, thumbnail: bool = False) -> np.ndarray:
-        return self.load_image_by_type("nuclear", thumbnail=thumbnail)
+    def load_nuclear_image(self, thumbnail: bool = False, cached: bool = False) -> np.ndarray:
+        return self.load_image_by_type("nuclear", thumbnail=thumbnail, cached=cached)
 
-    def load_eosin_image(self, thumbnail: bool = False) -> np.ndarray:
-        return self.load_image_by_type("eosin", thumbnail=thumbnail)
+    def load_eosin_image(self, thumbnail: bool = False, cached: bool = False) -> np.ndarray:
+        return self.load_image_by_type("eosin", thumbnail=thumbnail, cached=cached)
 
     def load_segmentation(self, expanded: bool = True) -> np.ndarray:
         arr = np.load(self.run_base / 'segmentation' / 'segmentation_mask.npz')
@@ -271,19 +276,19 @@ class G4Xoutput:
             out_dir = Path(out_dir)
 
         if isinstance(mask, GeoDataFrame):
-            self.logger.info('Rasterizing provided GeoDataFrame')
+            self.logger.info('Rasterizing provided GeoDataFrame.')
             mask = reseg.rasterize_polygons(gdf=mask, target_shape=self.shape)
 
-        self.logger.info('Extracting mask properties')
+        self.logger.info('Extracting mask properties.')
         segmentation_props = reseg.get_mask_properties(self, mask)
 
-        self.logger.info('Assigning transcripts to mask labels')
+        self.logger.info('Assigning transcripts to mask labels.')
         reads_new_labels = reseg.assign_tx_to_mask_labels(self, mask)
 
-        self.logger.info('Extracting image signals')
+        self.logger.info('Extracting protein signal.')
         cell_by_protein = reseg.extract_image_signals(self, mask, signal_list=signal_list)
 
-        self.logger.info('Building output data structures')
+        self.logger.info('Building output data structures.')
         cell_metadata = reseg._make_cell_metadata(segmentation_props, cell_by_protein)
         cell_by_gene = reseg._make_cell_by_gene(segmentation_props, reads_new_labels)
         adata = reseg._make_adata(cell_by_gene, cell_metadata)
@@ -333,8 +338,7 @@ class G4Xoutput:
 
     # region internal
     @staticmethod
-    @lru_cache(maxsize=None)
-    def _load_image(run_base: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
+    def _load_image_base(run_base: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
         img_path = next((run_base / parent_directory).glob(pattern), None)
         if img_path is None:
             raise FileNotFoundError(f"No file matching {pattern} found.")
@@ -345,6 +349,15 @@ class G4Xoutput:
         else:
             img = tifffile.imread(img_path)
         return img
+    
+    @staticmethod
+    @lru_cache(maxsize=None)
+    def _load_image_cached(run_base: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
+        return G4Xoutput._load_image_base(run_base, parent_directory, pattern)
+    
+    @staticmethod
+    def _load_image(run_base: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
+        return G4Xoutput._load_image_base(run_base, parent_directory, pattern)
     
     def _get_shape(self):
         img = self.load_he_image()

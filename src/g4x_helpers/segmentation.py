@@ -55,7 +55,7 @@ def _make_adata(cell_by_gene: pl.DataFrame, cell_metadata: pl.DataFrame) -> ad.A
     adata.var['modality'] = 'tx'
     adata.obs_names = adata.obs['segmentation_cell_id']
     adata.var_names = adata.var['gene_id']
-    
+
     sc.pp.calculate_qc_metrics(adata, inplace=True, percent_top=None)
 
     return adata
@@ -199,6 +199,7 @@ def extract_image_signals(
     mask: np.ndarray,
     lazy: bool = False,
     signal_list: list[str] | None = None,
+    cached: bool = False
 ) -> pl.DataFrame | pl.LazyFrame:
     
     if signal_list is None:
@@ -209,8 +210,6 @@ def extract_image_signals(
     channel_name_map["eosin"] = "cytoplasmicstain"
 
     for i, signal_name in enumerate(signal_list):
-        # print(f'Extracting {signal_name} signal...')
-
         if signal_name not in ["nuclear", "eosin"]:
             image_type = "protein"
             protein = signal_name
@@ -218,7 +217,7 @@ def extract_image_signals(
             image_type = signal_name
             protein = None
 
-        signal_img = sample.load_image_by_type(image_type, thumbnail=False, protein=protein)
+        signal_img = sample.load_image_by_type(image_type, thumbnail=False, protein=protein, cached=cached)
         
         ch_label = f'{channel_name_map[signal_name]}_intensity_mean'
 

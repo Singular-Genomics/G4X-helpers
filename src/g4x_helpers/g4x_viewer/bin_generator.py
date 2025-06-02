@@ -346,7 +346,7 @@ def seg_converter(
 
     outputCellSegmentation = CellMasksSchema.CellMasks()
 
-    for index in tqdm(range(len(segmentation_source['cell_id']))):
+    for index in tqdm(range(len(segmentation_source['cell_id'])), desc="Processing cells"):
         try:
             cellPolygonPoints = [
                 coord
@@ -432,7 +432,7 @@ def seg_updater(
 
     ## load the metadata
     if cellid_key is None:
-        logger.info("cellid_key not provided, assuming cell IDs are in first column.")
+        logger.info("cellid_key not provided, assuming cell IDs are in first column of metadata.")
         metadata = pd.read_csv(metadata_file, index_col= 0, header= 0)
     else:
         metadata = pd.read_csv(metadata_file, index_col= None, header= 0)
@@ -483,11 +483,11 @@ def seg_updater(
 
     ## Do the actual updating
     logger.info("Updating cells.")
-    for cell in tqdm(cell_masks.cellMasks):
+    for cell in tqdm(cell_masks.cellMasks, desc="Updating cell data"):
         current_cellid = cell.cellId
         if current_cellid in metadata.index:
             if update_cluster:
-                cell.clusterId = metadata.loc[current_cellid, cluster_key]
+                cell.clusterId = str(metadata.loc[current_cellid, cluster_key])
             if update_cluster_color:
                 cell.color.clear()
                 cell.color.extend(metadata.loc[current_cellid, cluster_color_key])
