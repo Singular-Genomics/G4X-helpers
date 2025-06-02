@@ -26,6 +26,49 @@ glymur.set_option('lib.num_threads', 8)
 
 @dataclass()
 class G4Xoutput:
+    """
+    Container for managing and processing data from a G4X run.
+
+    This class initializes and loads metadata, image dimensions, transcript and protein panels,
+    and sets up logging for downstream analysis of G4X output data. It provides methods to load
+    images, segmentations, transcript data, and interact with single-cell and spatial analysis pipelines.
+
+    Parameters
+    ----------
+    run_base : str or Path
+        The base directory path of the G4X run. This should contain all run-related files including metadata,
+        segmentation masks, panels, and feature matrices.
+    sample_id : str, optional
+        The sample ID to associate with the run. If not provided, it will be inferred from the `run_base` path.
+    out_dir : str or Path, optional
+        The output directory to use for writing logs and intermediate files. Defaults to `run_base` if not provided.
+    log_level : int, optional
+        The logging level for the stream logger (default is `logging.INFO`).
+
+    Attributes
+    ----------
+    run_meta : dict
+        Metadata dictionary loaded from `run_meta.json`.
+    shape : tuple
+        Image shape (height, width) as inferred from the segmentation mask.
+    transcript_panel_dict : dict
+        Mapping of transcript genes to panel types, if the transcript panel is present.
+    protein_panel_dict : dict
+        Mapping of proteins to panel types, if the protein panel is present.
+    genes : list of str
+        List of transcript gene names (only if transcript panel exists).
+    proteins : list of str
+        List of protein names (only if protein panel exists).
+
+    Notes
+    -----
+    On instantiation, this class performs the following:
+      - Sets up logging with optional stream and file loggers.
+      - Loads metadata from `run_meta.json`.
+      - Loads the shape of the segmentation mask.
+      - Parses transcript and protein panel files (if present).
+    """
+    
     run_base: Path | str
     sample_id: str | None = None
     out_dir: InitVar[Path | str | None] = None
