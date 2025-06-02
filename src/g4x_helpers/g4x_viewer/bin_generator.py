@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import ray
+import logging
 import anndata as ad
 from numba import njit
 from scipy.sparse import csr_matrix
@@ -16,7 +17,7 @@ from skimage.morphology import dilation, disk, erosion
 from tqdm import tqdm
 
 from . import CellMasksSchema_pb2 as CellMasksSchema
-
+import g4x_helpers.utils as utils
 
 def generate_cluster_palette(clusters: list, max_colors: int = 256) -> dict:
     unique_clusters = [c for c in np.unique(clusters) if c != '-1']
@@ -188,14 +189,27 @@ def get_border(mask: np.ndarray, s: int = 1) -> np.ndarray:
 def seg_converter(
     adata: ad.AnnData,
     seg_mask: np.ndarray,
-    outpath: str | Path,
+    out_path: str | Path,
     *,
     metadata: str| Path | None = None,
     cluster_key: str | None = None,
     emb_key: str | None = None,
     protein_list: list[str] | None = None,
-    n_threads: int = 4
+    n_threads: int = 4,
+    logger: logging.Logger | None = None,
+    log_level: int = logging.DEBUG
 ) -> None:
+
+    if logger is None:
+        logger = utils.setup_logger(
+            'seg_converter',
+            stream_logger=True,
+            stream_level=log_level,
+            file_logger=True,
+            file_level=logging.DEBUG,
+            out_dir=out_path.parent,
+            clear_handlers=True
+        )
 
     if metadata is None:
         clusters_available = False
@@ -237,7 +251,6 @@ def seg_converter(
     num_cells = len(cell_ids)
     centroid_y = obs_df['cell_x'].tolist()
     centroid_x = obs_df['cell_y'].tolist()
-    # areas = obs_df['nuclei_expanded_area'].tolist()
     areas = obs_df['area'].tolist()
     total_counts = obs_df['total_counts'].tolist()
     total_genes = obs_df['n_genes_by_counts'].tolist()
@@ -296,12 +309,8 @@ def seg_converter(
         'cluster_id': clusters,
         'umap_x': umap_x,
         'umap_y': umap_y,
+        'protein': prot_vals
     }
-    if protein_list:
-        segmentation_source['protein'] = prot_vals
-    # if emb_key:
-    #     segmentation_source['umap_x'] = umap_x
-    #     segmentation_source['umap_y'] = umap_y
 
     outputCellSegmentation = CellMasksSchema.CellMasks()
 
@@ -322,7 +331,7 @@ def seg_converter(
             cellUmapX = segmentation_source["umap_x"][index]
             cellUmapY = segmentation_source["umap_y"][index]
         except Exception as e:
-            # logger.exception(e)
+            logger.debug(e)
             pass
         outputMaskData = outputCellSegmentation.cellMasks.add()
         outputMaskData.vertices.extend(cellPolygonPoints + cellPolygonPoints[:2])
@@ -349,5 +358,82 @@ def seg_converter(
         outputCellSegmentation.colormap.append(entry)   
 
     ## write to file
-    with open(outpath, 'wb') as file:
+    with open(out_path, 'wb') as file:
         file.write(outputCellSegmentation.SerializeToString())
+
+
+def seg_updater(
+    bin_file: str | Path,
+    metadata: str | Path,
+    out_path: Path,
+    *,
+    cellid_key: str | None = None,
+    cluster_key: str | None = None,
+    emb_key: str | None = None,
+    logger: logging.Logger | None = None,
+    log_level: int = logging.DEBUG
+) -> None:
+
+    if logger is None:
+        logger = utils.setup_logger(
+            'seg_updater',
+            stream_logger=True,
+            stream_level=log_level,
+            file_logger=True,
+            file_level=logging.DEBUG,
+            out_dir=out_path.parent,
+            clear_handlers=True
+        )
+
+    if emb_key is None and cluster_key is None:
+        logger.warning("neither embedding nor cluster keys were provided, nothing to update.")
+        return None
+    
+    logger.info(f"Loading {bin_file}.")
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    cell_masks = CellMasksSchema.CellMasks()
+    cell_masks.ParseFromString(data)
+
+    if cellid_key is None:
+        logger.info("cellid_key not provided, assuming cell IDs are in first column.")
+        metadata = pd.read_csv(metadata, index_col= 0, header= 0)
+    else:
+        metadata = pd.read_csv(metadata, index_col= None, header= 0)
+        if cellid_key not in metadata.columns:
+            raise KeyError(f"{cellid_key} not a valid column in metadata.")
+        metadata.set_index(cellid_key, inplace= True)
+
+    if cluster_key is not None:
+        if cluster_key not in metadata.columns:
+            raise KeyError(f"{cluster_key} not a valid column in metadata.")
+        update_cluster = True
+        logger.debug("Updating cluster IDs.")
+    else:
+        update_cluster = False
+        logger.debug("Not updating cluster IDs.")
+
+    if emb_key is not None:
+        if emb_key not in metadata.columns:
+            raise KeyError(f"{emb_key} not a valid column in metadata.")
+        update_emb = True
+        logger.debug("Updating embedding.")
+    else:
+        update_emb = False
+        logger.debug("Not updating embedding.")
+
+    logger.info("Updating cells.")
+    for cell in tqdm(cell_masks.cellMasks):
+        current_cellid = cell.cellId
+        if current_cellid in metadata.index:
+            if update_cluster:
+                cell.clusterId = metadata.loc[current_cellid, cluster_key]
+            if update_emb:
+                cell.UmapX = metadata.loc[current_cellid, f"{emb_key}_0"]
+                cell.UmapY = metadata.loc[current_cellid, f"{emb_key}_1"]
+        else:
+            logger.debug(f"{current_cellid} not found in metadata, not updating data for this cell.")
+
+    logger.debug(f"Writing updated bin file --> {out_path}")
+    with open(out_path, 'wb') as file:
+        file.write(cell_masks.SerializeToString())

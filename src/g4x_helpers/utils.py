@@ -8,12 +8,35 @@ if TYPE_CHECKING:
 
 import logging
 import os
-import glymur
 from pathlib import Path
-from functools import lru_cache
 import numpy as np
 import matplotlib.pyplot as plt
-glymur.set_option('lib.num_threads', 8)
+
+
+def verbose_to_log_level(verbose: int) -> int:
+    """
+    returns a logging level based on verbose integer:
+
+    0 == WARNING
+
+    1 == REPORT
+
+    2 == INFO
+
+    any other integer == DEBUG
+    """
+
+    if verbose == 0:
+        log_level = logging.WARNING
+    elif verbose == 1:
+        log_level = logging.REPORT
+    elif verbose == 2:
+        log_level = logging.INFO
+    else:
+        log_level = logging.DEBUG
+
+    return log_level
+
 
 def setup_logger(
     logger_name: str,

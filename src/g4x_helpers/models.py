@@ -28,16 +28,23 @@ glymur.set_option('lib.num_threads', 8)
 class G4Xoutput:
     run_base: Path | str
     sample_id: str | None = None
+    out_dir: InitVar[Path | str | None] = None
     log_level: InitVar[int] = logging.INFO
 
-    def __post_init__(self, log_level: int):
+    def __post_init__(self, log_level: int, out_dir: Path | str | None):
         self.run_base = Path(self.run_base)
 
         if self.sample_id is None:
             self.sample_id = self.run_base.name
 
-        ## this only sets up a stream handler, no file handlers
-        _ = self.setup_logger(stream_level=log_level, clear_handlers=True)
+        _ = self.setup_logger(
+            stream_logger=True,
+            stream_level=log_level,
+            file_logger=True,
+            file_level=logging.DEBUG,
+            out_dir=out_dir,
+            clear_handlers=True
+        )
 
         with open(self.run_base / 'run_meta.json', 'r') as f:
             self.run_meta = json.load(f)
@@ -121,14 +128,18 @@ class G4Xoutput:
         stream_level: int = logging.INFO,
         file_logger: bool = False,
         file_level: int = logging.INFO,
+        out_dir: Path | str | None = None,
         clear_handlers: bool = True,
     ) -> None:
+        if out_dir is None:
+            out_dir = self.run_base
         _ = utils.setup_logger(
             f'{self.sample_id}_G4XOutput',
             stream_logger=stream_logger,
             stream_level=stream_level,
             file_logger=file_logger,
             file_level=file_level,
+            out_dir=out_dir,
             clear_handlers=clear_handlers,
         )
 
@@ -313,9 +324,10 @@ class G4Xoutput:
             _ = bin_gen.seg_converter(
                 adata=adata,
                 seg_mask=mask,
-                outpath=outfile,
+                out_path=outfile,
                 protein_list=[f'{x}_intensity_mean' for x in protein_only_list],
                 n_threads=n_threads,
+                logger= self.logger
             )
             self.logger.debug(f'G4X-Viewer bin --> {outfile}')
 
