@@ -53,7 +53,9 @@ def _make_adata(cell_by_gene: pl.DataFrame, cell_metadata: pl.DataFrame) -> ad.A
 
     adata.var['gene_id'] = cell_by_gene.columns[1:]
     adata.var['modality'] = 'tx'
-
+    adata.obs_names = adata.obs['segmentation_cell_id']
+    adata.var_names = adata.var['gene_id']
+    
     sc.pp.calculate_qc_metrics(adata, inplace=True, percent_top=None)
 
     return adata

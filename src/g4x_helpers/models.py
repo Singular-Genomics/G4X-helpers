@@ -31,7 +31,7 @@ class G4Xoutput:
     out_dir: InitVar[Path | str | None] = None
     log_level: InitVar[int] = logging.INFO
 
-    def __post_init__(self, log_level: int, out_dir: Path | str | None):
+    def __post_init__(self, out_dir: Path | str | None, log_level: int):
         self.run_base = Path(self.run_base)
 
         if self.sample_id is None:

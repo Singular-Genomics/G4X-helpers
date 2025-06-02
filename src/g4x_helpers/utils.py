@@ -29,8 +29,6 @@ def verbose_to_log_level(verbose: int) -> int:
     if verbose == 0:
         log_level = logging.WARNING
     elif verbose == 1:
-        log_level = logging.REPORT
-    elif verbose == 2:
         log_level = logging.INFO
     else:
         log_level = logging.DEBUG

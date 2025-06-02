@@ -77,7 +77,8 @@ def launch_update_bin():
     parser.add_argument('--out_path', help='Output file path', action='store', type=str, required=True)
     parser.add_argument('--metadata', help='Path to metadata table where clustering and/or embedding information will be extracted. Table must contain a header.', action='store', type=str, required=True)
     parser.add_argument('--cellid_key', help='Column name in metadata containing cell IDs that match with bin_file. If not provided, assumes that first column in metadata contains the cell IDs.', action='store', type=str, required=False, default=None)
-    parser.add_argument('--cluster_key', help='Column name in metadata containing cluster IDs. If not provided, skips updating cluster IDs.', action='store', type=str, required=False, default=None)
+    parser.add_argument('--cluster_key', help='Column name in metadata containing cluster IDs. Automatically assigns new colors if cluster_color_key is not provided. If not provided, skips updating cluster IDs.', action='store', type=str, required=False, default=None)
+    parser.add_argument('--cluster_color_key', help='Column name in metadata containing cluster colors. If provided, cluster_key must also be provided. If not provided, skips updating cluster colors.', action='store', type=str, required=False, default=None)
     parser.add_argument('--emb_key', help='Column name in metadata containing embedding. Parser will look for {emb_key}_0 and {emb_key}_1. If not provided, skips updating embedding.', action='store', type=str, required=False, default=None)
     parser.add_argument('--verbose', help= 'Set logging level WARNING (0), INFO (1), or DEBUG (2). [1]', action= 'store', type= int, default= 1)
     
@@ -97,9 +98,10 @@ def launch_update_bin():
     ## run converter
     _= seg_updater(
         bin_file=bin_file,
-        metadata=metadata,
+        metadata_file=metadata,
         out_path=out_path,
         cluster_key=args.cluster_key,
+        cluster_color_key=args.cluster_color_key,
         emb_key=args.emb_key,
         log_level=verbose_to_log_level(args.verbose)
     )
