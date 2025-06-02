@@ -1,20 +1,52 @@
-import os
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # This import is only for type checkers (mypy, PyCharm, etc.), not at runtime
+    from g4x_helpers.models import G4Xoutput
+
 import logging
+import os
 from pathlib import Path
-from typing import List, Tuple, Union, Iterator, Iterable, Any, Generator, Optional, Literal, Callable
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+def verbose_to_log_level(verbose: int) -> int:
+    """
+    returns a logging level based on verbose integer:
+
+    0 == WARNING
+
+    1 == REPORT
+
+    2 == INFO
+
+    any other integer == DEBUG
+    """
+
+    if verbose == 0:
+        log_level = logging.WARNING
+    elif verbose == 1:
+        log_level = logging.INFO
+    else:
+        log_level = logging.DEBUG
+
+    return log_level
 
 
 def setup_logger(
     logger_name: str,
     *,
-    stream_logger: Optional[bool] = True,
-    stream_level: Optional[int] = logging.DEBUG,
-    file_logger: Optional[bool] = False,
-    file_level: Optional[int] = logging.DEBUG,
-    file_mode: Optional[str] = 'a',
-    out_dir: Optional[Union[Path, str]] = None,
-    format: Optional[str] = None,
-    clear_handlers: Optional[bool] = False
+    stream_logger: bool = True,
+    stream_level: int = logging.DEBUG,
+    file_logger: bool = False,
+    file_level: int = logging.DEBUG,
+    file_mode: str = 'a',
+    out_dir: Path | str | None = None,
+    format: str | None = None,
+    clear_handlers: bool = False,
 ) -> logging.Logger:
     """
     Sets up a logger with configurable stream and file handlers.
@@ -44,9 +76,9 @@ def setup_logger(
     -------
     logging.Logger
         Configured logger instance.
-    
+
     """
-    
+
     logger = logging.getLogger(logger_name)
     logger.setLevel(logging.DEBUG)
     if format is None:
@@ -64,9 +96,9 @@ def setup_logger(
         logger.addHandler(h)
 
     if file_logger:
-        assert out_dir is not None, "out_dir must be provided if file_logger is True"
-        os.makedirs(out_dir, exist_ok= True)
-        fh = logging.FileHandler(f'{out_dir}/{logger_name}.log', mode= file_mode)
+        assert out_dir is not None, 'out_dir must be provided if file_logger is True'
+        os.makedirs(out_dir, exist_ok=True)
+        fh = logging.FileHandler(f'{out_dir}/{logger_name}.log', mode=file_mode)
         fh.setLevel(file_level)
         fh.setFormatter(formatter)
         logger.addHandler(fh)

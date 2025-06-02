@@ -1,56 +1,88 @@
-import os
-import re
 import json
-import glob
-import glymur
 import logging
-import anndata
+import os
+from dataclasses import InitVar, dataclass  # , asdict, field
+from pathlib import Path
+from typing import Literal
+
+import anndata as ad
+import glymur
+import tifffile
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import polars as pl
 import scanpy as sc
-from pathlib import Path
-from dataclasses import dataclass, field, asdict, InitVar
-from typing import List, Tuple, Union, Iterator, Iterable, Any, Generator, Optional, Literal
+from geopandas.geodataframe import GeoDataFrame
+from packaging import version
+from functools import lru_cache
 
-from g4x_helpers.utils import setup_logger
+import g4x_helpers.g4x_viewer.bin_generator as bin_gen
+import g4x_helpers.segmentation as reseg
+import g4x_helpers.utils as utils
 
-glymur.set_option("lib.num_threads", 16)
+glymur.set_option('lib.num_threads', 8)
+
 
 @dataclass()
-class G4XOutput():
-
-    run_base: Union[Path, str]
-    sample_id: str
+class G4Xoutput:
+    run_base: Path | str
+    sample_id: str | None = None
+    out_dir: InitVar[Path | str | None] = None
     log_level: InitVar[int] = logging.INFO
 
-    def __post_init__(self, log_level):
+    def __post_init__(self, out_dir: Path | str | None, log_level: int):
         self.run_base = Path(self.run_base)
 
-        ## this only sets up a stream handler, no file handlers
-        _= self.setup_logger(stream_level= log_level, clear_handlers= True)
+        if self.sample_id is None:
+            self.sample_id = self.run_base.name
 
-        with open(self.run_base / "run_meta.json", "r") as f:
+        _ = self.setup_logger(
+            stream_logger=True,
+            stream_level=log_level,
+            file_logger=True,
+            file_level=logging.DEBUG,
+            out_dir=out_dir,
+            clear_handlers=True
+        )
+
+        with open(self.run_base / 'run_meta.json', 'r') as f:
             self.run_meta = json.load(f)
         
+        arr = self.load_segmentation()
+        self.shape = arr.shape
+        del arr
+
         if self.transcript_panel:
-            transcript_panel = pd.read_csv(self.run_base / "transcript_panel.csv", index_col= 0, header= 0)
+            transcript_panel = pd.read_csv(self.run_base / 'transcript_panel.csv', index_col=0, header=0)
             self.transcript_panel_dict = transcript_panel.to_dict()['panel_type']
             self.genes = list(self.transcript_panel_dict.keys())
+
         if self.protein_panel:
-            protein_panel = pd.read_csv(self.run_base / "protein_panel.csv", index_col= 0, header= 0)
+            protein_panel = pd.read_csv(self.run_base / 'protein_panel.csv', index_col=0, header=0)
             self.protein_panel_dict = protein_panel.to_dict()['panel_type']
             self.proteins = list(self.protein_panel_dict.keys())
 
-
+    # region dunder
     def __repr__(self):
-        return f"""
-        G4XOutput for {self.sample_id} located at {self.run_base}.
-            contains transcript: {self.includes_transcript}
-            contains protein: {self.includes_protein}
-        """
+        machine_num = self.machine.removeprefix('g4-').lstrip('0')
+        mac_run_id = f'G{machine_num.zfill(2)}-{self.run_id}'
 
+        repr_string = f'G4X_output @ {self.run_base}\n'
+        repr_string += f'Sample: \033[1m{self.sample_id}\033[0m of {mac_run_id}, {self.fc}\n'
 
+        shp = (np.array(self.shape) * 0.3125) / 1000
+        repr_string += f'imaged area: ({shp[1]:.2f} x {shp[0]:.2f}) mm\n\n'
+
+        if self.includes_transcript:
+            repr_string += f'Transcript panel with {len(self.genes)} genes\t[{", ".join(self.genes[0:5])} ... ]\n'
+
+        if self.includes_protein:
+            repr_string += f'Protein panel with {len(self.proteins)} proteins\t[{", ".join(self.proteins[0:5])} ... ]\n'
+
+        return repr_string
+    
+    # region properties
     @property
     def machine(self) -> str:
         return self.run_meta.get('machine', None)
@@ -80,89 +112,269 @@ class G4XOutput():
         return self.run_meta.get('software_version', None)
     @property
     def logger(self) -> logging.Logger:
-      return logging.getLogger(f"{self.sample_id}_G4XOutput")
+        return logging.getLogger(f"{self.sample_id}_G4XOutput")
     @property
     def includes_transcript(self) -> bool:
         return self.transcript_panel is not None
     @property
     def includes_protein(self) -> bool:
         return self.protein_panel is not None
-    
 
+    # region methods
     def setup_logger(
         self,
         *,
-        stream_logger: Optional[bool] = True,
-        stream_level: Optional[int] = logging.INFO,
-        file_logger: Optional[bool] = False,
-        file_level: Optional[int] = logging.INFO,
-        clear_handlers: Optional[bool] = True
+        stream_logger: bool = True,
+        stream_level: int = logging.INFO,
+        file_logger: bool = False,
+        file_level: int = logging.INFO,
+        out_dir: Path | str | None = None,
+        clear_handlers: bool = True,
     ) -> None:
-        _= setup_logger(
-            f"{self.sample_id}_G4XOutput",
-            stream_logger= stream_logger,
-            stream_level= stream_level,
-            file_logger= file_logger,
-            file_level= file_level,
-            clear_handlers= clear_handlers
+        if out_dir is None:
+            out_dir = self.run_base
+        _ = utils.setup_logger(
+            f'{self.sample_id}_G4XOutput',
+            stream_logger=stream_logger,
+            stream_level=stream_level,
+            file_logger=file_logger,
+            file_level=file_level,
+            out_dir=out_dir,
+            clear_handlers=clear_handlers,
         )
 
-    def load_adata(
-        self,
-        *,
-        remove_nontargeting: Optional[bool] = True,
-        load_clustering: Optional[bool] = True
-    ) -> anndata.AnnData:
-        adata = sc.read_h5ad(self.run_base / "single_cell_data" / "feature_matrix.h5")
+    def load_adata(self, *, remove_nontargeting: bool = True, load_clustering: bool = True) -> ad.AnnData:
+        adata = sc.read_h5ad(self.run_base / 'single_cell_data' / 'feature_matrix.h5')
+
         adata.obs_names = adata.obs['cell_id']
         adata.var_names = adata.var['gene_id']
+
+        adata.obs['sample_id'] = adata.uns['sample_id'] = self.sample_id
+        adata.uns['software_version'] = self.software_version
+
         if remove_nontargeting:
             adata = adata[:, adata.var.query(" probe_type == 'targeting' ").index].copy()
+
         if load_clustering:
             try:
-                df = pd.read_csv(self.run_base / "single_cell_data" / "clustering_umap.csv.gz", index_col= 0, header= 0)
-                adata.obs = adata.obs.merge(df, how= 'left', left_index= True, right_index= True)
+                df = pd.read_csv(self.run_base / 'single_cell_data' / 'clustering_umap.csv.gz', index_col=0, header=0)
+                adata.obs = adata.obs.merge(df, how='left', left_index=True, right_index=True)
                 umap_key = '_'.join(sorted([x for x in adata.obs.columns if 'X_umap' in x])[0].split('_')[:-1])
-                adata.obsm['X_umap'] = adata.obs[[f"{umap_key}_1", f"{umap_key}_2"]].to_numpy(dtype= float)
+                adata.obsm['X_umap'] = adata.obs[[f'{umap_key}_1', f'{umap_key}_2']].to_numpy(dtype=float)
             except Exception as e:
-                self.logger.exception(f"No single-cell clustering results found.")
+                self.logger.exception('No single-cell clustering results found.')
                 self.logger.exception(e)
-        adata.obs_names = f"{self.sample_id}-" + adata.obs['cell_id'].str.split('-').str[1]
+
+        adata.obs_names = f'{self.sample_id}-' + adata.obs['cell_id'].str.split('-').str[1]
         return adata
 
-    def _get_image(self, parent_directory: str, pattern: str) -> np.ndarray:
-        img_path = next((self.run_base / parent_directory).glob(pattern), None)
+    def load_image_by_type(
+        self,
+        image_type: Literal["protein", "h_and_e", "nuclear", "eosin"],
+        *,
+        thumbnail: bool = False,
+        protein: str | None = None,
+        cached: bool = False
+    ) -> np.ndarray:
+        
+        if image_type == "protein":
+            if not self.protein_panel:
+                self.logger.error("No protein results.")
+                return None
+            if protein is None or protein not in self.proteins:
+                self.logger.error(f"{protein} not in protein panel.")
+                return None
+            pattern = f"{protein}_thumbnail.*" if thumbnail else f"{protein}.*"
+            directory = "protein"
+        else:
+            pattern_base = {
+                "h_and_e": "h_and_e",
+                "nuclear": "nuclear",
+                "eosin": "eosin"
+            }.get(image_type)
+
+            if not pattern_base:
+                self.logger.error(f"Unknown image type: {image_type}")
+                return None
+
+            pattern = f"{pattern_base}_thumbnail.*" if thumbnail else f"{pattern_base}.*"
+            directory = "h_and_e"
+
+        if cached:
+            return self._load_image_cached(self.run_base, directory, pattern)
+        else:
+            return self._load_image(self.run_base, directory, pattern)
+
+    def load_protein_image(self, protein: str, thumbnail: bool = False, cached: bool = False) -> np.ndarray:
+        return self.load_image_by_type("protein", thumbnail=thumbnail, protein=protein, cached=cached)
+
+    def load_he_image(self, thumbnail: bool = False, cached: bool = False) -> np.ndarray:
+        return self.load_image_by_type("h_and_e", thumbnail=thumbnail, cached=cached)
+
+    def load_nuclear_image(self, thumbnail: bool = False, cached: bool = False) -> np.ndarray:
+        return self.load_image_by_type("nuclear", thumbnail=thumbnail, cached=cached)
+
+    def load_eosin_image(self, thumbnail: bool = False, cached: bool = False) -> np.ndarray:
+        return self.load_image_by_type("eosin", thumbnail=thumbnail, cached=cached)
+
+    def load_segmentation(self, expanded: bool = True) -> np.ndarray:
+        arr = np.load(self.run_base / 'segmentation' / 'segmentation_mask.npz')
+        if expanded:
+            return arr['nuclei_exp']
+        else:
+            return arr['nuclei']
+
+    def load_transcript_table(self, return_polars: bool = False) -> pd.DataFrame | pl.DataFrame:
+        reads = pl.read_csv(self.run_base / 'rna' / 'transcript_table.csv.gz')
+        if not return_polars:
+            reads = reads.to_pandas()
+        return reads
+
+    def list_content(self, subdir=None):
+        if subdir is None:
+            subdir = ''
+
+        list_path = self.run_base / subdir
+        output = os.listdir(list_path)
+
+        contents = {'dirs': [], 'files': []}
+        for item in output:
+            if os.path.isdir(list_path / item):
+                contents['dirs'].append(item)
+            if os.path.isfile(list_path / item):
+                contents['files'].append(item)
+
+        return contents
+
+    def intersect_segmentation(
+        self,
+        labels: GeoDataFrame | np.ndarray,
+        *,
+        out_dir: str | Path | None = None,
+        exclude_channels: list[str] | None = None,
+        gen_bin_file: bool = True,
+        n_threads: int = 4,
+    ) -> None:
+        mask = labels
+
+        signal_list = ['nuclear', 'eosin'] + self.proteins
+
+        if exclude_channels is not None:
+            self.logger.info(f'Not processing channels: {", ".join(exclude_channels)}')
+            if isinstance(exclude_channels, str):
+                exclude_channels = [exclude_channels]
+
+            signal_list = [item for item in signal_list if item not in exclude_channels]
+        else:
+            self.logger.info('Processing all channels.')
+            
+        if out_dir is None:
+            self.logger.warning('out_dir was not specified, so files will be updated in-place.')
+            out_dir = self.run_base
+        else:
+            self.logger.info(f'Using provided output directory: {out_dir}')
+            out_dir = Path(out_dir)
+
+        if isinstance(mask, GeoDataFrame):
+            self.logger.info('Rasterizing provided GeoDataFrame.')
+            mask = reseg.rasterize_polygons(gdf=mask, target_shape=self.shape)
+
+        self.logger.info('Extracting mask properties.')
+        segmentation_props = reseg.get_mask_properties(self, mask)
+
+        self.logger.info('Assigning transcripts to mask labels.')
+        reads_new_labels = reseg.assign_tx_to_mask_labels(self, mask)
+
+        self.logger.info('Extracting protein signal.')
+        cell_by_protein = reseg.extract_image_signals(self, mask, signal_list=signal_list)
+
+        self.logger.info('Building output data structures.')
+        cell_metadata = reseg._make_cell_metadata(segmentation_props, cell_by_protein)
+        cell_by_gene = reseg._make_cell_by_gene(segmentation_props, reads_new_labels)
+        adata = reseg._make_adata(cell_by_gene, cell_metadata)
+
+        if out_dir:
+            self.logger.info(f'Saving output files to {out_dir}')
+        else:
+            self.logger.info(f'No output directory specified, saving to ["custom"] directories in {self.run_base}.')
+
+        outfile = reseg._create_custom_out(self, out_dir, 'segmentation', 'segmentation_mask_updated.npz')
+        self.logger.debug(f'segmentation mask --> {outfile}')
+        np.savez(outfile, cell_labels=mask)
+
+        outfile = reseg._create_custom_out(self, out_dir, 'rna', 'transcript_table.csv.gz')
+        self.logger.debug(f'transcript table --> {outfile}')
+        reads_new_labels.write_csv(outfile)
+
+        outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'cell_by_transcript.csv.gz')
+        self.logger.debug(f'cell x transcript --> {outfile}')
+        cell_by_gene.write_csv(outfile)
+
+        outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'cell_by_protein.csv.gz')
+        self.logger.debug(f'cell x protein --> {outfile}')
+        cell_by_protein.write_csv(outfile)
+
+        outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'feature_matrix.h5')
+        self.logger.debug(f'single-cell h5 --> {outfile}')
+        adata.write_h5ad(outfile)
+
+        outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'cell_metadata.csv.gz')
+        self.logger.debug(f'cell metadata --> {outfile}')
+        adata.obs.to_csv(outfile)
+
+        protein_only_list = [p for p in signal_list if p not in ['nuclear', 'eosin']]
+        if gen_bin_file:
+            self.logger.info('Making G4X-Viewer bin file.')
+            outfile = reseg._create_custom_out(self, out_dir, 'g4x_viewer', f'{self.sample_id}.bin')
+            _ = bin_gen.seg_converter(
+                adata=adata,
+                seg_mask=mask,
+                out_path=outfile,
+                protein_list=[f'{x}_intensity_mean' for x in protein_only_list],
+                n_threads=n_threads,
+                logger= self.logger
+            )
+            self.logger.debug(f'G4X-Viewer bin --> {outfile}')
+
+    # region internal
+    @staticmethod
+    def _load_image_base(run_base: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
+        img_path = next((run_base / parent_directory).glob(pattern), None)
         if img_path is None:
-            self.logger.error("Image file does not exist.")
-            return None
-        if img_path.suffix == ".jp2":
+            raise FileNotFoundError(f"No file matching {pattern} found.")
+        if img_path.suffix == ".jp2" or img_path.suffix == ".jpg":
             img = glymur.Jp2k(img_path)[:]
+        elif img_path.suffix == '.png':
+            img = plt.imread(img_path)
         else:
             img = tifffile.imread(img_path)
         return img
-
-    def load_protein_image(self, protein: str) -> np.ndarray:
-        if not self.protein_panel:
-            self.logger.error("No protein results.")
-            return None
-        assert protein in self.protein_panel, print(f"{protein} not in protein panel.")
-        return _get_image("protein", f"{protein}.*")
-    def load_he_image(self) -> np.ndarray:
-        return _get_image("h_and_e", "h_and_e.*")
-    def load_nuclear_image(self) -> np.ndarray:
-        return _get_image("h_and_e", "nuclear.*")
-    def load_eosin_image(self) -> np.ndarray:
-        return _get_image("h_and_e", "eosin.*")
     
-    def load_segmentation(self, expanded: Optional[bool] = True) -> np.ndarray:
-        arr = np.load(self.run_base / "segmentation" / "segmentation_mask.npz")
-        if expanded:
-            return arr["nuclei_exp"]
+    @staticmethod
+    @lru_cache(maxsize=None)
+    def _load_image_cached(run_base: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
+        return G4Xoutput._load_image_base(run_base, parent_directory, pattern)
+    
+    @staticmethod
+    def _load_image(run_base: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
+        return G4Xoutput._load_image_base(run_base, parent_directory, pattern)
+    
+    def _get_shape(self):
+        img = self.load_he_image()
+        return img.shape
+
+    def _get_coord_order(self, verbose: bool = False) -> str:
+        critical_version = version.parse('2.11.1')
+
+        detected_caretta_version = version.parse(self.software_version)
+        if verbose:
+            self.logger.debug(f'Detected Caretta version: {detected_caretta_version}')
+
+        if detected_caretta_version >= critical_version:
+            return 'yx'
         else:
-            return arr["nuclei"]
-        
-    def load_transcript_table(self, return_polars: Optional[bool] = False) -> Union[pd.DataFrame, pl.DataFrame]:
-        df = pl.read_csv(self.run_base / "rna" / "transcript_table.csv.gz")
-        if not return_polars:
-            df = df.to_pandas()
-        return d
+            return 'xy'
+
+    def _clear_image_cache(self):
+        """Evict all cached images so subsequent calls re-read from disk."""
+        self._load_image.cache_clear()
