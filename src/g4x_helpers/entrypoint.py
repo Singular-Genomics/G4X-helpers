@@ -1,12 +1,14 @@
-import os
 import argparse
+import os
+from pathlib import Path
+
+import geopandas
 import numpy as np
 import pandas as pd
-import geopandas
-from pathlib import Path
-from g4x_helpers.utils import verbose_to_log_level
-from g4x_helpers.models import G4Xoutput
+
 from g4x_helpers.g4x_viewer.bin_generator import seg_converter, seg_updater
+from g4x_helpers.models import G4Xoutput
+from g4x_helpers.utils import verbose_to_log_level
 
 SUPPORTED_MASK_FILETYPES = ['.npz', '.npy', '.geojson']
 
@@ -17,20 +19,53 @@ def try_load_segmentation(
     segmentation_mask_key: str | None = None
 ) -> np.ndarray | geopandas.GeoDataFrame:
     
+    
     ## load new segmentation
-    if segmentation_mask.suffix == '.npz' or segmentation_mask.suffix == '.npy':
+    suffix = segmentation_mask.suffix.lower()
+    if suffix == '.npz':
+        # .npz: gives you a dict-like NpzFile, so you can context-manage
         with np.load(segmentation_mask) as labels:
             if segmentation_mask_key:
-                if segmentation_mask.suffix != '.npz':
-                    raise ValueError("segmentation_mask_key was provided, but .npz file was not provided.")
                 if segmentation_mask_key not in labels:
-                    raise KeyError(f"{segmentation_mask_key} does not appear to be in provided mask file, available keys = {list(labels.keys())}.")
+                    raise KeyError(
+                        f"Key '{segmentation_mask_key}' not found in .npz; available keys: {list(labels.keys())}"
+                    )
                 seg = labels[segmentation_mask_key]
             else:
+                # if no key specified, load all (will be an array only if the archive had 1 entry named 'arr_0')
                 seg = labels
-            assert seg.shape == expected_shape, f"provided mask shape {seg.shape} does not match with G4X sample shape {expected_shape}"
+        # only validate shape for numpy arrays
+        if isinstance(seg, np.ndarray):
+            assert seg.shape == expected_shape, (
+                f"provided mask shape {seg.shape} does not match G4X sample shape {expected_shape}"
+            )
+    elif suffix == '.npy':
+        # .npy: directly returns the array
+        if segmentation_mask_key is not None:
+            raise ValueError("segmentation_mask_key provided but file is not .npz")
+        seg = np.load(segmentation_mask)
+        assert seg.shape == expected_shape, (
+            f"provided mask shape {seg.shape} does not match G4X sample shape {expected_shape}"
+        )
     else:
+        # geojson, shapefile, etc.
         seg = geopandas.read_file(segmentation_mask)
+        
+    
+    # ## load new segmentation
+    # if segmentation_mask.suffix == '.npz' or segmentation_mask.suffix == '.npy':
+    #     with np.load(segmentation_mask) as labels:
+    #         if segmentation_mask_key:
+    #             if segmentation_mask.suffix != '.npz':
+    #                 raise ValueError("segmentation_mask_key was provided, but .npz file was not provided.")
+    #             if segmentation_mask_key not in labels:
+    #                 raise KeyError(f"{segmentation_mask_key} does not appear to be in provided mask file, available keys = {list(labels.keys())}.")
+    #             seg = labels[segmentation_mask_key]
+    #         else:
+    #             seg = labels
+    #         assert seg.shape == expected_shape, f"provided mask shape {seg.shape} does not match with G4X sample shape {expected_shape}"
+    # else:
+    #     seg = geopandas.read_file(segmentation_mask)
 
     return seg
 
