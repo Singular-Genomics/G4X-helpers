@@ -74,12 +74,19 @@ update_bin \
 ---
 
 ### `--segmentation_mask_key` (optional)
-> **Type:** `str`  
-> **Default:** `None`  
-> **Description:**  
-> If the segmentation mask is provided as a `.npz` file, this key specifies which array inside the archive should be used as the mask.
+**Type:** `str`  
+**Default:** `None`  
 
----
+> **Description:**  
+> Specifies the identifier for segmentation labels when loading mask data:
+> - **If using a `.npz` file**:  
+> Provide the name of the array within the archive that corresponds to the segmentation mask  
+> (required if multiple arrays are stored).
+> 
+> - **If using a `.geojson` file**:  
+> By default, cell labels are expected in a column named `label`.  
+> Use this argument to override and select a different column as the label source.
+
 
 ### `--threads` (optional)
 > **Type:** `int`  
