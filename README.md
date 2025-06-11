@@ -74,9 +74,8 @@ update_bin \
 ---
 
 ### `--segmentation_mask_key` (optional)
-**Type:** `str`  
-**Default:** `None`  
-
+> **Type:** `str`  
+> **Default:** `None`  
 > **Description:**  
 > Specifies the identifier for segmentation labels when loading mask data:
 > - **If using a `.npz` file**:  
