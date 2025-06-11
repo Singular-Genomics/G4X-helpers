@@ -1,4 +1,3 @@
-# from g4x_helpers.models import G4Xoutput
 from __future__ import annotations
 
 from pathlib import Path
@@ -15,6 +14,7 @@ from rasterio.features import rasterize
 from rasterio.transform import Affine
 from shapely.geometry import Polygon
 from skimage.measure._regionprops import RegionProperties
+from tqdm import tqdm
 
 if TYPE_CHECKING:
     # This import is only for type checkers (mypy, PyCharm, etc.), not at runtime
@@ -65,18 +65,16 @@ def get_mask_properties(sample: 'G4Xoutput', mask: np.ndarray) -> pl.DataFrame:
     props = skimage.measure.regionprops(mask)
 
     prop_dict = []
-    # Loop through each region to get the area and centroid
-    for prop in props:
+    # Loop through each region to get the area and centroid, with a progress bar
+    for prop in tqdm(props, desc='Extracting mask properties'):
         label = prop.label  # The label (mask id)
         area = prop.area  # Area: count of pixels
-        centroid = prop.centroid  # Centroid: (row, col) coordinates
+        centroid = prop.centroid  # Centroid: (row, col)
 
         if sample._get_coord_order() == 'yx':
-            cell_y = centroid[0]
-            cell_x = centroid[1]
+            cell_y, cell_x = centroid
         else:
-            cell_x = centroid[0]
-            cell_y = centroid[1]
+            cell_x, cell_y = centroid
 
         prop_dict.append(
             {
@@ -87,10 +85,8 @@ def get_mask_properties(sample: 'G4Xoutput', mask: np.ndarray) -> pl.DataFrame:
                 'cell_y': cell_y,
             }
         )
-        # prop_dict.append({'segmentation_label': label, 'area': area, 'cell_x': cell_x, 'cell_y': cell_y})
 
     prop_dict_df = pl.DataFrame(prop_dict)
-    # prop_dict_df = prop_dict_df.with_columns(pl.col('segmentation_label')).cast(pl.Utf8).cast(pl.Categorical)
     return prop_dict_df
 
 
@@ -166,12 +162,19 @@ def _vectorize_mask(mask: np.ndarray, nudge: bool = True) -> GeoDataFrame:
 
     regions = skimage.measure.regionprops(mask)
 
-    polygons_list = [_region_props_to_polygons(region) for region in regions]
-    geoms = [poly for polygons in polygons_list for poly in polygons]
-    labels = [region.label for i, region in enumerate(regions) for _ in range(len(polygons_list[i]))]
+    geoms = []
+    labels = []
+    # Wrap the iteration in tqdm to show progress
+    for region in tqdm(regions, desc='Vectorizing regions'):
+        polys = _region_props_to_polygons(region)
+        geoms.extend(polys)
+        # add the region label once per polygon
+        labels.extend([region.label] * len(polys))
+
     gdf = GeoDataFrame({'label': labels}, geometry=geoms)
 
     if nudge:
+        # GeoSeries.translate works elementwise
         gdf['geometry'] = gdf['geometry'].translate(xoff=-0.5, yoff=-0.5)
 
     return gdf
@@ -181,7 +184,10 @@ def rasterize_polygons(gdf: GeoDataFrame, target_shape: tuple) -> np.ndarray:
     height, width = target_shape
     transform = Affine.identity()
 
-    shapes = ((geom, int(lbl)) for geom, lbl in zip(gdf.geometry, gdf['label']))
+    # wrap the zip in tqdm; total=len(gdf) gives a proper progress bar
+    wrapped = tqdm(zip(gdf.geometry, gdf['label']), total=len(gdf), desc='Rasterizing polygons')
+    # feed that wrapped iterator into rasterize
+    shapes = ((geom, int(lbl)) for geom, lbl in wrapped)
 
     label_array = rasterize(
         shapes=shapes,
@@ -195,30 +201,25 @@ def rasterize_polygons(gdf: GeoDataFrame, target_shape: tuple) -> np.ndarray:
 
 
 def extract_image_signals(
-    sample: G4Xoutput,
-    mask: np.ndarray,
-    lazy: bool = False,
-    signal_list: list[str] | None = None,
-    cached: bool = False
+    sample: G4Xoutput, mask: np.ndarray, lazy: bool = False, signal_list: list[str] | None = None, cached: bool = False
 ) -> pl.DataFrame | pl.LazyFrame:
-    
     if signal_list is None:
         signal_list = ['nuclear', 'eosin'] + sample.proteins
 
     channel_name_map = {protein: protein for protein in sample.proteins}
-    channel_name_map["nuclear"] = "nuclearstain"
-    channel_name_map["eosin"] = "cytoplasmicstain"
+    channel_name_map['nuclear'] = 'nuclearstain'
+    channel_name_map['eosin'] = 'cytoplasmicstain'
 
     for i, signal_name in enumerate(signal_list):
-        if signal_name not in ["nuclear", "eosin"]:
-            image_type = "protein"
+        if signal_name not in ['nuclear', 'eosin']:
+            image_type = 'protein'
             protein = signal_name
         else:
             image_type = signal_name
             protein = None
 
         signal_img = sample.load_image_by_type(image_type, thumbnail=False, protein=protein, cached=cached)
-        
+
         ch_label = f'{channel_name_map[signal_name]}_intensity_mean'
 
         prop_tab = image_mask_intensity_extraction(
@@ -244,7 +245,7 @@ def _create_custom_out(
     sample: 'G4Xoutput',
     out_dir: Path | str | None = None,
     parent_folder: Path | str | None = None,
-    file_name: str | None = None
+    file_name: str | None = None,
 ) -> Path:
     if out_dir is None:
         custom_out = sample.run_base / parent_folder / 'custom_segmentation'
