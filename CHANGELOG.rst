@@ -1,6 +1,10 @@
 
 Changelog
 =========
+0.2.2 (2025-06-24)
+------------------
+- Add new_bin tool to more quickly generate a new bin file
+
 0.2.1 (2025-06-02)
 ------------------
 - Bug fixes for MVP functionality

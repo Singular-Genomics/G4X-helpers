@@ -5,7 +5,7 @@ from pathlib import Path
 import geopandas
 import numpy as np
 
-from g4x_helpers.g4x_viewer.bin_generator import seg_updater
+from g4x_helpers.g4x_viewer.bin_generator import seg_updater, seg_converter
 from g4x_helpers.models import G4Xoutput
 from g4x_helpers.utils import verbose_to_log_level
 
@@ -117,7 +117,7 @@ def launch_update_bin():
     parser.add_argument('--cellid_key', help='Column name in metadata containing cell IDs that match with bin_file. If not provided, assumes that first column in metadata contains the cell IDs.', action='store', type=str, required=False, default=None)
     parser.add_argument('--cluster_key', help='Column name in metadata containing cluster IDs. Automatically assigns new colors if cluster_color_key is not provided. If not provided, skips updating cluster IDs.', action='store', type=str, required=False, default=None)
     parser.add_argument('--cluster_color_key', help='Column name in metadata containing cluster colors. If provided, cluster_key must also be provided. If not provided, skips updating cluster colors.', action='store', type=str, required=False, default=None)
-    parser.add_argument('--emb_key', help='Column name in metadata containing embedding. Parser will look for {emb_key}_0 and {emb_key}_1. If not provided, skips updating embedding.', action='store', type=str, required=False, default=None)
+    parser.add_argument('--emb_key', help='Column name in metadata containing embedding. Parser will look for {emb_key}_1 and {emb_key}_2. If not provided, skips updating embedding.', action='store', type=str, required=False, default=None)
     parser.add_argument('--verbose', help= 'Set logging level WARNING (0), INFO (1), or DEBUG (2). [1]', action= 'store', type= int, default= 1)
     
     args = parser.parse_args()
@@ -143,3 +143,48 @@ def launch_update_bin():
         emb_key=args.emb_key,
         log_level=verbose_to_log_level(args.verbose)
     )
+
+
+def launch_new_bin():
+
+    parser = argparse.ArgumentParser(allow_abbrev=False)
+
+    parser.add_argument('--run_base', help='Path to G4X sample output folder', action='store', type=str, required=True)
+    parser.add_argument('--out_dir', help='Output directory where new files will be saved. Will be created if it does not exist. If not provided, the files in run_base will be updated in-place.', action='store', type=str, required=False, default=None)
+    parser.add_argument('--threads', help='Number of threads to use for processing. [4]', action='store', type=int, required=False, default= 4)
+    parser.add_argument('--verbose', help= 'Set logging level WARNING (0), INFO (1), or DEBUG (2). [1]', action= 'store', type= int, default= 1)
+
+    args = parser.parse_args()
+
+    ## preflight checks
+    run_base = Path(args.run_base)
+    assert run_base.exists(), f"{run_base} does not appear to exist."
+
+    ## initialize G4X sample
+    sample = G4Xoutput(run_base=run_base, out_dir=args.out_dir, log_level=verbose_to_log_level(args.verbose))
+    print(sample)
+
+    ## set up the data
+    adata = sample.load_adata()
+    emb_key = '_'.join(sorted([x for x in adata.obs.columns if 'X_umap' in x])[0].split('_')[:-1])
+    cluster_key = sorted([x for x in adata.obs.columns if "leiden" in x])[0]
+    mask = sample.load_segmentation()
+    if args.out_dir is not None:
+        os.makedirs(args.out_dir, exist_ok= True)
+        outfile = Path(args.out_dir) / f"{sample.sample_id}.bin"
+    else:
+        outfile = run_base / "g4x_viewer" / f"{sample.sample_id}.bin"
+
+    ## make new bin file
+    sample.logger.info('Making G4X-Viewer bin file.')
+    _ = seg_converter(
+        adata=adata,
+        seg_mask=mask,
+        out_path=outfile,
+        cluster_key=cluster_key,
+        emb_key=emb_key,
+        protein_list=[f"{x}_intensity_mean" for x in sample.proteins],
+        n_threads=args.threads,
+        logger= sample.logger
+    )
+    sample.logger.debug(f'G4X-Viewer bin --> {outfile}')

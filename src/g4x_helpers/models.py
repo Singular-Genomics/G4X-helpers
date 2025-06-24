@@ -89,6 +89,8 @@ class G4Xoutput:
             clear_handlers=True
         )
 
+        _= self._validate_run_base()
+
         with open(self.run_base / 'run_meta.json', 'r') as f:
             self.run_meta = json.load(f)
         
@@ -421,3 +423,17 @@ class G4Xoutput:
     def _clear_image_cache(self):
         """Evict all cached images so subsequent calls re-read from disk."""
         self._load_image.cache_clear()
+
+    def _validate_run_base(self):
+        """ check that all expected outputs are present."""
+        self.logger.debug("Validating run_base.")
+
+        required_paths = [
+            self.run_base / "run_meta.json",
+            self.run_base / "single_cell_data" / "feature_matrix.h5"
+        ]
+
+        for p in required_paths:
+            if not p.is_file():
+                self.logger.error(f"{p} does not exist.")
+                raise FileNotFoundError(f"{p} does not exist.")

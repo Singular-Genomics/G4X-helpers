@@ -223,7 +223,7 @@ def seg_converter(
     seg_mask: np.ndarray,
     out_path: str | Path,
     *,
-    metadata: str| Path | None = None,
+    metadata: str | Path | None = None,
     cluster_key: str | None = None,
     emb_key: str | None = None,
     protein_list: list[str] | None = None,
@@ -244,7 +244,10 @@ def seg_converter(
         )
 
     if metadata is None:
-        clusters_available = False
+        if cluster_key in adata.obs.columns:
+            clusters_available = True
+        else:
+            clusters_available = False
         obs_df = adata.obs.copy()
     else:
         clusters_available = True
@@ -265,6 +268,7 @@ def seg_converter(
 
     ## initialize segmentation data
     ## we create polygons to define the boundaries of each cell mask
+    logger.debug("Making polygons.")
     border = get_border(seg_mask)
     seg_mask[border > 0] = 0
     eroded_mask = erosion(seg_mask, disk(1))
@@ -279,11 +283,15 @@ def seg_converter(
     sorted_cols = nonzero_col_indices[sorted_indices]
 
     ## add single-cell info
+    logger.debug("Adding single-cell metadata.")
     cell_ids = obs_df.index.tolist()
     num_cells = len(cell_ids)
     centroid_y = obs_df['cell_x'].tolist()
     centroid_x = obs_df['cell_y'].tolist()
-    areas = obs_df['area'].tolist()
+    if "area" in obs_df.columns:
+        areas = obs_df['area'].tolist()
+    else:
+        areas = obs_df["nuclei_expanded_area"].tolist()
     total_counts = obs_df['total_counts'].tolist()
     total_genes = obs_df['n_genes_by_counts'].tolist()
     if clusters_available:
@@ -300,13 +308,14 @@ def seg_converter(
     else:
         prot_vals = [{} for _ in range(num_cells)]
     if emb_key:
-        umap_x = obs_df[f"{emb_key}_0"].to_numpy()
-        umap_y = obs_df[f"{emb_key}_1"].to_numpy()
+        umap_x = obs_df[f"{emb_key}_1"].to_numpy()
+        umap_y = obs_df[f"{emb_key}_2"].to_numpy()
     else:
         umap_x = np.zeros(num_cells)
         umap_y = np.zeros(num_cells)
 
     ## refine polygons
+    logger.debug("Refining polygons.")
     ray.init(
         num_cpus=n_threads,
         logging_level='WARNING',
@@ -473,8 +482,8 @@ def seg_updater(
 
     ## check for embedding
     if emb_key is not None:
-        if f"{emb_key}_0" not in metadata.columns or f"{emb_key}_1" not in metadata.columns:
-            raise KeyError(f"{emb_key}_0 and {emb_key}_1 are not valid columns in metadata.")
+        if f"{emb_key}_1" not in metadata.columns or f"{emb_key}_2" not in metadata.columns:
+            raise KeyError(f"{emb_key}_1 and {emb_key}_2 are not valid columns in metadata.")
         update_emb = True
         logger.debug("Updating embedding.")
     else:
@@ -492,8 +501,8 @@ def seg_updater(
                 cell.color.clear()
                 cell.color.extend(metadata.loc[current_cellid, cluster_color_key])
             if update_emb:
-                cell.umapValues.umapX = metadata.loc[current_cellid, f"{emb_key}_0"]
-                cell.umapValues.umapY = metadata.loc[current_cellid, f"{emb_key}_1"]
+                cell.umapValues.umapX = metadata.loc[current_cellid, f"{emb_key}_1"]
+                cell.umapValues.umapY = metadata.loc[current_cellid, f"{emb_key}_2"]
         else:
             logger.debug(f"{current_cellid} not found in metadata, not updating data for this cell.")
     if update_cluster_color:
