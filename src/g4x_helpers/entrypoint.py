@@ -4,6 +4,9 @@ from pathlib import Path
 
 import geopandas
 import numpy as np
+import tarfile
+import json
+import shutil
 
 from g4x_helpers.g4x_viewer.bin_generator import seg_updater, seg_converter
 from g4x_helpers.models import G4Xoutput
@@ -188,3 +191,56 @@ def launch_new_bin():
         logger= sample.logger
     )
     sample.logger.debug(f'G4X-Viewer bin --> {outfile}')
+
+
+def launch_tar_viewer():
+
+    parser = argparse.ArgumentParser(allow_abbrev=False)
+
+    parser.add_argument('--viewer_dir', help='Path to G4X-viewer folder to tar', action='store', type=str, required=True)
+
+    args = parser.parse_args()
+
+    ## preflight checks
+    print("Checking files.")
+    viewer_dir = Path(args.viewer_dir)
+    assert viewer_dir.exists(), f"{viewer_dir} does not appear to exist."
+
+    bin_path = list(viewer_dir.glob("*.bin"))
+    assert len(bin_path) == 1, "Either no bin file was found in viewer_dir or multiple bin files were found."
+    bin_path = bin_path[0]
+
+    sample_id = bin_path.stem
+
+    ome_tiff_path = viewer_dir / f"{sample_id}.ome.tiff"
+    assert ome_tiff_path.is_file(), "fH&E ome.tiff file does not exist."
+
+    run_meta_path = viewer_dir / f"{sample_id}_run_metadata.json"
+    assert run_meta_path.is_file(), "run_metadata.json file does not exist."
+
+    tx_path = viewer_dir / f"{sample_id}.tar"
+    assert tx_path.is_file(), "transcript tar file does not exist."
+
+    os.makedirs(viewer_dir / "h_and_e", exist_ok= True)
+    h_and_e_path = viewer_dir / "h_and_e"
+    h_and_e_ome_tiff_path = viewer_dir / f"{sample_id}_HE.ome.tiff"
+    assert h_and_e_ome_tiff_path.is_file(), "fH&E ome.tiff file does not exist."
+    shutil.move(
+        h_and_e_ome_tiff_path,
+        h_and_e_path / f"{sample_id}_HE.ome.tiff"
+    )
+
+    print("Making metadata.")
+    metadata = {
+        "protein_image_src": f"{ome_tiff_path.name}",
+        "protein_image_data_src": f"{run_meta_path.name}",
+        "he_images_src": f"{h_and_e_path.name}",
+        "cell_segmentation_src": f"{bin_path.name}",
+        "transcript_src": f"{tx_path.name}"
+    }
+    with open(viewer_dir / "dataset.config.json", "w") as f:
+        _= json.dump(metadata, f)
+
+    print("Tarring folder.")
+    with tarfile.open(viewer_dir.with_suffix('.tar'), "w") as tar:
+        tar.add(viewer_dir, arcname=viewer_dir.name)
