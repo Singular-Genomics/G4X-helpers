@@ -8,8 +8,8 @@ Helper models and functions for working with G4X data.
 - [🚀 Installation](#-installation)
   - [📦 Source Installation / CLI Usage](#-source-installation--cli-usage)
     - [Step 1: Prepare a Python environment](#step-1-prepare-a-python-environment)
-    - [Step 2: Clone and install `g4x-helpers`](#step-2-clone-and-install-g4x-helpers)
-    - [Step 3: Install openJPEG](#step-3-install-openjpeg)
+    - [Step 2: Install openJPEG](#step-2-install-openjpeg)
+    - [Step 3: Clone and install `g4x-helpers`](#step-3-clone-and-install-g4x-helpers)
     - [Step 4: Verify installation](#step-4-verify-installation)
 - [🧬 `resegment`: Reprocess G4X output with a new segmentation](#-resegment-reprocess-g4x-output-with-a-new-segmentation)
   - [`resegment` Usage](#resegment-usage)
@@ -66,7 +66,22 @@ conda create -n g4x-helpers_env python=3.10
 conda activate g4x-helpers_env
 ```
 
-### Step 2: Clone and install `g4x-helpers`
+### Step 2: Install openJPEG
+
+- Install openJPEG.
+```bash
+apt-get install libopenjp2-7-dev
+```
+OR
+```bash
+conda install -c conda-forge openjpeg
+```
+- Verify openJPEG version is ≥ 2.2.0.
+```bash
+python -c "import glymur; print(glymur.version.openjpeg_version)"
+```
+
+### Step 3: Clone and install `g4x-helpers`
 
 - Clone the repository:
 
@@ -77,24 +92,13 @@ git clone git@github.com:Singular-Genomics/G4X-helpers.git
 - Navigate to the repo directory:
 
 ```bash
-cd g4x-helpers
+cd G4x-helpers
 ```
 
 - Install the package:
 
 ```bash
 pip install .
-```
-
-### Step 3: Install openJPEG
-
-- Install openJPEG.
-```bash
-apt-get install libopenjp2-7-dev
-```
-- Verify openJPEG version is ≥ 2.2.0.
-```bash
-python -c "import glymur; print(glymur.version.openjpeg_version)"
 ```
 
 ### Step 4: Verify installation
