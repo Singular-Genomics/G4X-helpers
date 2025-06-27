@@ -168,10 +168,19 @@ def launch_new_bin():
     print(sample)
 
     ## set up the data
-    adata = sample.load_adata()
-    emb_key = '_'.join(sorted([x for x in adata.obs.columns if 'X_umap' in x])[0].split('_')[:-1])
-    cluster_key = sorted([x for x in adata.obs.columns if "leiden" in x])[0]
+    try:
+        adata = sample.load_adata()
+        emb_key = '_'.join(sorted([x for x in adata.obs.columns if 'X_umap' in x])[0].split('_')[:-1])
+        cluster_key = sorted([x for x in adata.obs.columns if "leiden" in x])[0]
+        sample.logger.info("Successfully loaded adata with clustering information.")
+    except Exception as e:
+        adata = sample.load_adata(load_clustering= False)
+        emb_key = None
+        cluster_key = None
+        sample.logger.info("Clustering information was not found, cell coloring will be random.")
+
     mask = sample.load_segmentation()
+
     if args.out_dir is not None:
         os.makedirs(args.out_dir, exist_ok= True)
         outfile = Path(args.out_dir) / f"{sample.sample_id}.bin"
