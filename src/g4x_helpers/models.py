@@ -201,14 +201,10 @@ class G4Xoutput:
             adata = adata[:, adata.var.query(" probe_type == 'targeting' ").index].copy()
 
         if load_clustering:
-            try:
-                df = pd.read_csv(self.run_base / 'single_cell_data' / 'clustering_umap.csv.gz', index_col=0, header=0)
-                adata.obs = adata.obs.merge(df, how='left', left_index=True, right_index=True)
-                umap_key = '_'.join(sorted([x for x in adata.obs.columns if 'X_umap' in x])[0].split('_')[:-1])
-                adata.obsm['X_umap'] = adata.obs[[f'{umap_key}_1', f'{umap_key}_2']].to_numpy(dtype=float)
-            except Exception as e:
-                self.logger.exception('No single-cell clustering results found.')
-                self.logger.exception(e)
+            df = pd.read_csv(self.run_base / 'single_cell_data' / 'clustering_umap.csv.gz', index_col=0, header=0)
+            adata.obs = adata.obs.merge(df, how='left', left_index=True, right_index=True)
+            umap_key = '_'.join(sorted([x for x in adata.obs.columns if 'X_umap' in x])[0].split('_')[:-1])
+            adata.obsm['X_umap'] = adata.obs[[f'{umap_key}_1', f'{umap_key}_2']].to_numpy(dtype=float)
 
         adata.obs_names = f'{self.sample_id}-' + adata.obs['cell_id'].str.split('-').str[1]
         return adata
