@@ -5,4 +5,4 @@ try:
 except PackageNotFoundError:
     __version__ = "unknown"
 
-from g4x_helpers.models import G4Xoutput
+from g4x_helpers.models import G4Xoutput as G4Xoutput
