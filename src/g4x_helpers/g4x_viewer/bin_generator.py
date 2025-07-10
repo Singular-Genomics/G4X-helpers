@@ -49,7 +49,7 @@ def generate_cluster_palette(clusters: list, max_colors: int = 256) -> dict:
 
     Examples
     --------
-    >>> generate_cluster_palette(["0", "1", "2", "-1"])
+    >>> generate_cluster_palette(['0', '1', '2', '-1'])
     {'0': [31, 119, 180], '1': [255, 127, 14], '2': [44, 160, 44], '-1': [191, 191, 191]}
     """
     unique_clusters = [c for c in np.unique(clusters) if c != '-1']
@@ -63,10 +63,9 @@ def generate_cluster_palette(clusters: list, max_colors: int = 256) -> dict:
         base_cmap = plt.get_cmap('hsv', min(max_colors, n_clusters))
 
     cluster_palette = {
-        str(cluster): [int(255 * c) for c in base_cmap(i / n_clusters)[:3]]
-        for i, cluster in enumerate(unique_clusters)
+        str(cluster): [int(255 * c) for c in base_cmap(i / n_clusters)[:3]] for i, cluster in enumerate(unique_clusters)
     }
-    cluster_palette["-1"] = [int(191), int(191), int(191)]
+    cluster_palette['-1'] = [int(191), int(191), int(191)]
 
     return cluster_palette
 
@@ -229,9 +228,8 @@ def seg_converter(
     protein_list: list[str] | None = None,
     n_threads: int = 4,
     logger: logging.Logger | None = None,
-    log_level: int = logging.DEBUG
+    log_level: int = logging.DEBUG,
 ) -> None:
-
     if logger is None:
         logger = utils.setup_logger(
             'seg_converter',
@@ -240,7 +238,7 @@ def seg_converter(
             file_logger=True,
             file_level=logging.DEBUG,
             out_dir=out_path.parent,
-            clear_handlers=True
+            clear_handlers=True,
         )
 
     if metadata is None:
@@ -251,9 +249,11 @@ def seg_converter(
         obs_df = adata.obs.copy()
     else:
         clusters_available = True
-        clustered_df = pd.read_csv(metadata, index_col= 0, header= 0)
+        clustered_df = pd.read_csv(metadata, index_col=0, header=0)
         if clustered_df.shape[1] > 1:
-            assert cluster_key is not None, "ERROR: multiple columns detected in cluster_info, cluster_key must be provided."
+            assert cluster_key is not None, (
+                'ERROR: multiple columns detected in cluster_info, cluster_key must be provided.'
+            )
         else:
             cluster_key = clustered_df.columns[0]
         orig_df = adata.obs.copy()
@@ -268,7 +268,7 @@ def seg_converter(
 
     ## initialize segmentation data
     ## we create polygons to define the boundaries of each cell mask
-    logger.debug("Making polygons.")
+    logger.debug('Making polygons.')
     border = get_border(seg_mask)
     seg_mask[border > 0] = 0
     eroded_mask = erosion(seg_mask, disk(1))
@@ -283,15 +283,15 @@ def seg_converter(
     sorted_cols = nonzero_col_indices[sorted_indices]
 
     ## add single-cell info
-    logger.debug("Adding single-cell metadata.")
+    logger.debug('Adding single-cell metadata.')
     cell_ids = obs_df.index.tolist()
     num_cells = len(cell_ids)
     centroid_y = obs_df['cell_x'].tolist()
     centroid_x = obs_df['cell_y'].tolist()
-    if "area" in obs_df.columns:
+    if 'area' in obs_df.columns:
         areas = obs_df['area'].tolist()
     else:
-        areas = obs_df["nuclei_expanded_area"].tolist()
+        areas = obs_df['nuclei_expanded_area'].tolist()
     total_counts = obs_df['total_counts'].tolist()
     total_genes = obs_df['n_genes_by_counts'].tolist()
     if clusters_available:
@@ -300,28 +300,28 @@ def seg_converter(
         cluster_colors = obs_df[cluster_key].astype(str).map(cluster_palette).tolist()
     else:
         cmap = plt.get_cmap('hsv', 100)
-        clusters = ["-1"] * num_cells
+        clusters = ['-1'] * num_cells
         cluster_colors = [[int(255 * x) for x in cmap(i % 100)[:3]] for i in range(num_cells)]
         random.shuffle(cluster_colors)
     if protein_list:
-        prot_vals = list(obs_df[protein_list].to_dict(orient= 'index').values())
+        prot_vals = list(obs_df[protein_list].to_dict(orient='index').values())
     else:
         prot_vals = [{} for _ in range(num_cells)]
     if emb_key:
-        umap_x = obs_df[f"{emb_key}_1"].to_numpy()
-        umap_y = obs_df[f"{emb_key}_2"].to_numpy()
+        umap_x = obs_df[f'{emb_key}_1'].to_numpy()
+        umap_y = obs_df[f'{emb_key}_2'].to_numpy()
     else:
         umap_x = np.zeros(num_cells)
         umap_y = np.zeros(num_cells)
 
     ## refine polygons
-    logger.debug("Refining polygons.")
+    logger.debug('Refining polygons.')
     ray.init(
         num_cpus=n_threads,
         logging_level='WARNING',
         include_dashboard=False,
         address='local',
-        _node_ip_address='127.0.0.1'
+        _node_ip_address='127.0.0.1',
     )
 
     sorted_nonzero_values_ref = ray.put(sorted_nonzero_values)
@@ -350,12 +350,12 @@ def seg_converter(
         'cluster_id': clusters,
         'umap_x': umap_x,
         'umap_y': umap_y,
-        'protein': prot_vals
+        'protein': prot_vals,
     }
 
     outputCellSegmentation = CellMasksSchema.CellMasks()
 
-    for index in tqdm(range(len(segmentation_source['cell_id'])), desc="Processing cells"):
+    for index in tqdm(range(len(segmentation_source['cell_id'])), desc='Processing cells'):
         try:
             cellPolygonPoints = [
                 coord
@@ -368,9 +368,9 @@ def seg_converter(
             cellTotalGenes = segmentation_source['total_genes'][index]
             cellArea = segmentation_source['area'][index]
             clusterId = segmentation_source['cluster_id'][index]
-            cellProt = segmentation_source["protein"][index]
-            cellUmapX = segmentation_source["umap_x"][index]
-            cellUmapY = segmentation_source["umap_y"][index]
+            cellProt = segmentation_source['protein'][index]
+            cellUmapX = segmentation_source['umap_x'][index]
+            cellUmapY = segmentation_source['umap_y'][index]
         except Exception as e:
             logger.debug(e)
             pass
@@ -396,7 +396,7 @@ def seg_converter(
         entry = CellMasksSchema.ColormapEntry()
         entry.clusterId = '-1'
         entry.color.extend([int(31), int(119), int(180)])
-        outputCellSegmentation.colormap.append(entry)   
+        outputCellSegmentation.colormap.append(entry)
 
     ## write to file
     with open(out_path, 'wb') as file:
@@ -413,9 +413,8 @@ def seg_updater(
     cluster_color_key: str | None = None,
     emb_key: str | None = None,
     logger: logging.Logger | None = None,
-    log_level: int = logging.DEBUG
+    log_level: int = logging.DEBUG,
 ) -> None:
-
     ## pre-flight
     if logger is None:
         logger = utils.setup_logger(
@@ -425,15 +424,15 @@ def seg_updater(
             file_logger=True,
             file_level=logging.DEBUG,
             out_dir=out_path.parent,
-            clear_handlers=True
+            clear_handlers=True,
         )
 
     if emb_key is None and cluster_key is None:
-        logger.warning("neither embedding nor cluster keys were provided, nothing to update.")
+        logger.warning('neither embedding nor cluster keys were provided, nothing to update.')
         return None
-    
+
     ## load the bin file
-    logger.info(f"Loading {bin_file}.")
+    logger.info(f'Loading {bin_file}.')
     with open(bin_file, 'rb') as f:
         data = f.read()
     cell_masks = CellMasksSchema.CellMasks()
@@ -441,58 +440,62 @@ def seg_updater(
 
     ## load the metadata
     if cellid_key is None:
-        logger.info("cellid_key not provided, assuming cell IDs are in first column of metadata.")
-        metadata = pd.read_csv(metadata_file, index_col= 0, header= 0)
+        logger.info('cellid_key not provided, assuming cell IDs are in first column of metadata.')
+        metadata = pd.read_csv(metadata_file, index_col=0, header=0)
     else:
-        metadata = pd.read_csv(metadata_file, index_col= None, header= 0)
+        metadata = pd.read_csv(metadata_file, index_col=None, header=0)
         if cellid_key not in metadata.columns:
-            raise KeyError(f"{cellid_key} not a valid column in metadata.")
-        metadata.set_index(cellid_key, inplace= True)
+            raise KeyError(f'{cellid_key} not a valid column in metadata.')
+        metadata.set_index(cellid_key, inplace=True)
 
     ## check for clustering
     if cluster_key is not None:
         if cluster_key not in metadata.columns:
-            raise KeyError(f"{cluster_key} not a valid column in metadata.")
+            raise KeyError(f'{cluster_key} not a valid column in metadata.')
         update_cluster = True
-        logger.debug("Updating cluster IDs.")
+        logger.debug('Updating cluster IDs.')
     else:
         update_cluster = False
-        logger.debug("Not updating cluster IDs.")
+        logger.debug('Not updating cluster IDs.')
 
     ## check for cluster colors
     if cluster_color_key is not None:
         if cluster_key is None:
-            raise ValueError("cluster_color_key was provided, but cluster_key was not provided.")
+            raise ValueError('cluster_color_key was provided, but cluster_key was not provided.')
         if cluster_color_key not in metadata.columns:
-            raise KeyError(f"{cluster_color_key} not a valid column in metadata.")
+            raise KeyError(f'{cluster_color_key} not a valid column in metadata.')
         update_cluster_color = True
-        logger.debug("Updating cluster colors.")
-        cluster_palette = metadata.drop_duplicates(subset=cluster_key)[[cluster_key, cluster_color_key]].set_index(cluster_key).to_dict()[cluster_color_key]
-        cluster_palette = {str(k): v for k,v in cluster_palette.items()}
+        logger.debug('Updating cluster colors.')
+        cluster_palette = (
+            metadata.drop_duplicates(subset=cluster_key)[[cluster_key, cluster_color_key]]
+            .set_index(cluster_key)
+            .to_dict()[cluster_color_key]
+        )
+        cluster_palette = {str(k): v for k, v in cluster_palette.items()}
     else:
         if cluster_key is not None:
             update_cluster_color = True
-            logger.debug("Auto-assigning colors to new clustering.")
-            cluster_color_key = "cluster_color"
+            logger.debug('Auto-assigning colors to new clustering.')
+            cluster_color_key = 'cluster_color'
             cluster_palette = generate_cluster_palette(metadata[cluster_key].tolist())
-            metadata["cluster_color"] = metadata[cluster_key].astype(str).map(cluster_palette).tolist()
+            metadata['cluster_color'] = metadata[cluster_key].astype(str).map(cluster_palette).tolist()
         else:
             update_cluster_color = False
-            logger.debug("Not updating cluster colors.")
+            logger.debug('Not updating cluster colors.')
 
     ## check for embedding
     if emb_key is not None:
-        if f"{emb_key}_1" not in metadata.columns or f"{emb_key}_2" not in metadata.columns:
-            raise KeyError(f"{emb_key}_1 and {emb_key}_2 are not valid columns in metadata.")
+        if f'{emb_key}_1' not in metadata.columns or f'{emb_key}_2' not in metadata.columns:
+            raise KeyError(f'{emb_key}_1 and {emb_key}_2 are not valid columns in metadata.')
         update_emb = True
-        logger.debug("Updating embedding.")
+        logger.debug('Updating embedding.')
     else:
         update_emb = False
-        logger.debug("Not updating embedding.")
+        logger.debug('Not updating embedding.')
 
     ## Do the actual updating
-    logger.info("Updating cells.")
-    for cell in tqdm(cell_masks.cellMasks, desc="Updating cell data"):
+    logger.info('Updating cells.')
+    for cell in tqdm(cell_masks.cellMasks, desc='Updating cell data'):
         current_cellid = cell.cellId
         if current_cellid in metadata.index:
             if update_cluster:
@@ -501,10 +504,10 @@ def seg_updater(
                 cell.color.clear()
                 cell.color.extend(metadata.loc[current_cellid, cluster_color_key])
             if update_emb:
-                cell.umapValues.umapX = metadata.loc[current_cellid, f"{emb_key}_1"]
-                cell.umapValues.umapY = metadata.loc[current_cellid, f"{emb_key}_2"]
+                cell.umapValues.umapX = metadata.loc[current_cellid, f'{emb_key}_1']
+                cell.umapValues.umapY = metadata.loc[current_cellid, f'{emb_key}_2']
         else:
-            logger.debug(f"{current_cellid} not found in metadata, not updating data for this cell.")
+            logger.debug(f'{current_cellid} not found in metadata, not updating data for this cell.')
     if update_cluster_color:
         cell_masks.colormap.clear()
         for cluster_id, color in cluster_palette.items():
@@ -514,6 +517,6 @@ def seg_updater(
             cell_masks.colormap.append(entry)
 
     ## Write to file
-    logger.debug(f"Writing updated bin file --> {out_path}")
+    logger.debug(f'Writing updated bin file --> {out_path}')
     with open(out_path, 'wb') as file:
         file.write(cell_masks.SerializeToString())

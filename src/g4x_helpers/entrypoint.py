@@ -16,12 +16,8 @@ SUPPORTED_MASK_FILETYPES = ['.npz', '.npy', '.geojson']
 
 
 def try_load_segmentation(
-    segmentation_mask: Path, 
-    expected_shape: tuple[int], 
-    segmentation_mask_key: str | None = None
+    segmentation_mask: Path, expected_shape: tuple[int], segmentation_mask_key: str | None = None
 ) -> np.ndarray | geopandas.GeoDataFrame:
-    
-    
     ## load new segmentation
     suffix = segmentation_mask.suffix.lower()
     if suffix == '.npz':
@@ -77,91 +73,186 @@ def try_load_segmentation(
 
 
 def launch_resegment():
-
     parser = argparse.ArgumentParser(allow_abbrev=False)
 
     parser.add_argument('--run_base', help='Path to G4X sample output folder', action='store', type=str, required=True)
-    parser.add_argument('--segmentation_mask', help='Path to new segmentation mask. Supported files types are: .npy, .npz, .geojson.', action='store', type=str, required=True)
-    parser.add_argument('--sample_id', help='sample_id (Optional)', action='store', type=str, required=False, default=None)
-    parser.add_argument('--out_dir', help='Output directory where new files will be saved. Will be created if it does not exist. If not provided, the files in run_base will be updated in-place.', action='store', type=str, required=False, default=None)
-    parser.add_argument('--segmentation_mask_key', help='Key in npz/geojson where mask/labels should be taken from (Optional)', action='store', type=str, required=False, default=None)
-    parser.add_argument('--threads', help='Number of threads to use for processing. [4]', action='store', type=int, required=False, default= 4)
-    parser.add_argument('--verbose', help= 'Set logging level WARNING (0), INFO (1), or DEBUG (2). [1]', action= 'store', type= int, default= 1)
+    parser.add_argument(
+        '--segmentation_mask',
+        help='Path to new segmentation mask. Supported files types are: .npy, .npz, .geojson.',
+        action='store',
+        type=str,
+        required=True,
+    )
+    parser.add_argument(
+        '--sample_id', help='sample_id (Optional)', action='store', type=str, required=False, default=None
+    )
+    parser.add_argument(
+        '--out_dir',
+        help='Output directory where new files will be saved. Will be created if it does not exist. If not provided, the files in run_base will be updated in-place.',
+        action='store',
+        type=str,
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        '--segmentation_mask_key',
+        help='Key in npz/geojson where mask/labels should be taken from (Optional)',
+        action='store',
+        type=str,
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        '--threads',
+        help='Number of threads to use for processing. [4]',
+        action='store',
+        type=int,
+        required=False,
+        default=4,
+    )
+    parser.add_argument(
+        '--verbose',
+        help='Set logging level WARNING (0), INFO (1), or DEBUG (2). [1]',
+        action='store',
+        type=int,
+        default=1,
+    )
 
     args = parser.parse_args()
 
     ## preflight checks
     run_base = Path(args.run_base)
-    assert run_base.exists(), f"{run_base} does not appear to exist."
+    assert run_base.exists(), f'{run_base} does not appear to exist.'
     segmentation_mask = Path(args.segmentation_mask)
-    assert segmentation_mask.suffix in SUPPORTED_MASK_FILETYPES, f"{segmentation_mask.suffix} not a supported file type."
+    assert segmentation_mask.suffix in SUPPORTED_MASK_FILETYPES, (
+        f'{segmentation_mask.suffix} not a supported file type.'
+    )
 
     ## initialize G4X sample
-    sample = G4Xoutput(run_base=run_base, sample_id=args.sample_id, out_dir=args.out_dir, log_level=verbose_to_log_level(args.verbose))
+    sample = G4Xoutput(
+        run_base=run_base, sample_id=args.sample_id, out_dir=args.out_dir, log_level=verbose_to_log_level(args.verbose)
+    )
     print(sample)
 
     ## load new segmentation
     labels = try_load_segmentation(segmentation_mask, sample.shape, args.segmentation_mask_key)
 
     ## run intersection with new segmentation
-    _= sample.intersect_segmentation(
-        labels= labels,
-        out_dir= args.out_dir,
-        n_threads= args.threads
-    )
+    _ = sample.intersect_segmentation(labels=labels, out_dir=args.out_dir, n_threads=args.threads)
 
 
 def launch_update_bin():
     parser = argparse.ArgumentParser(allow_abbrev=False)
 
-    parser.add_argument('--bin_file', help='Path to G4X-Viewer segmentation bin file.', action='store', type=str, required=True)
+    parser.add_argument(
+        '--bin_file', help='Path to G4X-Viewer segmentation bin file.', action='store', type=str, required=True
+    )
     parser.add_argument('--out_path', help='Output file path', action='store', type=str, required=True)
-    parser.add_argument('--metadata', help='Path to metadata table where clustering and/or embedding information will be extracted. Table must contain a header.', action='store', type=str, required=True)
-    parser.add_argument('--cellid_key', help='Column name in metadata containing cell IDs that match with bin_file. If not provided, assumes that first column in metadata contains the cell IDs.', action='store', type=str, required=False, default=None)
-    parser.add_argument('--cluster_key', help='Column name in metadata containing cluster IDs. Automatically assigns new colors if cluster_color_key is not provided. If not provided, skips updating cluster IDs.', action='store', type=str, required=False, default=None)
-    parser.add_argument('--cluster_color_key', help='Column name in metadata containing cluster colors. If provided, cluster_key must also be provided. If not provided, skips updating cluster colors.', action='store', type=str, required=False, default=None)
-    parser.add_argument('--emb_key', help='Column name in metadata containing embedding. Parser will look for {emb_key}_1 and {emb_key}_2. If not provided, skips updating embedding.', action='store', type=str, required=False, default=None)
-    parser.add_argument('--verbose', help= 'Set logging level WARNING (0), INFO (1), or DEBUG (2). [1]', action= 'store', type= int, default= 1)
-    
+    parser.add_argument(
+        '--metadata',
+        help='Path to metadata table where clustering and/or embedding information will be extracted. Table must contain a header.',
+        action='store',
+        type=str,
+        required=True,
+    )
+    parser.add_argument(
+        '--cellid_key',
+        help='Column name in metadata containing cell IDs that match with bin_file. If not provided, assumes that first column in metadata contains the cell IDs.',
+        action='store',
+        type=str,
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        '--cluster_key',
+        help='Column name in metadata containing cluster IDs. Automatically assigns new colors if cluster_color_key is not provided. If not provided, skips updating cluster IDs.',
+        action='store',
+        type=str,
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        '--cluster_color_key',
+        help='Column name in metadata containing cluster colors. If provided, cluster_key must also be provided. If not provided, skips updating cluster colors.',
+        action='store',
+        type=str,
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        '--emb_key',
+        help='Column name in metadata containing embedding. Parser will look for {emb_key}_1 and {emb_key}_2. If not provided, skips updating embedding.',
+        action='store',
+        type=str,
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        '--verbose',
+        help='Set logging level WARNING (0), INFO (1), or DEBUG (2). [1]',
+        action='store',
+        type=int,
+        default=1,
+    )
+
     args = parser.parse_args()
 
     ## preflight checks
     bin_file = Path(args.bin_file)
     if not bin_file.exists():
-        raise FileNotFoundError(f"{bin_file} does not appear to exist.")
+        raise FileNotFoundError(f'{bin_file} does not appear to exist.')
     metadata = Path(args.metadata)
     if not metadata.exists():
-        raise FileNotFoundError(f"{metadata} does not appear to exist.")
+        raise FileNotFoundError(f'{metadata} does not appear to exist.')
     out_path = Path(args.out_path)
     out_dir = out_path.parent
     os.makedirs(out_dir, exist_ok=True)
 
     ## run converter
-    _= seg_updater(
+    _ = seg_updater(
         bin_file=bin_file,
         metadata_file=metadata,
         out_path=out_path,
         cluster_key=args.cluster_key,
         cluster_color_key=args.cluster_color_key,
         emb_key=args.emb_key,
-        log_level=verbose_to_log_level(args.verbose)
+        log_level=verbose_to_log_level(args.verbose),
     )
 
 
 def launch_new_bin():
-
     parser = argparse.ArgumentParser(allow_abbrev=False)
 
     parser.add_argument('--run_base', help='Path to G4X sample output folder', action='store', type=str, required=True)
-    parser.add_argument('--out_dir', help='Output directory where new files will be saved. Will be created if it does not exist. If not provided, the files in run_base will be updated in-place.', action='store', type=str, required=False, default=None)
-    parser.add_argument('--threads', help='Number of threads to use for processing. [4]', action='store', type=int, required=False, default= 4)
-    parser.add_argument('--verbose', help= 'Set logging level WARNING (0), INFO (1), or DEBUG (2). [1]', action= 'store', type= int, default= 1)
+    parser.add_argument(
+        '--out_dir',
+        help='Output directory where new files will be saved. Will be created if it does not exist. If not provided, the files in run_base will be updated in-place.',
+        action='store',
+        type=str,
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        '--threads',
+        help='Number of threads to use for processing. [4]',
+        action='store',
+        type=int,
+        required=False,
+        default=4,
+    )
+    parser.add_argument(
+        '--verbose',
+        help='Set logging level WARNING (0), INFO (1), or DEBUG (2). [1]',
+        action='store',
+        type=int,
+        default=1,
+    )
 
     args = parser.parse_args()
 
     ## preflight checks
     run_base = Path(args.run_base)
-    assert run_base.exists(), f"{run_base} does not appear to exist."
+    assert run_base.exists(), f'{run_base} does not appear to exist.'
 
     ## initialize G4X sample
     sample = G4Xoutput(run_base=run_base, out_dir=args.out_dir, log_level=verbose_to_log_level(args.verbose))
@@ -171,21 +262,21 @@ def launch_new_bin():
     try:
         adata = sample.load_adata()
         emb_key = '_'.join(sorted([x for x in adata.obs.columns if 'X_umap' in x])[0].split('_')[:-1])
-        cluster_key = sorted([x for x in adata.obs.columns if "leiden" in x])[0]
-        sample.logger.info("Successfully loaded adata with clustering information.")
-    except Exception as e:
-        adata = sample.load_adata(load_clustering= False)
+        cluster_key = sorted([x for x in adata.obs.columns if 'leiden' in x])[0]
+        sample.logger.info('Successfully loaded adata with clustering information.')
+    except Exception:
+        adata = sample.load_adata(load_clustering=False)
         emb_key = None
         cluster_key = None
-        sample.logger.info("Clustering information was not found, cell coloring will be random.")
+        sample.logger.info('Clustering information was not found, cell coloring will be random.')
 
     mask = sample.load_segmentation()
 
     if args.out_dir is not None:
-        os.makedirs(args.out_dir, exist_ok= True)
-        outfile = Path(args.out_dir) / f"{sample.sample_id}.bin"
+        os.makedirs(args.out_dir, exist_ok=True)
+        outfile = Path(args.out_dir) / f'{sample.sample_id}.bin'
     else:
-        outfile = run_base / "g4x_viewer" / f"{sample.sample_id}.bin"
+        outfile = run_base / 'g4x_viewer' / f'{sample.sample_id}.bin'
 
     ## make new bin file
     sample.logger.info('Making G4X-Viewer bin file.')
@@ -195,61 +286,59 @@ def launch_new_bin():
         out_path=outfile,
         cluster_key=cluster_key,
         emb_key=emb_key,
-        protein_list=[f"{x}_intensity_mean" for x in sample.proteins],
+        protein_list=[f'{x}_intensity_mean' for x in sample.proteins],
         n_threads=args.threads,
-        logger= sample.logger
+        logger=sample.logger,
     )
     sample.logger.debug(f'G4X-Viewer bin --> {outfile}')
 
 
 def launch_tar_viewer():
-
     parser = argparse.ArgumentParser(allow_abbrev=False)
 
-    parser.add_argument('--viewer_dir', help='Path to G4X-viewer folder to tar', action='store', type=str, required=True)
+    parser.add_argument(
+        '--viewer_dir', help='Path to G4X-viewer folder to tar', action='store', type=str, required=True
+    )
 
     args = parser.parse_args()
 
     ## preflight checks
-    print("Checking files.")
+    print('Checking files.')
     viewer_dir = Path(args.viewer_dir)
-    assert viewer_dir.exists(), f"{viewer_dir} does not appear to exist."
+    assert viewer_dir.exists(), f'{viewer_dir} does not appear to exist.'
 
-    bin_path = list(viewer_dir.glob("*.bin"))
-    assert len(bin_path) == 1, "Either no bin file was found in viewer_dir or multiple bin files were found."
+    bin_path = list(viewer_dir.glob('*.bin'))
+    assert len(bin_path) == 1, 'Either no bin file was found in viewer_dir or multiple bin files were found.'
     bin_path = bin_path[0]
 
     sample_id = bin_path.stem
 
-    ome_tiff_path = viewer_dir / f"{sample_id}.ome.tiff"
-    assert ome_tiff_path.is_file(), "fH&E ome.tiff file does not exist."
+    ome_tiff_path = viewer_dir / f'{sample_id}.ome.tiff'
+    assert ome_tiff_path.is_file(), 'fH&E ome.tiff file does not exist.'
 
-    run_meta_path = viewer_dir / f"{sample_id}_run_metadata.json"
-    assert run_meta_path.is_file(), "run_metadata.json file does not exist."
+    run_meta_path = viewer_dir / f'{sample_id}_run_metadata.json'
+    assert run_meta_path.is_file(), 'run_metadata.json file does not exist.'
 
-    tx_path = viewer_dir / f"{sample_id}.tar"
-    assert tx_path.is_file(), "transcript tar file does not exist."
+    tx_path = viewer_dir / f'{sample_id}.tar'
+    assert tx_path.is_file(), 'transcript tar file does not exist.'
 
-    os.makedirs(viewer_dir / "h_and_e", exist_ok= True)
-    h_and_e_path = viewer_dir / "h_and_e"
-    h_and_e_ome_tiff_path = viewer_dir / f"{sample_id}_HE.ome.tiff"
-    assert h_and_e_ome_tiff_path.is_file(), "fH&E ome.tiff file does not exist."
-    shutil.move(
-        h_and_e_ome_tiff_path,
-        h_and_e_path / f"{sample_id}_HE.ome.tiff"
-    )
+    os.makedirs(viewer_dir / 'h_and_e', exist_ok=True)
+    h_and_e_path = viewer_dir / 'h_and_e'
+    h_and_e_ome_tiff_path = viewer_dir / f'{sample_id}_HE.ome.tiff'
+    assert h_and_e_ome_tiff_path.is_file(), 'fH&E ome.tiff file does not exist.'
+    shutil.move(h_and_e_ome_tiff_path, h_and_e_path / f'{sample_id}_HE.ome.tiff')
 
-    print("Making metadata.")
+    print('Making metadata.')
     metadata = {
-        "protein_image_src": f"{ome_tiff_path.name}",
-        "protein_image_data_src": f"{run_meta_path.name}",
-        "he_images_src": f"{h_and_e_path.name}",
-        "cell_segmentation_src": f"{bin_path.name}",
-        "transcript_src": f"{tx_path.name}"
+        'protein_image_src': f'{ome_tiff_path.name}',
+        'protein_image_data_src': f'{run_meta_path.name}',
+        'he_images_src': f'{h_and_e_path.name}',
+        'cell_segmentation_src': f'{bin_path.name}',
+        'transcript_src': f'{tx_path.name}',
     }
-    with open(viewer_dir / "dataset.config.json", "w") as f:
-        _= json.dump(metadata, f)
+    with open(viewer_dir / 'dataset.config.json', 'w') as f:
+        _ = json.dump(metadata, f)
 
-    print("Tarring folder.")
-    with tarfile.open(viewer_dir.with_suffix('.tar'), "w") as tar:
+    print('Tarring folder.')
+    with tarfile.open(viewer_dir.with_suffix('.tar'), 'w') as tar:
         tar.add(viewer_dir, arcname=viewer_dir.name)
