@@ -68,7 +68,7 @@ class G4Xoutput:
       - Loads the shape of the segmentation mask.
       - Parses transcript and protein panel files (if present).
     """
-    
+
     run_base: Path | str
     sample_id: str | None = None
     out_dir: InitVar[Path | str | None] = None
@@ -86,14 +86,14 @@ class G4Xoutput:
             file_logger=True,
             file_level=logging.DEBUG,
             out_dir=out_dir,
-            clear_handlers=True
+            clear_handlers=True,
         )
 
-        _= self._validate_run_base()
+        _ = self._validate_run_base()
 
         with open(self.run_base / 'run_meta.json', 'r') as f:
             self.run_meta = json.load(f)
-        
+
         arr = self.load_segmentation()
         self.shape = arr.shape
         del arr
@@ -126,41 +126,52 @@ class G4Xoutput:
             repr_string += f'Protein panel with {len(self.proteins)} proteins\t[{", ".join(self.proteins[0:5])} ... ]\n'
 
         return repr_string
-    
+
     # region properties
     @property
     def machine(self) -> str:
         return self.run_meta.get('machine', None)
+
     @property
     def run_id(self) -> str:
         return self.run_meta.get('run_id', None)
+
     @property
     def fc(self) -> str:
         return self.run_meta.get('fc', None)
+
     @property
     def lane(self) -> str:
         return self.run_meta.get('lane', None)
+
     @property
     def platform(self) -> str:
         return self.run_meta.get('platform', None)
+
     @property
     def transcript_panel(self) -> dict:
         return self.run_meta.get('transcript_panel', None)
+
     @property
     def protein_panel(self) -> dict:
         return self.run_meta.get('protein_panel', None)
+
     @property
     def software(self) -> str:
         return self.run_meta.get('software', None)
+
     @property
     def software_version(self) -> str:
         return self.run_meta.get('software_version', None)
+
     @property
     def logger(self) -> logging.Logger:
-        return logging.getLogger(f"{self.sample_id}_G4XOutput")
+        return logging.getLogger(f'{self.sample_id}_G4XOutput')
+
     @property
     def includes_transcript(self) -> bool:
         return self.transcript_panel is not None
+
     @property
     def includes_protein(self) -> bool:
         return self.protein_panel is not None
@@ -211,35 +222,30 @@ class G4Xoutput:
 
     def load_image_by_type(
         self,
-        image_type: Literal["protein", "h_and_e", "nuclear", "eosin"],
+        image_type: Literal['protein', 'h_and_e', 'nuclear', 'eosin'],
         *,
         thumbnail: bool = False,
         protein: str | None = None,
-        cached: bool = False
+        cached: bool = False,
     ) -> np.ndarray:
-        
-        if image_type == "protein":
+        if image_type == 'protein':
             if not self.protein_panel:
-                self.logger.error("No protein results.")
+                self.logger.error('No protein results.')
                 return None
             if protein is None or protein not in self.proteins:
-                self.logger.error(f"{protein} not in protein panel.")
+                self.logger.error(f'{protein} not in protein panel.')
                 return None
-            pattern = f"{protein}_thumbnail.*" if thumbnail else f"{protein}.*"
-            directory = "protein"
+            pattern = f'{protein}_thumbnail.*' if thumbnail else f'{protein}.*'
+            directory = 'protein'
         else:
-            pattern_base = {
-                "h_and_e": "h_and_e",
-                "nuclear": "nuclear",
-                "eosin": "eosin"
-            }.get(image_type)
+            pattern_base = {'h_and_e': 'h_and_e', 'nuclear': 'nuclear', 'eosin': 'eosin'}.get(image_type)
 
             if not pattern_base:
-                self.logger.error(f"Unknown image type: {image_type}")
+                self.logger.error(f'Unknown image type: {image_type}')
                 return None
 
-            pattern = f"{pattern_base}_thumbnail.*" if thumbnail else f"{pattern_base}.*"
-            directory = "h_and_e"
+            pattern = f'{pattern_base}_thumbnail.*' if thumbnail else f'{pattern_base}.*'
+            directory = 'h_and_e'
 
         if cached:
             return self._load_image_cached(self.run_base, directory, pattern)
@@ -247,16 +253,16 @@ class G4Xoutput:
             return self._load_image(self.run_base, directory, pattern)
 
     def load_protein_image(self, protein: str, thumbnail: bool = False, cached: bool = False) -> np.ndarray:
-        return self.load_image_by_type("protein", thumbnail=thumbnail, protein=protein, cached=cached)
+        return self.load_image_by_type('protein', thumbnail=thumbnail, protein=protein, cached=cached)
 
     def load_he_image(self, thumbnail: bool = False, cached: bool = False) -> np.ndarray:
-        return self.load_image_by_type("h_and_e", thumbnail=thumbnail, cached=cached)
+        return self.load_image_by_type('h_and_e', thumbnail=thumbnail, cached=cached)
 
     def load_nuclear_image(self, thumbnail: bool = False, cached: bool = False) -> np.ndarray:
-        return self.load_image_by_type("nuclear", thumbnail=thumbnail, cached=cached)
+        return self.load_image_by_type('nuclear', thumbnail=thumbnail, cached=cached)
 
     def load_eosin_image(self, thumbnail: bool = False, cached: bool = False) -> np.ndarray:
-        return self.load_image_by_type("eosin", thumbnail=thumbnail, cached=cached)
+        return self.load_image_by_type('eosin', thumbnail=thumbnail, cached=cached)
 
     def load_segmentation(self, expanded: bool = True) -> np.ndarray:
         arr = np.load(self.run_base / 'segmentation' / 'segmentation_mask.npz')
@@ -308,7 +314,7 @@ class G4Xoutput:
             signal_list = [item for item in signal_list if item not in exclude_channels]
         else:
             self.logger.info('Processing all channels.')
-            
+
         if out_dir is None:
             self.logger.warning('out_dir was not specified, so files will be updated in-place.')
             out_dir = self.run_base
@@ -373,7 +379,7 @@ class G4Xoutput:
                 out_path=outfile,
                 protein_list=[f'{x}_intensity_mean' for x in protein_only_list],
                 n_threads=n_threads,
-                logger= self.logger
+                logger=self.logger,
             )
             self.logger.debug(f'G4X-Viewer bin --> {outfile}')
 
@@ -382,24 +388,24 @@ class G4Xoutput:
     def _load_image_base(run_base: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
         img_path = next((run_base / parent_directory).glob(pattern), None)
         if img_path is None:
-            raise FileNotFoundError(f"No file matching {pattern} found.")
-        if img_path.suffix == ".jp2" or img_path.suffix == ".jpg":
+            raise FileNotFoundError(f'No file matching {pattern} found.')
+        if img_path.suffix == '.jp2' or img_path.suffix == '.jpg':
             img = glymur.Jp2k(img_path)[:]
         elif img_path.suffix == '.png':
             img = plt.imread(img_path)
         else:
             img = tifffile.imread(img_path)
         return img
-    
+
     @staticmethod
     @lru_cache(maxsize=None)
     def _load_image_cached(run_base: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
         return G4Xoutput._load_image_base(run_base, parent_directory, pattern)
-    
+
     @staticmethod
     def _load_image(run_base: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
         return G4Xoutput._load_image_base(run_base, parent_directory, pattern)
-    
+
     def _get_shape(self):
         img = self.load_he_image()
         return img.shape
@@ -421,15 +427,12 @@ class G4Xoutput:
         self._load_image.cache_clear()
 
     def _validate_run_base(self):
-        """ check that all expected outputs are present."""
-        self.logger.debug("Validating run_base.")
+        """check that all expected outputs are present."""
+        self.logger.debug('Validating run_base.')
 
-        required_paths = [
-            self.run_base / "run_meta.json",
-            self.run_base / "single_cell_data" / "feature_matrix.h5"
-        ]
+        required_paths = [self.run_base / 'run_meta.json', self.run_base / 'single_cell_data' / 'feature_matrix.h5']
 
         for p in required_paths:
             if not p.is_file():
-                self.logger.error(f"{p} does not exist.")
-                raise FileNotFoundError(f"{p} does not exist.")
+                self.logger.error(f'{p} does not exist.')
+                raise FileNotFoundError(f'{p} does not exist.')

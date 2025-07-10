@@ -1,16 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    # This import is only for type checkers (mypy, PyCharm, etc.), not at runtime
-    from g4x_helpers.models import G4Xoutput
-
 import logging
 import os
 from pathlib import Path
-import numpy as np
-import matplotlib.pyplot as plt
 
 
 def verbose_to_log_level(verbose: int) -> int:
