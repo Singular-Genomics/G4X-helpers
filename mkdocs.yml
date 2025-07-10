@@ -1,4 +1,8 @@
 site_name: G4X-Helpers
+site_author: Singular Genomics
+site_url: https://shiny-tribble-2nl4loz.pages.github.io/
+site_description: Singular Genomics G4X-Helpers documentation site
+
 theme:
   name: material
   logo: assets/LogoType_White.svg
@@ -37,13 +41,8 @@ theme:
   
   # custom_dir: docs/.overrides
 
-repo_url: https://github.com/astral-sh/uvx
 repo_name: g4x-helpers
-site_author: Singular Genomics
-site_url: https://docs.astral.sh/uvx/
-
-site_dir: site/g4x-helpers
-site_description: Singular Genomics G4X-Helpers documentation site
+repo_url: https://github.com/Singular-Genomics/G4X-helpers
 
 extra_css:
   - stylesheets/extra.css
@@ -57,8 +56,6 @@ nav:
       - Installation: getting_started/1_installation.md
       - First steps: getting_started/2_first-steps.md
       - G4X output: getting_started/3_g4x_output.md
-      # - Features: getting-started/features.md
-      # - Getting help: getting-started/help.md
     
   - Features:
       - features/index.md
@@ -66,24 +63,6 @@ nav:
       - update_bin: features/2_update_bin.md
       - new_bin: features/3_new_bin.md
       - tar_viewer: features/4_tar_viewer.md
-      # - Working on projects: guides/projects.md
-      # - Publishing packages: guides/package.md
-      # - Migration:
-      #     - guides/migration/index.md
-      #     - From pip to a uv project: guides/migration/pip-to-project.md
-      # - Integrations:
-      #     - guides/integration/index.md
-      #     - Docker: guides/integration/docker.md
-      #     - Jupyter: guides/integration/jupyter.md
-      #     - marimo: guides/integration/marimo.md
-      #     - GitHub Actions: guides/integration/github.md
-      #     - GitLab CI/CD: guides/integration/gitlab.md
-      #     - Pre-commit: guides/integration/pre-commit.md
-      #     - PyTorch: guides/integration/pytorch.md
-      #     - FastAPI: guides/integration/fastapi.md
-      #     - Alternative indexes: guides/integration/alternative-indexes.md
-      #     - Dependency bots: guides/integration/dependency-bots.md
-      #     - AWS Lambda: guides/integration/aws-lambda.md
 
 markdown_extensions:
   - admonition
@@ -106,106 +85,16 @@ markdown_extensions:
   - pymdownx.tabbed:
       alternate_style: true
 
-# plugins:
-#   - search
-#   - git-revision-date-localized:
-#       timezone: UTC # It can only be in UTC unless the ISO time can include timezone.
-#   - redirects:
-#       # Note that redirecting an anchor, e.g., `concepts/projects/#managing-dependencies` must be done
-#       # client-side and is implemented in `extra.js` instead.
-#       redirect_maps:
-#         "guides/publish.md": "guides/package.md"
-#         "concepts/workspaces.md": "concepts/projects/workspaces.md"
-#         "concepts/dependencies.md": "concepts/projects/dependencies.md"
-#         "reference/versioning.md": "reference/policies/versioning.md"
-#         "reference/platforms.md": "reference/policies/platforms.md"
-#         "reference/build_failures.md": "reference/troubleshooting/build-failures.md"
-#         "configuration/installer.md": "reference/installer.md"
-#         "configuration/authentication.md": "concepts/authentication.md"
-#         "configuration/build-backend.md": "concepts/build-backend.md"
-#         "configuration/files.md": "concepts/configuration-files.md"
-#         "configuration/indexes.md": "concepts/indexes.md"
-#         "configuration/environment.md": "reference/environment.md"
-#   - llmstxt:
-#       markdown_description: |
-#         You can use uv to install Python dependencies, run scripts, manage virtual environments,
-#         build and publish packages, and even install Python itself. uv is capable of replacing
-#         `pip`, `pip-tools`, `pipx`, `poetry`, `pyenv`, `twine`, `virtualenv`, and more.
 
-#         uv includes both a pip-compatible CLI (prepend `uv` to a pip command, e.g., `uv pip install ruff`)
-#         and a first-class project interface (e.g., `uv add ruff`) complete with lockfiles and
-#         workspace support.
-#       sections:
-#         Getting started:
-#           - getting-started/installation.md
-#           - getting-started/first-steps.md
-#           - getting-started/features.md
-#         Guides:
-#           - guides/install-python.md
-#           - guides/scripts.md
-#           - guides/tools.md
-#           - guides/projects.md
-#           - guides/package.md
-#         Integrations:
-#           - guides/integration/docker.md
-#           - guides/integration/jupyter.md
-#           - guides/integration/marimo.md
-#           - guides/integration/github.md
-#           - guides/integration/gitlab.md
-#           - guides/integration/pre-commit.md
-#           - guides/integration/pytorch.md
-#           - guides/integration/fastapi.md
-#           - guides/integration/alternative-indexes.md
-#           - guides/integration/dependency-bots.md
-#           - guides/integration/aws-lambda.md
-#         Projects:
-#           - concepts/projects/layout.md
-#           - concepts/projects/init.md
-#           - concepts/projects/dependencies.md
-#           - concepts/projects/run.md
-#           - concepts/projects/sync.md
-#           - concepts/projects/config.md
-#           - concepts/projects/build.md
-#           - concepts/projects/workspaces.md
-#         Features:
-#           - concepts/tools.md
-#           - concepts/python-versions.md
-#           - concepts/configuration-files.md
-#           - concepts/indexes.md
-#           - concepts/resolution.md
-#           - concepts/build-backend.md
-#           - concepts/authentication.md
-#           - concepts/cache.md
-#         The pip interface:
-#           - pip/environments.md
-#           - pip/packages.md
-#           - pip/inspection.md
-#           - pip/dependencies.md
-#           - pip/compile.md
-#           - pip/compatibility.md
-#         Reference:
-#           - reference/cli.md
-#           - reference/settings.md
-#           - reference/environment.md
-#           - reference/installer.md
 
 extra_javascript:
   - js/extra.js
 
 extra:
-  # analytics:
-  #   provider: fathom
 
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/Singular-Genomics/G4X-helpers
-
-    # - icon: fontawesome/brands/python
-    #   link: https://pypi.org/project/uv/
-
-    # - icon: fontawesome/brands/x-twitter
-    #   link: https://x.com/astral_sh
-
 
 validation:
   omitted_files: warn
