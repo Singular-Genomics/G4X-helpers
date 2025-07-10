@@ -42,9 +42,11 @@ dependencies = [
 [dependency-groups]
 dev = [
   "ipykernel ~= 6.29.5",
-  "ipywidgets ~= 8.1.6",
-  "mkdocs ~= 1.6.1",
-  "mkdocs-material ~= 9.6.12",
+  "ipywidgets ~= 8.1.7",
+  "mkdocs >= 1.6.1",
+  "mkdocs-material >= 9.6.15",
+  "pre-commit >= 4.2.0",
+  "ruff == 0.12.2", # pinned to match pre-commit version
 ]
 
 [project.scripts]
