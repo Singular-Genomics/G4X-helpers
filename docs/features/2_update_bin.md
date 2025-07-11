@@ -6,7 +6,7 @@ Updates an existing `.bin` segmentation file with new clustering, embedding, or 
 ## Usage 
 
 ```bash
-update_bin 
+$ update_bin 
   --bin_file /path/to/sample.bin
   --out_path /path/to/updated_sample.bin
   --metadata /path/to/metadata.csv
@@ -19,10 +19,10 @@ update_bin
   --verbose <level>
 ```
 
-
----
+<br>
 
 ## Argument Descriptions
+---
 
 ### `--bin_file` (required)
 > **Type:** `str`  
@@ -73,4 +73,4 @@ update_bin
 > - `2` = DEBUG
 > This affects how much information is printed to the console during execution.
 
----
+<br>

@@ -6,7 +6,7 @@ This tool will create a new `.bin` segmentation file compatible with the G4X-Vie
 ## Usage 
 
 ```bash
-new_bin 
+$ new_bin 
   --run_base /path/to/G4X_sample_output
 
   # ─── optional ───
@@ -15,8 +15,10 @@ new_bin
   --verbose <level>
 ```
 
+<br>
 
 ## Argument Descriptions
+---
 
 ### `--run_base` (required)
 > **Type:** `str`  
@@ -45,4 +47,4 @@ new_bin
 > - `2` = DEBUG  
 > This affects how much information is printed to the console during execution.
 
----
+<br>

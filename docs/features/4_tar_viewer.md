@@ -6,10 +6,13 @@ Tars a G4X-Viewer folder by validating and organizing key viewer assets (e.g., `
 ## Usage
 
 ```bash
-tar_viewer --viewer_dir /path/to/g4x_viewer_folder
+$ tar_viewer --viewer_dir /path/to/g4x_viewer_folder
 ```
 
-## Argument Description
+<br>
+
+## Argument Descriptions
+---
 
 ### `--viewer_dir` (required)
 > **Type:** `str`  
@@ -21,4 +24,4 @@ tar_viewer --viewer_dir /path/to/g4x_viewer_folder
 > - A `{sample_id}.tar` transcript file
 > - A `{sample_id}_HE.ome.tiff` file (H&E), which will be moved into a subdirectory `h_and_e/`
 
----
+<br>

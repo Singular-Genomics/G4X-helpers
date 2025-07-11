@@ -1,5 +1,24 @@
 # 🚀 Installation
 
+!!! tip
+
+    The installation script may be inspected before use:
+
+    === "macOS and Linux"
+
+        ```bash
+        $ curl -LsSf https://astral.sh/uv/install.sh | less
+        ```
+
+    === "Windows"
+
+        ```bash
+        PS> powershell -c "irm https://astral.sh/uv/install.ps1 | more"
+        ```
+
+    Alternatively, the installer or binaries can be downloaded directly from [GitHub](#github-releases).
+
+
 ## 📦 Source Installation / CLI Usage
 
 `g4x-helpers` can be installed and run directly as a Python package.
@@ -10,13 +29,13 @@
 - Create the environment:
 
 ```bash
-conda create -n g4x-helpers_env python=3.10
+$ conda create -n g4x-helpers_env python=3.10
 ```
 
 - Activate the environment:
 
 ```bash
-conda activate g4x-helpers_env
+$ conda activate g4x-helpers_env
 ```
 
 ### Step 2: Install openJPEG

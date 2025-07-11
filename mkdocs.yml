@@ -1,18 +1,27 @@
-site_name: G4X-Helpers
+# region Site
+site_name: Singular Genomics - G4X-helpers
 site_author: Singular Genomics
 site_url: https://shiny-tribble-2nl4loz.pages.github.io/
 site_description: Singular Genomics G4X-Helpers documentation site
 
+# region Theme
 theme:
   name: material
-  logo: assets/LogoType_White.svg
+  logo: assets/sg-logo_transparent_19.5_3.svg
   favicon: assets/sg-favicon.ico
+
+  font:               
+    text: Roboto
+    code: Fira Code
   
   icon:
     repo: fontawesome/brands/github
   
   features:
     - navigation.path
+    - navigation.footer
+    - navigation.top
+    # - navigation.tabs
     - navigation.instant
     - navigation.instant.prefetch
     - navigation.instant.progress
@@ -20,11 +29,9 @@ theme:
     - navigation.indexes
     - navigation.tracking
     - content.code.annotate
-    - toc.follow
-    - navigation.footer
-    - navigation.top
     - content.code.copy
     - content.tabs.link
+    - toc.follow
   
   palette:  
     - media: "(prefers-color-scheme: light)"
@@ -46,6 +53,7 @@ repo_url: https://github.com/Singular-Genomics/G4X-helpers
 
 extra_css:
   - stylesheets/extra.css
+  # - stylesheets/pygments.css
 
 # region Nav
 nav:
@@ -53,8 +61,8 @@ nav:
 
   - Getting started:
       - getting_started/index.md
-      - Installation: getting_started/1_installation.md
-      - First steps: getting_started/2_first-steps.md
+      - installation: getting_started/1_installation.md
+      - first steps: getting_started/2_first-steps.md
       - G4X output: getting_started/3_g4x_output.md
     
   - Features:
@@ -64,34 +72,45 @@ nav:
       - new_bin: features/3_new_bin.md
       - tar_viewer: features/4_tar_viewer.md
 
+# region Extensions
 markdown_extensions:
   - admonition
-  - pymdownx.details
-  - pymdownx.snippets:
-  - pymdownx.magiclink:
-  - attr_list:
+  - pymdownx.superfences:
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.highlight:
+      
+      anchor_linenums: true
+      use_pygments: true
+      pygments_style: monokai
+      noclasses: true         # write colours inline so they override the theme
+      line_spans: __span
+      pygments_lang_class: true
+  
+
+  
+#   - pymdownx.details
+#   - pymdownx.magiclink:
+  
+  # - attr_list:
+  
   - toc:
       anchorlink: true
       anchorlink_class: "toclink"
-  - md_in_html:
-  - pymdownx.inlinehilite:
-  - pymdownx.superfences:
-  - markdown.extensions.attr_list:
+  
+#   - md_in_html:
+#   - pymdownx.inlinehilite:
+#   - markdown.extensions.attr_list:
+  
   - pymdownx.keys:
-  - pymdownx.tasklist:
-      custom_checkbox: true
-  - pymdownx.highlight:
-      anchor_linenums: true
+#   - pymdownx.tasklist:
+#       custom_checkbox: true
+  
   - pymdownx.tabbed:
       alternate_style: true
 
-
-
-extra_javascript:
-  - js/extra.js
-
+# region Extras
 extra:
-
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/Singular-Genomics/G4X-helpers

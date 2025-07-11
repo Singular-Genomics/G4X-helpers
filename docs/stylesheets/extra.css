@@ -62,7 +62,8 @@
 /* --- 2. semantic aliases that point at those tokens --- */
 :root {
   /* surfaces & text */
-  --surface_drk: var(--sg-grey-dark-100);
+  /* --surface_drk: var(--sg-grey-dark-100); */
+  --surface_drk: hsla(166.7, 14.8%, 12%, 1); /* #1A2321; */
   --surface_lit: var(--sg-grey-light);
   --fg:          var(--sg-grey-dark-700);
   --fg_light:    var(--sg-grey-medium-900);
@@ -106,20 +107,21 @@
   --md-typeset-mark-color: var(--acc_red);         /* unsure?! */
 
   --md-code-fg-color: var(--text);
-  --md-code-bg-color: var(--text_bg);
-
-  --md-code-hl-comment-color: var(--marker);
-  --md-code-hl-punctuation-color: var(--marker);
-  --md-code-hl-generic-color: var(--marker);
-  --md-code-hl-variable-color: var(--marker);
-  --md-code-hl-string-color: var(--marker);
-  --md-code-hl-keyword-color: var(--marker);
-  --md-code-hl-operator-color: var(--marker);
-  --md-code-hl-number-color: var(--marker);
-  --md-code-hl-special-color: var(--marker);
-  --md-code-hl-function-color: var(--marker);
+  --md-code-bg-color: hsla(172, 20%, 18%, 1);
+  /* var(--text_bg); */
+  
+  /* --md-code-hl-comment-color: var(--sg-grey-dark-900);
+  --md-code-hl-punctuation-color: var(--acc_green);
+  --md-code-hl-generic-color: var(--acc_green);
+  --md-code-hl-variable-color: var(--acc_green);
+  --md-code-hl-string-color: var(--acc_green);
+  --md-code-hl-keyword-color: var(--acc_green);
+  --md-code-hl-operator-color: var(--acc_green);
+  --md-code-hl-number-color: var(--acc_green);
+  --md-code-hl-special-color: var(--acc_green);
+  --md-code-hl-function-color: var(--acc_green);
   --md-code-hl-constant-color: var(--marker);
-  --md-code-hl-name-color: var(--marker);
+  --md-code-hl-name-color: var(--acc_green); */
 
   --md-typeset-del-color: hsla(6, 90%, 60%, 0.15);
   --md-typeset-ins-color: hsla(150, 90%, 44%, 0.15);
@@ -127,6 +129,14 @@
   --md-typeset-table-color: hsla(0, 0%, 100%, 0.12);
   --md-typeset-table-color--light: hsla(0, 0%, 100%, 0.035);
 }
+
+hr {
+  border: none;
+  height: 1px;
+  background-color: hsla(172, 50%, 44%, 0.15);  /* Change this to your desired color */
+  margin: 0.5em 0;
+}
+
 
 [data-md-color-scheme="singular-light"] img[src$="#only-dark"],
 [data-md-color-scheme="singular-light"] img[src$="#gh-dark-mode-only"] {
@@ -158,13 +168,27 @@
 
 /* See: https://github.com/singular-sh/ruff/issues/8519 */
 [data-md-color-scheme="singular-dark"] details summary a {
-  color: var(--flare);
+  color: var(--acc_orange);
 }
 
 /* See: https://github.com/singular-sh/ruff/issues/9046 */
 [data-md-color-scheme="singular-dark"] div.admonition {
-  color: var(--md-code-fg-color);
-  background-color: var(--md-code-bg-color);
+  color: var(--text);
+  background-color: var(--surface_drk);
+}
+
+/* Site title (left-hand side of the top bar) */
+.md-header__title {
+  font-family: "Roboto", sans-serif;
+  font-weight: normal;
+  font-size: 1rem;
+}
+
+/* Logo area, if you want it aligned with the new title height */
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 1.5rem;
+  width: 1.5rem;
 }
 
 /* Prevent the shadow from the nav title from blurring the top link.
@@ -211,15 +235,15 @@ because the nav is in a hamburger menu anyway
   /* Reducing spacing between nav items to fit more content 
   First, disable `nav__link` spacing then use `nav__item` to enforce margins this reduces inconsistencies in the spacing. */
   .md-nav--primary .md-nav__link {
-    margin: 0;
+    margin: 0.1em;
   }
   .md-nav--primary .md-nav__item {
     margin-top: 0.35em;
   }
   /* Use larger spacing for the sections headings */
   .md-nav--primary .md-nav__item--section {
-    margin-bottom: 0.75em;
-    margin-top: 1em;
+    margin-bottom: 1.75em;
+    margin-top: 1.75em;
   }
   /* Decrease the font size of items in a collapsible section */
   .md-nav__item--section> .md-nav > .md-nav__list > .md-nav__item > .md-nav > .md-nav__list {
@@ -229,10 +253,12 @@ because the nav is in a hamburger menu anyway
   .md-nav__item--section> .md-nav > .md-nav__list > .md-nav__item > .md-nav > .md-nav__list > .md-nav__item:first-of-type {
     margin-top: 0.5em;
   }
+  
   /* Increase bottom margin on the last item of a collapsible section */
   .md-nav__item--section> .md-nav > .md-nav__list > .md-nav__item > .md-nav > .md-nav__list > .md-nav__item:last-of-type {
     margin-bottom: 0.575em;
   }
+  
   /* Increase the size of the first nav item to match the sections 
   It has no children, so it is not considered a section */
   .md-nav--primary > .md-nav__list > .md-nav__item:first-of-type {
@@ -251,7 +277,21 @@ because the nav is in a hamburger menu anyway
   user-select: none;
 }
 
-/* Styling for the generated CLI reference page */
+/* works with or without navigation.tabs */
+.md-nav__item--section > .md-nav__link,
+.md-nav__item--section > label {      /* label = collapsed sections */
+  font-weight: 700;                  /* or 600 for semi-bold        */
+  font-size: 0.85rem;                /* default is 0.8 rem          */
+  letter-spacing: 0.02em;            /* optional for clarity        */
+}
+
+
+/* move every link that *isn’t* the section title 1 rem to the right */
+.md-nav__item--section .md-nav__item > .md-nav__link {
+  padding-left: 0.5rem;  /* tweak to taste */
+}
+
+/* Styling for the generated CLI reference page
 .cli-reference dd {
   margin-top: 0.1em;
   margin-bottom: 0.5em;
@@ -266,7 +306,7 @@ because the nav is in a hamburger menu anyway
 h3.cli-reference {
   font-size: 1.1em;
   margin: 0 0 0 0;
-}
+} */
 
 /* Styling for anchor link headers */
 .toclink {

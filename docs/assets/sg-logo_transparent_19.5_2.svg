@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_3" xmlns="http://www.w3.org/2000/svg" width="34.484" height="34.484" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" viewBox="0 0 34.484 34.484">
+  <!-- Generator: Adobe Illustrator 29.3.1, SVG Export Plug-In . SVG Version: 2.1.0 Build 151)  -->
+  <defs>
+    <linearGradient id="linear-gradient" x1="527.193" y1="-169.028" x2="527.193" y2="-203.778" gradientTransform="translate(534.268 250.906) rotate(-136.5)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient1" x1="528.943" y1="-172.528" x2="528.943" y2="-200.278" xlink:href="#linear-gradient"/>
+    <linearGradient id="linear-gradient2" x1="530.693" y1="-176.028" x2="530.693" y2="-196.778" xlink:href="#linear-gradient"/>
+    <linearGradient id="linear-gradient3" x1="544.568" y1="-203.778" x2="544.568" y2="-169.028" xlink:href="#linear-gradient"/>
+    <linearGradient id="linear-gradient4" x1="542.818" y1="-200.278" x2="542.818" y2="-172.528" xlink:href="#linear-gradient"/>
+    <linearGradient id="linear-gradient5" x1="541.068" y1="-196.778" x2="541.068" y2="-176.028" xlink:href="#linear-gradient"/>
+  </defs>
+  <g>
+    <path d="M29.202,4.639c6.949,6.595,7.238,17.614.643,24.564s-17.614,7.238-24.564.643l.86-.907c6.45,6.121,16.676,5.853,22.796-.597,6.121-6.45,5.853-16.676-.597-22.796l.86-.907Z" fill="url(#linear-gradient)"/>
+    <path d="M26.793,7.177c5.55,5.267,5.78,14.066.514,19.615-5.267,5.55-14.066,5.78-19.615.514l.86-.907c5.05,4.792,13.056,4.582,17.848-.467s4.582-13.056-.467-17.848l.86-.907Z" fill="url(#linear-gradient1)"/>
+    <path d="M24.384,9.716c4.15,3.938,4.322,10.518.384,14.667s-10.518,4.322-14.667.384l.86-.907c3.65,3.464,9.437,3.312,12.9-.338,3.464-3.65,3.312-9.437-.338-12.9l.86-.907Z" fill="url(#linear-gradient2)"/>
+  </g>
+  <g>
+    <path d="M29.202,4.639l-.86.907C21.892-.575,11.666-.307,5.545,6.142S-.307,22.818,6.142,28.939l-.86.907C-1.668,23.251-1.956,12.231,4.639,5.282s17.614-7.238,24.564-.643Z" fill="url(#linear-gradient3)"/>
+    <path d="M26.793,7.177l-.86.907c-5.05-4.792-13.056-4.582-17.848.467s-4.582,13.056.467,17.848l-.86.907c-5.55-5.267-5.78-14.066-.514-19.615,5.267-5.55,14.066-5.78,19.615-.514Z" fill="url(#linear-gradient4)"/>
+    <path d="M24.384,9.716l-.86.907c-3.65-3.464-9.437-3.312-12.9.338s-3.312,9.437.338,12.9l-.86.907c-4.15-3.938-4.322-10.518-.384-14.667,3.938-4.15,10.518-4.322,14.667-.384Z" fill="url(#linear-gradient5)"/>
+  </g>
+</svg>
