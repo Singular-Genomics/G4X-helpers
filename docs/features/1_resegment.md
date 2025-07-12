@@ -5,10 +5,10 @@ Replaces or updates the segmentation mask in a G4X run and regenerates all downs
 
 ## usage
 
-```bash
+``` console
 $ resegment
-  --run_base /path/to/G4X/output
-  --segmentation_mask /path/to/new_mask.npz
+  --run_base /path/to/G4X/output 
+  --segmentation_mask /path/to/new_mask.npz 
   
   # ─── optional ───
   --sample_id <sample_id> 
@@ -16,23 +16,6 @@ $ resegment
   --segmentation_mask_key <mask_array_name> 
   --threads <n_threads> 
   --verbose <level>
-```
-
-```py
-def __post_init__(self, out_dir: Path | str | None, log_level: int):
-    self.run_base = Path(self.run_base)
-
-    if self.sample_id is None:
-        self.sample_id = self.run_base.name
-
-    _ = self.setup_logger(
-        stream_logger=True,
-        stream_level=log_level,
-        file_logger=True,
-        file_level=logging.DEBUG,
-        out_dir=out_dir,
-        clear_handlers=True,
-    )
 ```
 
 <br>

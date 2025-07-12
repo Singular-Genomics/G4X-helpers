@@ -1,85 +1,147 @@
 # 🚀 Installation
 
-!!! tip
 
-    The installation script may be inspected before use:
+## Step 1: clone the [`g4x-helpers`](https://github.com/Singular-Genomics/G4X-helpers) repository
 
-    === "macOS and Linux"
-
-        ```bash
-        $ curl -LsSf https://astral.sh/uv/install.sh | less
-        ```
-
-    === "Windows"
-
-        ```bash
-        PS> powershell -c "irm https://astral.sh/uv/install.ps1 | more"
-        ```
-
-    Alternatively, the installer or binaries can be downloaded directly from [GitHub](#github-releases).
-
-
-## 📦 Source Installation / CLI Usage
-
-`g4x-helpers` can be installed and run directly as a Python package.
-
-### Step 1: Prepare a Python environment
-
-- Install **conda**, **miniconda**, or **mamba**
-- Create the environment:
 
 ```bash
-$ conda create -n g4x-helpers_env python=3.10
+$ git clone git@github.com:Singular-Genomics/G4X-helpers.git
 ```
 
-- Activate the environment:
+navigate to the repo directory:
+```bash
+$ cd G4X-helpers
+```
+
+all following steps assume that you are in the G4X-helpers directory. You can confirm this via:
+```bash
+$ pwd
+
+# output
+# $ /path/to/current/directory/.../G4X-helpers
+```
+
+## Step 2: install the package
+
+!!! note
+    
+    G4X-helpers depends on [`Glymur`](https://glymur.readthedocs.io/en/v0.14.2/) and [`OpenJPEG >= 2.2.0`](https://www.openjpeg.org/) for multi-threaded image loading. On some systems, Glymur may require advanced configuration to [properly detect OpenJPEG](https://glymur.readthedocs.io/en/v0.14.2/detailed_installation.html).
+    
+    
+    Due to those limitations **we strongly suggest installing OpenJPEG, and thus G4X-helpers, via `Conda`**, as it reliably provides compatible and properly linked dependencies across platforms.
+    Other installation methods (e.g., Homebrew or manual builds) may lead to issues such as Glymur reporting version `0.0.0` or failing to load JPEG 2000 images.  
+
+    learn how to [install and verify OpenJPEG](#step-3-verify-openjpeg-installation) for use with Glymur
+
+
+=== "Conda (recommended)"
+
+    ### Create a `Conda` environment
+
+    Install **miniconda**, **conda**, or **mamba**. ([intstructions](https://www.anaconda.com/docs/getting-started/miniconda/install))  
+    <br>
+    create the environment:
+
+    ```bash
+    $ conda create -n g4x-helpers_env python=3.10
+    
+    # if this is your first time using conda ...
+    # $ conda init
+    ```
+
+    activate the environment:
+
+    ```bash
+    $ conda activate g4x-helpers_env
+    ```
+
+    ### Install the package:
+    
+    ```bash
+    $ pip install .
+    ```
+
+=== "pip"
+    
+    ### Install into your current python environment via `pip`
+    
+    ```bash
+    $ pip install .
+    ```
+
+=== "uv"
+    ### Create a `venv` using [uv](https://docs.astral.sh/uv/)
+
+    ```bash
+    $ uv sync
+    ```  
+    activate the environment  
+
+    ```bash
+    $ source .venv/bin/activate
+    ```
+
+---
+
+
+## Step 3: verify OpenJPEG installation
+
+After installation of `G4X-helpers`, you can confirm that Glymur recognizes OpenJPEG via:
 
 ```bash
-$ conda activate g4x-helpers_env
+$ python -c "import glymur; print(glymur.version.openjpeg_version)"
 ```
 
-### Step 2: Install openJPEG
+!!! success 
+    ```
+    # output
+    2.2.0
+    ```
 
-- Install openJPEG.
-```bash
-apt-get install libopenjp2-7-dev
-```
-OR
-```bash
-conda install -c conda-forge openjpeg
-```
-- Verify openJPEG version is ≥ 2.2.0.
-```bash
-python -c "import glymur; print(glymur.version.openjpeg_version)"
-```
+An OpenJPEG version above `2.2.0` is detected. Please continue to [next steps](./first_steps.md)
 
-### Step 3: Clone and install `g4x-helpers`
+!!! warning 
+    ```
+    # output
+    0.0.0
+    ```
 
-- Clone the repository:
+Glymur does not detect OpenJPEG and reports `0.0.0` or other error.  
+In this case we **strongly suggest** performing the G4X-helpers installation and the following steps to enable OpenJPEG in a Conda enviroment.  
+Hints on other systems are provided, but not supported! You can find further details in the [Glymur documentation](https://glymur.readthedocs.io/en/v0.14.2/detailed_installation.html) on advanced installation methods.
 
-```bash
-git clone git@github.com:Singular-Genomics/G4X-helpers.git
-```
 
-- Navigate to the repo directory:
+## Step 4: install OpenJPEG
 
-```bash
-cd G4x-helpers
-```
+=== "Conda (recommended)"
 
-- Install the package:
+    Inside your `Conda` environment:
 
-```bash
-pip install .
-```
+    ```bash
+    conda install -c conda-forge openjpeg
+    ```
 
-### Step 4: Verify installation
+=== "Other systems"
+    
+    This has been tested on MacOS with Homebrew:
+    
+    install OpenJPEG and pkg-config
+    
+    ```bash
+    $ brew install openjpeg pkg-config
+    ```
 
-After installation, you can call the following commands from any terminal and help statements should be printed:
+    create a Glymur config directory
 
-```bash
-resegment --help
-update_bin --help
-new_bin --help
-tar_viewer --help
-```
+    ```bash
+    mkdir -p ~/.config/glymur
+    ```
+    
+    add the Homebrew installed OpenJPEG path to a glymurrc file in the config
+    
+    ```bash
+    printf "[library]\nopenjp2 = /opt/homebrew/lib/libopenjp2.dylib\n" > ~/.config/glymur/glymurrc
+    ```
+
+---
+<br>

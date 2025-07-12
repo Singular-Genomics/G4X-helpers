@@ -2,35 +2,35 @@
   /* greyscale */
   --sg-black: #000000;
 
-  --sg-grey-dark:        #1E1E1E;
-  --sg-grey-dark-100:    #212426;
-  --sg-grey-dark-300:    #2E3337;
-  --sg-grey-dark-500:    #3F4447;
-  --sg-grey-dark-700:    #515558;
-  --sg-grey-dark-900:    #626668;
+  --sg-grey-dark:       #1E1E1E;
+  --sg-grey-dark-100:   #212426;
+  --sg-grey-dark-300:   #2E3337;
+  --sg-grey-dark-500:   #3F4447;
+  --sg-grey-dark-700:   #515558;
+  --sg-grey-dark-900:   #626668;
 
-  --sg-grey-medium:      #CCCCCC;
-  --sg-grey-medium-100:  #7D7F81;
-  --sg-grey-medium-300:  #8E9092;
-  --sg-grey-medium-500:  #A0A1A2;
-  --sg-grey-medium-700:  #B2B2B3;
-  --sg-grey-medium-900:  #C3C3C4;
+  --sg-grey-medium:     #CCCCCC;
+  --sg-grey-medium-100: #7D7F81;
+  --sg-grey-medium-300: #8E9092;
+  --sg-grey-medium-500: #A0A1A2;
+  --sg-grey-medium-700: #B2B2B3;
+  --sg-grey-medium-900: #C3C3C4;
 
-  --sg-grey-light:       #F2F2F2;
-  --sg-grey-light-100:   #D0D0D0;
-  --sg-grey-light-300:   #D7D7D7;
-  --sg-grey-light-500:   #DFDFDF;
-  --sg-grey-light-700:   #E7E7E7;
-  --sg-grey-light-900:   #EEEEEE;
+  --sg-grey-light:      #F2F2F2;
+  --sg-grey-light-100:  #D0D0D0;
+  --sg-grey-light-300:  #D7D7D7;
+  --sg-grey-light-500:  #DFDFDF;
+  --sg-grey-light-700:  #E7E7E7;
+  --sg-grey-light-900:  #EEEEEE;
 
   --sg-grey-extra-light: #F8F8F8;
   --sg-white:            #FFFFFF;
   
-  --sg-blue:             #0071BC;
-  --sg-blue-200:         #182F3E;
-  --sg-blue-400:         #123F5D;
-  --sg-blue-600:         #0C507D;
-  --sg-blue-800:         #06609C;
+  --sg-blue:     #0071BC;
+  --sg-blue-200: #182F3E;
+  --sg-blue-400: #123F5D;
+  --sg-blue-600: #0C507D;
+  --sg-blue-800: #06609C;
   
   --sg-blue-green-200: #007EB7;
   --sg-blue-green-400: #008BB2;
@@ -61,7 +61,6 @@
 
 /* --- 2. semantic aliases that point at those tokens --- */
 :root {
-  --md-text-font: "Montserrat"; 
   /* surfaces & text */
   /* --surface_drk: var(--sg-grey-dark-100); */
   --surface_drk: hsla(166.7, 14.8%, 12%, 1); /* #1A2321; */
@@ -70,7 +69,7 @@
   --fg_light:    var(--sg-grey-medium-900);
   --header:      var(--sg-blue-green-dark);
    
-  --text:        var(--sg-grey-medium-700);
+  --text:        var(--sg-grey-light-100);
   --text_bg:     var(--sg-grey-dark-300);
 
   /* accent colours */
@@ -83,37 +82,57 @@
   --marker:      var(--sg-magenta);
 }
 
-[data-md-color-scheme="slate"] {
-  --md-hue: 172;
-  --md-primary-fg-color: hsla(var(--md-hue), 30%, 22%, 1);
-  --md-default-bg-color: hsla(var(--md-hue), 15%, 10%, 1);
-  --md-default-fg-color: var(--text);       /* selectables (like tabs) */
+
+[data-md-color-scheme="singular-light"] {
+  --md-default-bg-color: var(--surface_lit);
+  --md-primary-fg-color: var(--surface_drk);
+  --md-typeset-a-color: var(--acc_green);
+  --md-accent-fg-color: var(--acc_green);
+}
+
+[data-md-color-scheme="singular-dark"] {
+  --md-default-bg-color: var(--surface_drk);      /* surface */
+  --md-primary-fg-color: var(--header);           /* header */
   
-  --md-accent-fg-color:                var(--acc_purple);
-  --md-accent-fg-color--transparent:   hsla(var(--md-hue), 30%, 22%, 0.5); /* hover items */
-  --md-accent-bg-color:                var(--acc_purple);
-  --md-accent-bg-color--light:         var(--acc_red);
+  --md-primary-bg-color: var(--fg_light);         /* header text and logos */
+  --md-default-fg-color--light: var(--text);      /* headlines */
   
-  --md-typeset-a-color:                var(--acc_green);  /* links and selected nav items */
-  --md-primary-bg-color:               var(--fg_light);   /* header text and logos */
+  --md-default-fg-color: var(--acc_purple);       /* selectables (like tabs) */
+  --md-accent-fg-color: var(--acc_purple);        /* hover color for links and buttons */
+  
+  --md-default-fg-color--lighter: var(--fg);      /* unselected scrollbars */
+  
+  --md-typeset-color: var(--text);                /* main text body */
+  --md-typeset-a-color: var(--acc_green);         /* links and selected nav items */
+  --md-typeset-mark-color: var(--acc_red);         /* unsure?! */
 
-  --md-default-fg-color--light:        var(--sg-grey-medium-500);  
-  --md-default-fg-color--lighter:      var(--md-default-fg-color); 
-  --md-default-fg-color--lightest:     var(--md-default-fg-color); 
+  --md-code-fg-color: var(--text);
+  --md-code-bg-color: hsla(172, 20%, 18%, 1);
+  
+  /* --md-code-hl-comment-color: var(--sg-grey-dark-900);
+  --md-code-hl-generic-color: var(--text);
+  --md-code-hl-punctuation-color: var(--acc_green);
+   */
+  /* --md-code-hl-punctuation-color: var(--acc_green);
+  
+  --md-code-hl-variable-color: var(--acc_green);
+  --md-code-hl-string-color: var(--acc_green);
+  --md-code-hl-keyword-color: var(--acc_green);
+  --md-code-hl-operator-color: var(--acc_green);
+  --md-code-hl-number-color: var(--acc_green);
+  --md-code-hl-special-color: var(--acc_green);
+  --md-code-hl-function-color: var(--acc_green);
+  --md-code-hl-constant-color: var(--marker);
+  --md-code-hl-name-color: var(--acc_green); */
+
+  --md-typeset-del-color: hsla(6, 90%, 60%, 0.15);
+  --md-typeset-ins-color: hsla(150, 90%, 44%, 0.15);
+
+  --md-typeset-table-color: hsla(0, 0%, 100%, 0.12);
+  --md-typeset-table-color--light: hsla(0, 0%, 100%, 0.035);
 }
 
-[data-md-color-scheme="default"] {
-  --md-hue: 172; 
-  --md-primary-fg-color: hsla(var(--md-hue), 30%, 22%, 1);
-  --md-default-bg-color: hsla(var(--md-hue), 15%, 82%, 1);
-}
 
-@font-face {
-  font-family: "Montserrat";
-  src: "./assets/Montserrat/Montserrat-VariableFont_wght.ttf";
-}
-
-.big-title { font-size: var(--md-typeset-h1-size) * 4; }
 
 hr {
   border: none;
@@ -123,6 +142,25 @@ hr {
 }
 
 
+[data-md-color-scheme="singular-light"] img[src$="#only-dark"],
+[data-md-color-scheme="singular-light"] img[src$="#gh-dark-mode-only"] {
+  display: none; /* Hide dark images in light mode */
+}
+
+[data-md-color-scheme="singular-light"] img[src$="#only-light"],
+[data-md-color-scheme="singular-light"] img[src$="#gh-light-mode-only"] {
+  display: inline; /* Show light images in light mode */
+}
+
+[data-md-color-scheme="singular-dark"] img[src$="#only-light"],
+[data-md-color-scheme="singular-dark"] img[src$="#gh-light-mode-only"] {
+  display: none; /* Hide light images in dark mode */
+}
+
+[data-md-color-scheme="singular-dark"] img[src$="#only-dark"],
+[data-md-color-scheme="singular-dark"] img[src$="#gh-dark-mode-only"] {
+  display: inline; /* Show dark images in dark mode */
+}
 
 /* See: https://github.com/squidfunk/mkdocs-material/issues/175#issuecomment-616694465 */
 .md-typeset__table {
@@ -132,15 +170,23 @@ hr {
   display: table;
 }
 
-
-/* ——— Header (site title in top bar) ——— */
-.md-header__title,              /* Material v10+          */
-.md-header__topic,              /* Material ≤ v9          */
-.site-name {                    /* Built-in mkdocs theme  */
-  font-weight: 200 !important;
-  font-size: 1.15rem !important;
+/* See: https://github.com/singular-sh/ruff/issues/8519 */
+[data-md-color-scheme="singular-dark"] details summary a {
+  color: var(--acc_orange);
 }
 
+/* See: https://github.com/singular-sh/ruff/issues/9046 */
+[data-md-color-scheme="singular-dark"] div.admonition {
+  color: var(--text);
+  background-color: var(--surface_drk);
+}
+
+/* Site title (left-hand side of the top bar) */
+.md-header__title {
+  font-family: "Roboto", sans-serif;
+  font-weight: normal;
+  font-size: 1rem;
+}
 
 /* Logo area, if you want it aligned with the new title height */
 .md-header__button.md-logo img,

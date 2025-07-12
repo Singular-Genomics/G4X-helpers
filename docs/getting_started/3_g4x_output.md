@@ -7,7 +7,7 @@ Directory [structure](#directory) depends on run type.
 > `samplesheet.csv`  
 > `summary_<sample_1>.html`  
 > `transcript_panel.csv`  
-> `protein_panel.csv` *(only when protein is included)*
+> `protein_panel.csv`  *(only when protein is included)*
 
 ---
 

@@ -8,20 +8,33 @@ site_description: Singular Genomics G4X-Helpers documentation site
 theme:
   name: material
   logo: assets/sg-logo_transparent_19.5_3.svg
-  favicon: assets/sg-favicon.ico
-
+  favicon: assets/favicon.ico
+  
   font:               
     text: Roboto
     code: Fira Code
   
   icon:
     repo: fontawesome/brands/github
+    
+    admonition:
+      note: octicons/tag-16
+      abstract: octicons/checklist-16
+      info: octicons/info-16
+      # tip: octicons/squirrel-16
+      success: octicons/check-16
+      question: octicons/question-16
+      warning: octicons/alert-16
+      failure: octicons/x-circle-16
+      danger: octicons/zap-16
+      bug: octicons/bug-16
+      example: octicons/beaker-16
+      quote: octicons/quote-16
   
   features:
     - navigation.path
     - navigation.footer
     - navigation.top
-    # - navigation.tabs
     - navigation.instant
     - navigation.instant.prefetch
     - navigation.instant.progress
@@ -30,21 +43,42 @@ theme:
     - navigation.tracking
     - content.code.annotate
     - content.code.copy
+    - content.code.select
     - content.tabs.link
     - toc.follow
+    # - navigation.tabs
   
+
+
   palette:  
+    # - media: "(prefers-color-scheme: light)"
+    #   scheme: singular-light
+    #   toggle:
+    #     icon: material/toggle-switch-off-outline
+    #     name: Switch to dark mode
+    
     - media: "(prefers-color-scheme: light)"
-      scheme: singular-light
+      
+      scheme: slate
+      primary: custom
+      accent: custom
       toggle:
         icon: material/toggle-switch-off-outline
-        name: Switch to dark mode
-  
-    - media: "(prefers-color-scheme: dark)"
-      scheme: singular-dark
+        name: Switch to light mode
+    
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      # primary: custom
+      # accent: custom
       toggle:
         icon: material/toggle-switch
-        name: Switch to system preference
+        name: Switch to dark mode
+  
+    # - media: "(prefers-color-scheme: dark)"
+    #   scheme: singular-dark
+    #   toggle:
+    #     icon: material/toggle-switch
+    #     name: Switch to system preference
   
   # custom_dir: docs/.overrides
 
@@ -62,7 +96,7 @@ nav:
   - Getting started:
       - getting_started/index.md
       - installation: getting_started/1_installation.md
-      - first steps: getting_started/2_first-steps.md
+      - first steps: getting_started/2_first_steps.md
       - G4X output: getting_started/3_g4x_output.md
     
   - Features:
@@ -79,26 +113,24 @@ markdown_extensions:
   - pymdownx.inlinehilite
   - pymdownx.snippets
   - pymdownx.highlight:
-      
       anchor_linenums: true
       use_pygments: true
-      pygments_style: monokai
-      noclasses: true         # write colours inline so they override the theme
-      line_spans: __span
       pygments_lang_class: true
-  
-
-  
+      pygments_style: monokai
+      # noclasses: true         # write colours inline so they override the theme
+      # line_spans: __span
+      
 #   - pymdownx.details
 #   - pymdownx.magiclink:
   
-  # - attr_list:
-  
+  - attr_list
+  - md_in_html
+  - pymdownx.blocks.caption
   - toc:
       anchorlink: true
       anchorlink_class: "toclink"
+      toc_depth: 3
   
-#   - md_in_html:
 #   - pymdownx.inlinehilite:
 #   - markdown.extensions.attr_list:
   

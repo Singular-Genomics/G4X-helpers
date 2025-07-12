@@ -1,21 +1,16 @@
-# First steps with uv
+## 📦 Source Installation / CLI Usage
 
-After [installing uv](./installation.md), you can check that uv is available by running the `uv`
-command:
+`g4x-helpers` can be installed and run directly as a Python package.
 
-```console
-$ uv
-An extremely fast Python package manager.
 
-Usage: uv [OPTIONS] <COMMAND>
 
-...
+### Step 4: Verify installation
+
+After installation, you can call the following commands from any terminal and help statements should be printed:
+
+```bash
+resegment --help
+update_bin --help
+new_bin --help
+tar_viewer --help
 ```
-
-You should see a help menu listing the available commands.
-
-## Next steps
-
-Now that you've confirmed uv is installed, check out an [overview of features](./features.md), learn
-how to [get help](./help.md) if you run into any problems, or jump to the
-[guides](../guides/index.md) to start using uv.
