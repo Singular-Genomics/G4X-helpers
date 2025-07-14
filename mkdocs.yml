@@ -95,16 +95,21 @@ nav:
 
   - Getting started:
       - getting_started/index.md
-      - installation: getting_started/1_installation.md
-      - first steps: getting_started/2_first_steps.md
-      - G4X output: getting_started/3_g4x_output.md
+      - installation: getting_started/installation.md
+      - first steps: getting_started/first_steps.md
+
     
   - Features:
       - features/index.md
-      - resegment: features/1_resegment.md
-      - update_bin: features/2_update_bin.md
-      - new_bin: features/3_new_bin.md
-      - tar_viewer: features/4_tar_viewer.md
+      - resegment: features/resegment.md
+      - update_bin: features/update_bin.md
+      - new_bin: features/new_bin.md
+      - tar_viewer: features/tar_viewer.md
+    
+  - G4X data:
+      - g4x_data/index.md
+      - G4X output: g4x_data/g4x_output.md
+      - data import: g4x_data/data_import.md
 
 # region Extensions
 markdown_extensions:
