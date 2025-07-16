@@ -439,15 +439,15 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "geopandas", specifier = "~=1.0.1" },
-    { name = "glymur", specifier = ">=0.14.0.post1" },
+    { name = "glymur", specifier = "~=0.13.0" },
     { name = "matplotlib", specifier = "~=3.7.0" },
     { name = "polars", specifier = "~=1.8.2" },
     { name = "pyarrow", specifier = "~=18.0.0" },
     { name = "rasterio", specifier = "~=1.4.3" },
     { name = "ray", specifier = "~=2.44.0" },
     { name = "scanpy", specifier = "~=1.10.0" },
-    { name = "scikit-image", specifier = ">=0.24.0" },
-    { name = "shapely", specifier = ">=2.0.0" },
+    { name = "scikit-image", specifier = "~=0.25.2" },
+    { name = "shapely", specifier = "~=2.1.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -492,17 +492,16 @@ wheels = [
 
 [[package]]
 name = "glymur"
-version = "0.14.0.post1"
+version = "0.13.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "imageio" },
     { name = "lxml" },
     { name = "numpy" },
     { name = "packaging" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f8/a2/dceea8a55f5a4ca1d8d020f31e2063610a877879edf2ecb2a9733aa030cf/glymur-0.14.0.post1.tar.gz", hash = "sha256:d2b58cca09e01739dc3e5fc8970618598fac4660fd592d06c1c791c161d406bc", size = 2836689, upload-time = "2025-03-22T19:12:06Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e0/72/76164707061918f7105efc51ee17ef60e4fde35be2ebd9894805e8ec71cc/glymur-0.13.8.tar.gz", hash = "sha256:8aa37faf4a19177ad150bc6146003f9ce33a3e772f10b9085d9904fd6e9c1a8a", size = 2826991, upload-time = "2025-01-25T05:03:07.719Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8c/73/c38a82ece86b2e287483335c57d9ba15f1216f2744cd5fb084b4dfa2caef/glymur-0.14.0.post1-py3-none-any.whl", hash = "sha256:8d0f959d1f91ca161e9318c09c9f1789b167905ed038a495028f54c522e2f07a", size = 2743386, upload-time = "2025-03-22T19:11:52.414Z" },
+    { url = "https://files.pythonhosted.org/packages/95/50/d4830cf3be665d3c335a65f07f1f2c2983b73390e54597fd775df18fb096/Glymur-0.13.8-py3-none-any.whl", hash = "sha256:d1f6a42d3b6670a4395192aacbb6d49779adc35cdedec0d095c0a58e19264a69", size = 2739235, upload-time = "2025-01-25T05:03:04.983Z" },
 ]
 
 [[package]]

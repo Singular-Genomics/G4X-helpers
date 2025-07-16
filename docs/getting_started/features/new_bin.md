@@ -1,4 +1,4 @@
-# 🧪 `new_bin`
+# `--new_bin`
 # Generate G4X-viewer `.bin` files from G4X Sample Output
 
 This tool will create a new `.bin` segmentation file compatible with the G4X-Viewer using the processed output from a G4X run. This is typically only needed to update older outputs to newer versions of the `.bin` format.

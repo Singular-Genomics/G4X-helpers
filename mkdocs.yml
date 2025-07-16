@@ -9,19 +9,19 @@ theme:
   name: material
   logo: assets/sg-logo_transparent_19.5_3.svg
   favicon: assets/favicon.ico
-  
-  font:               
+
+  font:
     text: Roboto
     code: Fira Code
-  
+
   icon:
     repo: fontawesome/brands/github
-    
+
     admonition:
       note: octicons/tag-16
       abstract: octicons/checklist-16
       info: octicons/info-16
-      # tip: octicons/squirrel-16
+      tip: octicons/squirrel-16
       success: octicons/check-16
       question: octicons/question-16
       warning: octicons/alert-16
@@ -30,7 +30,7 @@ theme:
       bug: octicons/bug-16
       example: octicons/beaker-16
       quote: octicons/quote-16
-  
+
   features:
     - navigation.path
     - navigation.footer
@@ -41,31 +41,25 @@ theme:
     - navigation.sections
     - navigation.indexes
     - navigation.tracking
+    # - navigation.tabs
+    
     - content.code.annotate
     - content.code.copy
     - content.code.select
     - content.tabs.link
-    - toc.follow
-    # - navigation.tabs
-  
-
-
-  palette:  
-    # - media: "(prefers-color-scheme: light)"
-    #   scheme: singular-light
-    #   toggle:
-    #     icon: material/toggle-switch-off-outline
-    #     name: Switch to dark mode
     
-    - media: "(prefers-color-scheme: light)"
-      
+    - toc.follow
+    
+
+  palette:
+    - media: "(prefers-color-scheme: dark)"
       scheme: slate
       primary: custom
       accent: custom
       toggle:
         icon: material/toggle-switch-off-outline
         name: Switch to light mode
-    
+
     - media: "(prefers-color-scheme: light)"
       scheme: default
       # primary: custom
@@ -73,14 +67,6 @@ theme:
       toggle:
         icon: material/toggle-switch
         name: Switch to dark mode
-  
-    # - media: "(prefers-color-scheme: dark)"
-    #   scheme: singular-dark
-    #   toggle:
-    #     icon: material/toggle-switch
-    #     name: Switch to system preference
-  
-  # custom_dir: docs/.overrides
 
 repo_name: g4x-helpers
 repo_url: https://github.com/Singular-Genomics/G4X-helpers
@@ -93,19 +79,18 @@ extra_css:
 nav:
   - Introduction: index.md
 
-  - Getting started:
+  - G4X-helpers:
       - getting_started/index.md
       - installation: getting_started/installation.md
-      - first steps: getting_started/first_steps.md
+      - usage: getting_started/first_steps.md
 
-    
-  - Features:
-      - features/index.md
-      - resegment: features/resegment.md
-      - update_bin: features/update_bin.md
-      - new_bin: features/new_bin.md
-      - tar_viewer: features/tar_viewer.md
-    
+      - CLI features:
+          - getting_started/features/index.md
+          - getting_started/features/resegment.md
+          - getting_started/features/update_bin.md
+          - getting_started/features/new_bin.md
+          - getting_started/features/tar_viewer.md
+
   - G4X data:
       - g4x_data/index.md
       - G4X output: g4x_data/g4x_output.md
@@ -113,38 +98,31 @@ nav:
 
 # region Extensions
 markdown_extensions:
+  - attr_list
+  - md_in_html
   - admonition
-  - pymdownx.superfences:
+
+  - pymdownx.blocks.caption
+  - pymdownx.superfences
   - pymdownx.inlinehilite
   - pymdownx.snippets
+  - pymdownx.details
+
+  - pymdownx.tabbed:
+      alternate_style: true
+
   - pymdownx.highlight:
       anchor_linenums: true
       use_pygments: true
       pygments_lang_class: true
       pygments_style: monokai
-      # noclasses: true         # write colours inline so they override the theme
+      # noclasses: true
       # line_spans: __span
-      
-#   - pymdownx.details
-#   - pymdownx.magiclink:
-  
-  - attr_list
-  - md_in_html
-  - pymdownx.blocks.caption
+
   - toc:
       anchorlink: true
       anchorlink_class: "toclink"
       toc_depth: 3
-  
-#   - pymdownx.inlinehilite:
-#   - markdown.extensions.attr_list:
-  
-  - pymdownx.keys:
-#   - pymdownx.tasklist:
-#       custom_checkbox: true
-  
-  - pymdownx.tabbed:
-      alternate_style: true
 
 # region Extras
 extra:

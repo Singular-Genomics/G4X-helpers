@@ -1,4 +1,4 @@
-# 📦 `tar_viewer`
+#  `--tar_viewer`
 # Package G4X-Viewer Folder for Distribution
 
 Tars a G4X-Viewer folder by validating and organizing key viewer assets (e.g., `.bin`, `.ome.tiff`, `.tar`, etc.), generating the required `dataset.config.json` metadata file, and creating a `.tar` archive ready for use with the Single-File upload option in the G4X-Viewer.
