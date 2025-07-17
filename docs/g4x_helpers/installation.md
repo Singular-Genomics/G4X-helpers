@@ -13,13 +13,18 @@ navigate to the repo directory:
 $ cd G4X-helpers
 ```
 
-all following steps assume that you are in the G4X-helpers directory. You can confirm this via:
-```bash
-$ pwd
-
-# output
-# $ /path/to/current/directory/.../G4X-helpers
-```
+!!!note
+    all following steps assume that you are in the G4X-helpers directory. You can confirm this via:
+    ```bash
+    $ pwd
+    ```
+    you should see a path ending in: G4X-helpers
+    ```bash
+    $ /path/to/current/directory/.../G4X-helpers
+    ```
+    
+---
+<br>
 
 ## Step 2: install the package
 
@@ -33,8 +38,9 @@ $ pwd
 
     learn how to [install and verify OpenJPEG](#step-3-verify-openjpeg-installation) for use with Glymur
 
+<br>
 
-=== "Conda (recommended)"
+=== "<span style="font-size:1rem">Conda (recommended)</span>"
 
     ### Create a `Conda` environment
 
@@ -61,7 +67,7 @@ $ pwd
     $ pip install .
     ```
 
-=== "pip"
+=== "<span style="font-size:1rem">pip</span>"
     
     ### Install into your current python environment via `pip`
     
@@ -69,7 +75,7 @@ $ pwd
     $ pip install .
     ```
 
-=== "uv"
+=== "<span style="font-size:1rem">uv</span>"
     ### Create a `venv` using [uv](https://docs.astral.sh/uv/)
 
     ```bash
@@ -93,12 +99,12 @@ $ python -c "import glymur; print(glymur.version.openjpeg_version)"
 ```
 
 !!! success 
+    The output shows a correct version string
     ```
-    # output
-    2.2.0
+    2.4.1
     ```
 
-An OpenJPEG version above `2.2.0` is detected. Please continue to [next steps](./first_steps.md)
+An OpenJPEG version above `2.2.0` is detected. You can now proceed to [use](./usage.md) G4X-helpers
 
 !!! warning 
     ```

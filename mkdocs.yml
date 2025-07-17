@@ -62,8 +62,6 @@ theme:
 
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      # primary: custom
-      # accent: custom
       toggle:
         icon: material/toggle-switch
         name: Switch to dark mode
@@ -80,21 +78,22 @@ nav:
   - Introduction: index.md
 
   - G4X-helpers:
-      - getting_started/index.md
-      - installation: getting_started/installation.md
-      - usage: getting_started/first_steps.md
+      - g4x_helpers/index.md
+      - installation: g4x_helpers/installation.md
+      - usage: g4x_helpers/usage.md
 
       - CLI features:
-          - getting_started/features/index.md
-          - getting_started/features/resegment.md
-          - getting_started/features/update_bin.md
-          - getting_started/features/new_bin.md
-          - getting_started/features/tar_viewer.md
+          - g4x_helpers/features/index.md
+          - g4x_helpers/features/resegment.md
+          - g4x_helpers/features/update_bin.md
+          - g4x_helpers/features/new_bin.md
+          - g4x_helpers/features/tar_viewer.md
 
   - G4X data:
       - g4x_data/index.md
       - G4X output: g4x_data/g4x_output.md
       - data import: g4x_data/data_import.md
+  
 
 # region Extensions
 markdown_extensions:
@@ -122,7 +121,7 @@ markdown_extensions:
   - toc:
       anchorlink: true
       anchorlink_class: "toclink"
-      toc_depth: 3
+      toc_depth: 2
 
 # region Extras
 extra:
