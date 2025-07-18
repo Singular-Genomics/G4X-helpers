@@ -71,10 +71,8 @@ def get_mask_properties(sample: 'G4Xoutput', mask: np.ndarray) -> pl.DataFrame:
         area = prop.area  # Area: count of pixels
         centroid = prop.centroid  # Centroid: (row, col)
 
-        if sample._get_coord_order() == 'yx':
-            cell_y, cell_x = centroid
-        else:
-            cell_x, cell_y = centroid
+        # assuming coordinate order: 'yx':
+        cell_y, cell_x = centroid
 
         prop_dict.append(
             {
@@ -93,10 +91,8 @@ def get_mask_properties(sample: 'G4Xoutput', mask: np.ndarray) -> pl.DataFrame:
 def assign_tx_to_mask_labels(sample: 'G4Xoutput', mask: np.ndarray) -> pl.DataFrame:
     reads = sample.load_transcript_table(return_polars=True)
 
-    if sample._get_coord_order() == 'yx':
-        coord_order = ['y_pixel_coordinate', 'x_pixel_coordinate']
-    else:
-        coord_order = ['x_pixel_coordinate', 'y_pixel_coordinate']
+    # assuming coord order == 'yx':
+    coord_order = ['y_pixel_coordinate', 'x_pixel_coordinate']
 
     tx_coords = reads[coord_order].to_numpy()
     cell_ids = mask[tx_coords[:, 0].astype(int), tx_coords[:, 1].astype(int)]

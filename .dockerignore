@@ -1,0 +1,4 @@
+# Exclude the project virtual environment from image builds
+.venv
+.ruff_cache
+.site
