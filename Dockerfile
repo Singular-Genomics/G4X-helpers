@@ -1,6 +1,12 @@
 # Use a Python image with uv pre-installed
 FROM ghcr.io/astral-sh/uv:python3.10-bookworm-slim
 
+RUN apt-get update -qq \
+ && apt-get install -y --no-install-recommends \
+      libexpat1 \
+      libopenjp2-7 \
+ && rm -rf /var/lib/apt/lists/*
+
 # Install the project into `/app`
 WORKDIR /app
 
