@@ -9,6 +9,7 @@ __pycache__/
 .ruff_cache/
 .vscode/**
 site/
+build/
 
 
 # # C extensions
@@ -16,7 +17,7 @@ site/
 
 # # Distribution / packaging
 # .Python
-# build/
+
 # develop-eggs/
 # dist/
 # downloads/
