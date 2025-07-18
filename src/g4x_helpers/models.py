@@ -2,20 +2,20 @@ import json
 import logging
 import os
 from dataclasses import InitVar, dataclass  # , asdict, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
 import anndata as ad
 import glymur
-import tifffile
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import polars as pl
 import scanpy as sc
+import tifffile
 from geopandas.geodataframe import GeoDataFrame
 from packaging import version
-from functools import lru_cache
 
 import g4x_helpers.g4x_viewer.bin_generator as bin_gen
 import g4x_helpers.segmentation as reseg
@@ -170,11 +170,11 @@ class G4Xoutput:
 
     @property
     def includes_transcript(self) -> bool:
-        return self.transcript_panel is not None
+        return self.transcript_panel != []
 
     @property
     def includes_protein(self) -> bool:
-        return self.protein_panel is not None
+        return self.protein_panel != []
 
     # region methods
     def setup_logger(
