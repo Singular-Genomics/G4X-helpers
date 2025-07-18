@@ -1,5 +1,5 @@
 # Use a Python image with uv pre-installed
-FROM ghcr.io/astral-sh/uv:python3.10-bookworm-slim
+FROM ghcr.io/astral-sh/uv:0.8.0-python3.10-bookworm-slim
 
 RUN apt-get update -qq \
  && apt-get install -y --no-install-recommends \
