@@ -2,20 +2,19 @@ import json
 import logging
 import os
 from dataclasses import InitVar, dataclass  # , asdict, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
 import anndata as ad
 import glymur
-import tifffile
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import polars as pl
 import scanpy as sc
+import tifffile
 from geopandas.geodataframe import GeoDataFrame
-from packaging import version
-from functools import lru_cache
 
 import g4x_helpers.g4x_viewer.bin_generator as bin_gen
 import g4x_helpers.segmentation as reseg
@@ -170,11 +169,11 @@ class G4Xoutput:
 
     @property
     def includes_transcript(self) -> bool:
-        return self.transcript_panel is not None
+        return self.transcript_panel != []
 
     @property
     def includes_protein(self) -> bool:
-        return self.protein_panel is not None
+        return self.protein_panel != []
 
     # region methods
     def setup_logger(
@@ -409,18 +408,6 @@ class G4Xoutput:
     def _get_shape(self):
         img = self.load_he_image()
         return img.shape
-
-    def _get_coord_order(self, verbose: bool = False) -> str:
-        critical_version = version.parse('2.11.1')
-
-        detected_caretta_version = version.parse(self.software_version)
-        if verbose:
-            self.logger.debug(f'Detected Caretta version: {detected_caretta_version}')
-
-        if detected_caretta_version >= critical_version:
-            return 'yx'
-        else:
-            return 'xy'
 
     def _clear_image_cache(self):
         """Evict all cached images so subsequent calls re-read from disk."""
