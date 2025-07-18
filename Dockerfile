@@ -20,13 +20,20 @@ ENV UV_COMPILE_BYTECODE=1
 # Copy from the cache instead of linking since it's a mounted volume
 ENV UV_LINK_MODE=copy
 
+RUN mkdir -p /usr/local/tmp && chmod a+rwx /usr/local/tmp
+RUN mkdir -p /usr/local/tmp/fontconfig && chmod a+rwx /usr/local/tmp/fontconfig
+
+ENV MPLCONFIGDIR=/usr/local/tmp
+ENV NUMBA_CACHE_DIR=/usr/local/tmp
+ENV XDG_CACHE_HOME=/usr/local/tmp
+
 # Install the project's dependencies using the lockfile and settings
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --locked --no-install-project --no-dev
 
-# Then, add the rest of the project source code and install it
+    # Then, add the rest of the project source code and install it
 # Installing separately from its dependencies allows optimal layer caching
 COPY . /app
 RUN --mount=type=cache,target=/root/.cache/uv \
