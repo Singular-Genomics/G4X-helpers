@@ -93,9 +93,7 @@ class G4Xoutput:
         with open(self.run_base / 'run_meta.json', 'r') as f:
             self.run_meta = json.load(f)
 
-        arr = self.load_segmentation()
-        self.shape = arr.shape
-        del arr
+        self.shape = utils.npzGetShape(self.run_base / 'segmentation' / 'segmentation_mask.npz', 'nuclei')
 
         if self.transcript_panel:
             transcript_panel = pd.read_csv(self.run_base / 'transcript_panel.csv', index_col=0, header=0)
