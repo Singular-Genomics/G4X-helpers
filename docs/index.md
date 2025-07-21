@@ -1,11 +1,8 @@
----
-toc_depth: 1        # only H1 & H2 on *this* page
----
-
 <br>
-# <span style="font-size:2.5rem; margin-bottom:0rem; line-height:1; padding-bottom:0;">G4X-tutorials</span>  
+# <span class="index-header">G4X-tutorials</span>
 <span style="margin-top:-1.75rem; display:block;"><a href="https://www.singulargenomics.com/">singulargenomics.com</a></span>
 <br>
+
 
 
 ### Welcome to G4X-tutorials.  

@@ -2,7 +2,7 @@
   /* greyscale */
   --sg-black: #000000;
   --sg-white: #FFFFFF;
-  
+
   --sg-grey-dark: #1E1E1E;
   --sg-grey-dark-100: #212426;
   --sg-grey-dark-300: #2E3337;
@@ -107,23 +107,13 @@
   --md-default-bg-color: hsla(var(--md-hue), 15%, 82%, 1);
 }
 
-@font-face {
-  font-family: "Montserrat";
-  src: "./assets/Montserrat/Montserrat-VariableFont_wght.ttf";
-}
 
-.big-title {
-  font-size: var(--md-typeset-h1-size) * 4;
+.index-header {
+  font-size: 2.5rem;
+  margin-bottom: 0;
+  line-height: 1;
+  padding-bottom: 0;
 }
-
-hr {
-  border: none;
-  height: 1px;
-  background-color: hsla(172, 50%, 44%, 0.15);
-  /* Change this to your desired color */
-  margin: 0.5em 0;
-}
-
 
 
 /* See: https://github.com/squidfunk/mkdocs-material/issues/175#issuecomment-616694465 */
@@ -163,7 +153,7 @@ This is a consequence of the reduced nav spacing below. */
   box-shadow: none;
 }
 
-/* Omits the nav title "uv" entirely unless on a small screen, in which case
+/* Omits the nav title entirely unless on a small screen, in which case
 the nav title is needed for backwards navigation in the collapsible
 nav variant.
 
@@ -198,7 +188,7 @@ because the nav is in a hamburger menu anyway
     font-size: 0.85rem;
   }
 
-  /* Reducing spacing between nav items to fit more content 
+  /* Reducing spacing between nav items to fit more content
   First, disable `nav__link` spacing then use `nav__item` to enforce margins this reduces inconsistencies in the spacing. */
   .md-nav--primary .md-nav__link {
     margin: 0.1em;
@@ -229,7 +219,7 @@ because the nav is in a hamburger menu anyway
     margin-bottom: 0.575em;
   }
 
-  /* Increase the size of the first nav item to match the sections 
+  /* Increase the size of the first nav item to match the sections
   It has no children, so it is not considered a section */
   .md-nav--primary>.md-nav__list>.md-nav__item:first-of-type {
     font-size: 0.85rem;
@@ -253,7 +243,7 @@ because the nav is in a hamburger menu anyway
 .md-nav__item--section>.md-nav__link,
 .md-nav__item--section>label {
   /* label = collapsed sections */
-  font-weight: 700;
+  font-weight: 500;
   /* or 600 for semi-bold        */
   font-size: 0.85rem;
   /* default is 0.8 rem          */

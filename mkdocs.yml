@@ -42,14 +42,14 @@ theme:
     - navigation.indexes
     - navigation.tracking
     # - navigation.tabs
-    
+
     - content.code.annotate
     - content.code.copy
     - content.code.select
     - content.tabs.link
-    
+
     - toc.follow
-    
+
 
   palette:
     - media: "(prefers-color-scheme: dark)"
@@ -93,7 +93,10 @@ nav:
       - g4x_data/index.md
       - G4X output: g4x_data/g4x_output.md
       - data import: g4x_data/data_import.md
-  
+
+  - contributing:
+      - contributing/index.md
+
 
 # region Extensions
 markdown_extensions:
