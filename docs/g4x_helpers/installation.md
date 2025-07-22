@@ -1,8 +1,7 @@
-# 🚀 Installation
+# <span class="index-cat-header">installation</span>
 
-
+<!-- begin section -->
 ## Step 1: clone the [`g4x-helpers`](https://github.com/Singular-Genomics/G4X-helpers) repository
-
 
 ```bash
 $ git clone git@github.com:Singular-Genomics/G4X-helpers.git
@@ -25,7 +24,9 @@ $ cd G4X-helpers
     
 ---
 <br>
+<!-- end section -->
 
+<!-- begin section -->
 ## Step 2: install the package
 
 !!! note
@@ -88,8 +89,10 @@ $ cd G4X-helpers
     ```
 
 ---
+<br>
+<!-- end section -->
 
-
+<!-- begin section -->
 ## Step 3: verify OpenJPEG installation
 
 After installation of `G4X-helpers`, you can confirm that Glymur recognizes OpenJPEG via:
@@ -116,7 +119,11 @@ Glymur does not detect OpenJPEG and reports `0.0.0` or other error.
 In this case we **strongly suggest** performing the G4X-helpers installation and the following steps to enable OpenJPEG in a Conda enviroment.  
 Hints on other systems are provided, but not supported! You can find further details in the [Glymur documentation](https://glymur.readthedocs.io/en/v0.14.2/detailed_installation.html) on advanced installation methods.
 
+---
+<br>
+<!-- end section -->
 
+<!-- begin section -->
 ## Step 4: install OpenJPEG
 
 === "Conda (recommended)"
@@ -151,3 +158,4 @@ Hints on other systems are provided, but not supported! You can find further det
 
 ---
 <br>
+<!-- end section -->

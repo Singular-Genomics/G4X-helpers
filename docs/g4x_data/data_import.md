@@ -1,4 +1,4 @@
-# G4X data import
+# <span class="index-cat-header">G4X data import</span>
 
 The multimodal output of the G4X spatial sequencer comprises images, tables and annotated data matrices, which allow deep exploration of your sample. The `single_cell_data` folder in the G4X output contains the final processed form of the data, after transcript and image signals have been aggreagted for each each segmented cell. There are several excellent open-source tools available that enable the full stack of analytical needs to gain biological insight from this data.  
 
@@ -6,8 +6,9 @@ The multimodal output of the G4X spatial sequencer comprises images, tables and 
 
 ---
 <br>
+<!-- end section -->
 
-
+<!-- begin section -->
 # if you are working in Python
 Some excellent tools are:
 
@@ -89,8 +90,9 @@ adata.var_names = counts.columns
 
 ---
 <br>
+<!-- end section -->
 
-
+<!-- begin section -->
 # if you are working in R
 
 The most feature rich package for single-cell analysis in R is:
@@ -118,3 +120,4 @@ sobj <- CreateSeuratObject(counts = counts, meta.data = metadata)
 
 ---
 <br>
+<!-- end section -->

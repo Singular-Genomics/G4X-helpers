@@ -22,6 +22,8 @@ repos:
   hooks:
     - id: check-merge-conflict
     - id: check-yaml
+      unsafe: true
+      exclude: mkdocs\.yml
     - id: check-json
     - id: check-toml
     - id: check-added-large-files

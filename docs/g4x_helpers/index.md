@@ -1,5 +1,5 @@
 <br>
-# <span class="index-header">🛠️ G4X-helpers</span>
+# <span class="index-header">:material-code-tags: G4X-helpers</span>
 ### Helper models and post-processing tools for working with G4X data.  
 
 `$ git clone https://github.com/singular-genomics/g4x-helpers`

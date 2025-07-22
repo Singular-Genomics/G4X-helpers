@@ -1,3 +1,6 @@
+# <span class="index-cat-header">usage</span>
+
+<!-- begin section -->
 ## verify installation
 
 To start using G4X-helpers, ensure that you have activated the environment in which the package was installed. 
@@ -15,7 +18,9 @@ If your installation of G4X-helpers was successful, you can call the following c
 
 ---
 <br>
+<!-- end section -->
 
+<!-- begin section -->
 ## CLI Usage
 
 G4X-helpers offers several tools for common post-processing needs, each of which is described in detail in the [CLI features](./features/index.md) section.
@@ -63,3 +68,7 @@ resegment \
     --sample_id sample_A01 \
     --out_dir /path/to/resegmentation/output 
 ```
+
+---
+<br>
+<!-- end section -->

@@ -6,7 +6,9 @@
 [pandas]: https://pandas.pydata.org/pandas-docs/stable/development/index.html
 [MDAnalysis]: https://userguide.mdanalysis.org/stable/contributing.html
 
-# <span class="g4x-header">Contributing</span>
+
+# <span class="index-cat-header">contributing</span>
+
 
 Contributions to `G4X-helpers` are welcome!  
 This section provides some guidelines and tips to follow when you wish to enrich the project with your own code.

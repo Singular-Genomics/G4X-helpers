@@ -1,4 +1,4 @@
-# G4X output structure
+# <span class="index-cat-header">G4X output structure</span>
 
 ### sample output directory
 Directory structure depends on run type.
