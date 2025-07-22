@@ -1,5 +1,23 @@
 # <span class="index-cat-header">installation</span>
 
+This page explains how you can install G4X-helpers on your local machine. However, if you’re happy running the tool via `Docker`, you can skip the installation steps below and head to the [docker usage](usage.md/#cli-usage) section.  
+
+**You only need a local install if you want to:**
+
+- use the `G4X-helpers` CLI directly on your machine
+- use the package beyond the CLI features exposed in the Docker image
+- develop or debug the codebase
+- integrate pieces of the library into your own Python environment
+
+
+if these use case apply to you, please read on
+
+<br>    
+
+---
+
+<!-- end section -->
+
 <!-- begin section -->
 ## Step 1: clone the [`g4x-helpers`](https://github.com/Singular-Genomics/G4X-helpers) repository
 
@@ -21,10 +39,11 @@ $ cd G4X-helpers
     ```bash
     $ /path/to/current/directory/.../G4X-helpers
     ```
-    
----
-<br>
+
 <!-- end section -->
+<br>
+
+---
 
 <!-- begin section -->
 ## Step 2: install the package
@@ -45,7 +64,7 @@ $ cd G4X-helpers
 
     ### Create a `Conda` environment
 
-    Install **miniconda**, **conda**, or **mamba**. ([intstructions](https://www.anaconda.com/docs/getting-started/miniconda/install))  
+    Install **miniconda**, **conda**, or **mamba**. ([instructions](https://www.anaconda.com/docs/getting-started/miniconda/install))  
     <br>
     create the environment:
 
@@ -88,9 +107,10 @@ $ cd G4X-helpers
     $ source .venv/bin/activate
     ```
 
----
-<br>
 <!-- end section -->
+<br>
+
+---
 
 <!-- begin section -->
 ## Step 3: verify OpenJPEG installation
@@ -116,17 +136,18 @@ An OpenJPEG version above `2.2.0` is detected. You can now proceed to [use](./us
     ```
 
 Glymur does not detect OpenJPEG and reports `0.0.0` or other error.  
-In this case we **strongly suggest** performing the G4X-helpers installation and the following steps to enable OpenJPEG in a Conda enviroment.  
+In this case we **strongly suggest** performing the G4X-helpers installation and the following steps to enable OpenJPEG in a Conda environment.  
 Hints on other systems are provided, but not supported! You can find further details in the [Glymur documentation](https://glymur.readthedocs.io/en/v0.14.2/detailed_installation.html) on advanced installation methods.
 
----
-<br>
 <!-- end section -->
+<br>
+
+---
 
 <!-- begin section -->
 ## Step 4: install OpenJPEG
 
-=== "Conda (recommended)"
+=== "<span style="font-size:1rem">Conda (recommended)</span>"
 
     Inside your `Conda` environment:
 
@@ -134,7 +155,7 @@ Hints on other systems are provided, but not supported! You can find further det
     conda install -c conda-forge openjpeg
     ```
 
-=== "Other systems"
+=== "<span style="font-size:1rem">other systems</span>"
     
     This has been tested on MacOS with Homebrew:
     
@@ -156,6 +177,9 @@ Hints on other systems are provided, but not supported! You can find further det
     printf "[library]\nopenjp2 = /opt/homebrew/lib/libopenjp2.dylib\n" > ~/.config/glymur/glymurrc
     ```
 
----
-<br>
 <!-- end section -->
+<br>
+
+---
+
+<!-- begin section -->

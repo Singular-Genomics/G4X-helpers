@@ -7,42 +7,55 @@
 [MDAnalysis]: https://userguide.mdanalysis.org/stable/contributing.html
 
 
-# <span class="index-cat-header">contributing</span>
+<!-- <span class="index-cat-header">contributing</span> -->
 
 
-Contributions to `G4X-helpers` are welcome!  
-This section provides some guidelines and tips to follow when you wish to enrich the project with your own code.
+### Contributions to `G4X-helpers` are welcome!  
+This section provides some guidelines and tips to follow when you wish to enrich the project with your own code or documentation.
 
+<br>
 
+---
+
+<!-- begin section -->
 ## Index
 + [Development workflow](#development-workflow)  
 + [Working with git](#working-with-git)
 + [Building and managing your environment](#building-and-managing-your-environment)
 + [Documentation](#documentation)
-+ [Releasing a new version](#documentation)
++ [Releasing a new version](#releasing-and-versioning)
 
+<br>
 
 !!!info
     Parts of these guidelines have been adapted from the [scanpy docs][], which in turn built on the work done by [pandas][] and [MDAnalysis][].
     We highly recommend checking out these excellent guides to learn more.
 
----
 <br>
 
+---
+<br>
+<!-- end section -->
+
+<!-- begin section -->
 # Development workflow
+
+The life-cycle of a new feature or other contribution should follow this pattern:
 
 1. [Fork](#forking-and-cloning) the `G4X-helpers` repository to your own GitHub account
 2. Create an [environment](#building-and-managing-your-environment) with all dev-dependencies
 3. Create a [new branch](#creating-a-branch-for-your-feature) for your feature or bugfix
-4. Commit your contribution to the codebase
+4. [Commit](#committing-your-code) your contribution to the codebase
 5. Update and check the [documentation](#documentation)
 6. [Open a PR](#opening-a-pull-request) back to the main repository
 
----
 <br>
 
+---
+<br>
+<!-- end section -->
 
-
+<!-- begin section -->
 # Working with `git`
 
 This section of the docs covers our practices for working with `git` on our codebase.  
@@ -93,6 +106,28 @@ $ git pull                          # Syncing with the repo
 $ git switch -c {your-branch-name}  # Making and changing to the new branch
 ```
 
+## Committing your code
+
+Keep commits small, focused, and well-described. This makes code review easier and history clearer.
+When you are ready, add the files that belong to your commit:
+
+```bash
+$ git status              # See what changed
+$ git add -p              # Interactively stage only the hunks you want
+
+# or everything
+$ git add .
+```
+
+Write a clear commit-message. Use an imperative, one-line summary (≤ 72 chars).  
+
+```bash
+$ git commit -m "Fix NPE in sample parser when header is missing"
+```
+
+!!!tip
+    Need to fix the last commit before pushing?
+    `git commit --amend` lets you change the message or add more files.
 
 ## Opening a pull request
 
@@ -106,16 +141,21 @@ $ # After that, just use
 $ git push
 ```
 
-And open a pull request by going to the [main repo](https://github.com/Singular-Genomics/G4X-helpers) and clicking *`New pull request`*.  
+Then open a pull request by going to the [main repo](https://github.com/Singular-Genomics/G4X-helpers) and clicking *`New pull request`*.  
 GitHub may also prompt you to open PRs for recently pushed branches.
+
+!!!info
+    It is important to summarize your changes in the description of the PR so that they get included in the next change-log
 
 We'll try and get back to you soon!
 
----
 <br>
 
+---
+<br>
+<!-- end section -->
 
-
+<!-- begin section -->
 # Building and managing your environment
 
 ## Installing project dependencies
@@ -151,7 +191,7 @@ In order for it to attach to your commits automatically, you need to install it 
 $ pre-commit install
 ```
 
-While most rules will be applied automatically, some checks may prevent your code from being commited. The pre-commit output will help you indentify which sections need to be addressed.
+While most rules will be applied automatically, some checks may prevent your code from being committed. The pre-commit output will help you identify which sections need to be addressed.
 
 If you choose not to run the hooks on each commit, you can run them manually with  
 `pre-commit run --files={your files}`.
@@ -168,10 +208,13 @@ If you choose not to run the hooks on each commit, you can run them manually wit
 ## Code formatting and linting
 We use [Ruff](https://docs.astral.sh/ruff) to format and lint the `G4X-helpers` codebase. Ruff is a project dependency and its rules are configured in `ruff.toml`. It  will be invoked on all code contributions via pre-commit hooks (see above) but you can also run it manually via `ruff check`.
 
-
 <br>
 
+---
+<br>
+<!-- end section -->
 
+<!-- begin section -->
 # Documentation
 
 ## docstrings
@@ -193,67 +236,50 @@ The `Params` abbreviation is a legit replacement for `Parameters`.
 To document parameter types use type annotations on function parameters.
 These will automatically populate the docstrings on import, and when the documentation is built.
 
-Use the python standard library types (defined in {mod}`collections.abc` and {mod}`typing` modules) for containers, e.g.
-{class}`~collections.abc.Sequence`s (like `list`),
-{class}`~collections.abc.Iterable`s (like `set`), and
-{class}`~collections.abc.Mapping`s (like `dict`).
+Use the python standard library types (defined in `collections.abc` and `typing` modules) for containers, e.g.  
+
++ `collections.abc.Sequence`s (like `list`),
++ `collections.abc.Iterable`s (like `set`), and
++ `collections.abc.Mapping`s (like `dict`).
+
 Always specify what these contain, e.g. `{'a': (1, 2)}` → `Mapping[str, Tuple[int, int]]`.
 If you can’t use one of those, use a concrete class like `AnnData`.
 If your parameter only accepts an enumeration of strings, specify them like so: `Literal['elem-1', 'elem-2']`.
 
 ### `Returns` section
 
-There are three types of return sections – prose, tuple, and a mix of both.
++ Function returns nothing? Use None.
++ Single object: pd.DataFrame — description on the next line.
++ Multiple values:
++ Prefer a named tuple/dataclass.
++ Otherwise list each element on its own line:
 
-1. Prose is for simple cases.
-2. Tuple return sections are formatted like parameters. Other than in numpydoc, each tuple is first characterized by the identifier and *not* by its type. Provide type annotation in the function header.
-3. Mix of prose and tuple is relevant in complicated cases, e.g. when you want to describe that you *added something as annotation to an \`AnnData\` object*.
-
-#### Examples
-
-For simple cases, use prose as in [`sc.pp.normalize_total`](https://scanpy.readthedocs.io/en/stable/generated/scanpy.pp.normalize_total.html#scanpy.pp.normalize_total):
-
-```rst
+```
 Returns
 -------
-Returns dictionary with normalized copies of `adata.X` and `adata.layers`
-or updates `adata` with normalized versions of the original
-`adata.X` and `adata.layers`, depending on `inplace`.
+norm : AnnData
+    Normalized copy of the input.
+stats : dict
+    Summary statistics (mean, var, n_cells).
 ```
+<br>
 
-For tuple return values, you can use the standard numpydoc way of populating it,
-e.g. as in [`sc.pp.calculate_qc_metrics`](https://scanpy.readthedocs.io/en/stable/generated/scanpy.pp.calculate_qc_metrics.html#scanpy.pp.calculate_qc_metrics).
-Do not add types in the docstring, but specify them in the function signature:
+---
+<br>
+<!-- end section -->
 
-```python
-def myfunc(...) -> tuple[int, str]:
-    """
-    ...
-    Returns
-    -------
-    one_identifier
-        Description.
-    second_identifier
-        Description 2.
-    """
-    ...
-```
+<!-- begin section -->
+# Releasing and versioning
 
-Many functions also just modify parts of the passed AnnData object, like e.g. [`scanpy.tl.dpt`](https://scanpy.readthedocs.io/en/stable/generated/scanpy.tl.dpt.html#scanpy.tl.dpt).
-You can then combine prose and lists to best describe what happens:
+Versioning and release tagging in G4X-helpers is handled through `bump-my-version`.
 
-```rst
-Returns
--------
-Depending on `copy`, returns or updates `adata` with the following fields.
+Please do not change the project version or the changelog. Maintainers handle version bumps and publishing releases.  
 
-If `n_branchings==0`, no field `dpt_groups` will be written.
+Just submit your code/docs and they will be incorporated into our release workflow.
+<br>
 
-dpt_pseudotime : :class:`~pandas.Series` (`adata.obs`, dtype `float`)
-    Array of dim (number of samples) that stores the pseudotime of each
-    cell, that is, the DPT distance with respect to the root cell.
-dpt_groups : :class:`pandas.Series` (`adata.obs`, dtype `category`)
-    Array of dim (number of samples) that stores the subgroup id ('0',
-    '1', ...) for each cell. The groups  typically correspond to
-    'progenitor cells', 'undecided cells' or 'branches' of a process.
-```
+---
+<br>
+<!-- end section -->
+
+<!-- begin section -->
