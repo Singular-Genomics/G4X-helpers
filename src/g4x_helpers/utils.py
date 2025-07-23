@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import logging
 import os
+import zipfile
 from pathlib import Path
+
+import numpy as np
 
 
 def verbose_to_log_level(verbose: int) -> int:
@@ -96,3 +99,29 @@ def setup_logger(
         logger.addHandler(fh)
 
     return logger
+
+
+
+def npzGetShape(npz, key):
+    """Takes a path to an .npz file and key to stored array and returns array shape
+    without loading the array into memory
+
+    Parameters
+        npz: str
+        key: str
+
+    Raises: KeyError
+
+    Returns: tuple
+
+    Reference: http://bit.ly/2qsSxy8
+    """
+    with zipfile.ZipFile(npz) as archive:
+        name = '{}.npy'.format(key)
+        if name in archive.namelist():
+            npy = archive.open(name)
+            version = np.lib.format.read_magic(npy)
+            shape, _ , _ = np.lib.format._read_array_header(npy, version)
+            return shape
+        else:
+            raise KeyError('{} not in archive'.format(key))
