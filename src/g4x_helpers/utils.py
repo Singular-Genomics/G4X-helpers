@@ -101,7 +101,6 @@ def setup_logger(
     return logger
 
 
-
 def npzGetShape(npz, key):
     """Takes a path to an .npz file and key to stored array and returns array shape
     without loading the array into memory
@@ -121,7 +120,7 @@ def npzGetShape(npz, key):
         if name in archive.namelist():
             npy = archive.open(name)
             version = np.lib.format.read_magic(npy)
-            shape, _ , _ = np.lib.format._read_array_header(npy, version)
+            shape, _, _ = np.lib.format._read_array_header(npy, version)
             return shape
         else:
             raise KeyError('{} not in archive'.format(key))
