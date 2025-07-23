@@ -15,7 +15,7 @@ If your installation of G4X-helpers was successful, you can call the following c
 
 
 !!!tip
-    [further down](#example-using---resegment-from-the-cli) you can see the output of such a `--help` statement
+    [further down](#example-using-resegment-from-the-cli) you can see the output of such a `--help` statement
 
 ---
 <br>
@@ -97,7 +97,7 @@ If you don’t want to install `g4x-helpers` locally, you can run all tools from
 ### Basic pattern
 
 When running via Docker, the pattern is similar to invoking a CLI command, with the exception that all paths and the Docker image need to be specified.
-Inside the container, always reference the mounted paths (e.g. /data/...), not the host paths ([see full example below](#example-using---resegment-in-docker)).
+Inside the container, always reference the mounted paths (e.g. /data/...), not the host paths ([see full example below](#example-using-resegment-in-docker)).
 
 
 ```bash
@@ -110,13 +110,13 @@ docker run --rm \
 ```
 
 + `-v host:container` mounts your folder to let the container see your files. 
-+ `--rm` cleans up the container after it exits.
++ `--rm` cleans up the container after it exits.+
 + `ghcr.io/singular-genomics/g4x-helpers:latest` uses the latest version of G4X-helpers
 
 
 ### Example: using `--resegment` in Docker
 
-Here we run the same --resegment command as in the [cli-example](#example-using---resegment-from-the-cli) above
+Here we run the same --resegment command as in the [cli-example](#example-using-resegment-from-the-cli) above
 
 ```bash
 docker run --rm \
