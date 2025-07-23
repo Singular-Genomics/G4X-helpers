@@ -10,43 +10,40 @@ description = "Python helpers for G4X."
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
-  { name = "Kenneth Gouin III", email = "kennethg@singulargenomics.com" },
-  { name = "Florian Raths", email = "flo.rathsg@singulargenomics.com" },
+    { name = "Kenneth Gouin III", email = "kennethg@singulargenomics.com" },
+    { name = "Florian Raths", email = "flo.raths@singulargenomics.com" },
 ]
-requires-python = ">=3.10,<3.11"
+requires-python = ">=3.10, <3.11"
 
 classifiers = [
-  "Development Status :: 4 - Beta",
-  "Intended Audience :: Developers",
-  "License :: OSI Approved :: MIT License",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
-  "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 
 urls = { Homepage = "https://github.com/Singular-Genomics/G4X-helpers" }
 dependencies = [
-  "geopandas ~= 1.0.1",
-  "glymur ~= 0.13.0",
-  "matplotlib ~= 3.7.0",
-  "polars ~= 1.8.2",
-  "pyarrow ~= 18.0.0",
-  "rasterio ~= 1.4.3",
-  "ray ~= 2.44.0",
-  "scanpy ~= 1.10.0",
-  "scikit-image ~= 0.25.2",
-  "shapely ~= 2.1.0",
+    "geopandas ~= 1.0",
+    "glymur ~= 0.13",
+    "matplotlib ~= 3.7",
+    "polars ~= 1.30",
+    "rasterio ~= 1.4",
+    "ray ~= 2.44",
+    "scanpy ~= 1.10",
+    "scikit-image ~= 0.25",
+    "shapely ~= 2.1",
 ]
 
 [dependency-groups]
 dev = [
-  "ipykernel ~= 6.29.5",
-  "ipywidgets ~= 8.1.7",
-  "mkdocs >= 1.6.1",
-  "mkdocs-material >= 9.6.15",
-  "pre-commit >= 4.2.0",
-  "ruff == 0.12.2", # pinned to match pre-commit version
-  "bump-my-version ~= 1.2.0",
+    "mkdocs >= 1.6.1",
+    "mkdocs-material >= 9.6.15",
+    "pre-commit >= 4.2.0",
+    "ruff == 0.12.2", # pinned to match pre-commit version
+    "bump-my-version ~= 1.2.0",
 ]
 
 [project.scripts]
