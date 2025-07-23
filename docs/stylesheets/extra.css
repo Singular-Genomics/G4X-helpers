@@ -98,7 +98,7 @@
   /* scrollbars */
   --md-default-fg-color--lighter: hsla(var(--md-hue), 10%, 45%, 0.5);
 
-  .md-search-result__meta { background: #222; }
+
 }
 
 [data-md-color-scheme="slate"] {
@@ -147,25 +147,48 @@
   --md-code-bg-color: hsla(var(--md-hue), 10%, 90%, 1);
 }
 
+.md-search-result__meta {
+  background: #222 !important;
+}
+
 /* Base body text */
-.md-typeset { font-size: 0.875rem; }
+.md-typeset {
+  font-size: 0.875rem !important;
+}
 
 /* Headings */
-.md-typeset h1 { font-size: 2.5rem; line-height: 0.25; }
-.md-typeset h2 { font-size: 1.8rem; font-weight: 100; }
-.md-typeset h3 { font-size: 1.4rem; font-weight: 100; }
-.md-typeset h4 { font-size: 1.2rem; font-weight: 100; }
+.md-typeset h1 {
+  font-size: 2.5rem !important;
+  line-height: 0.25 !important;
+}
+
+.md-typeset h2 {
+  font-size: 1.8rem !important;
+  font-weight: 100 !important;
+}
+
+.md-typeset h3 {
+  font-size: 1.4rem !important;
+  font-weight: 100 !important;
+}
+
+.md-typeset h4 {
+  font-size: 1.2rem !important;
+  font-weight: 100 !important;
+}
 
 
 /* Whole admonition block */
 .md-typeset .admonition,
-.md-typeset details.admonition { font-size: 0.8rem; }
+.md-typeset details.admonition {
+  font-size: 0.8rem !important;
+}
 
 /* The title line ("Note", "Warning", etc.) */
-.md-typeset .admonition > .admonition-title,
-.md-typeset details.admonition > summary {
-  font-size: 0.9rem;
-  font-weight: 500;
+.md-typeset .admonition>.admonition-title,
+.md-typeset details.admonition>summary {
+  font-size: 0.9rem !important;
+  font-weight: 500 !important;
 }
 
 
