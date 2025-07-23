@@ -126,12 +126,12 @@
   --md-code-bg-color: hsla(var(--md-hue), 10%, 20%, 1);
 
   /* If you want per-level control */
-  .md-typeset h1 { color: var(--text_lit_2); }
-  .md-typeset h2 { color: var(--text_lit_2); }
-  .md-typeset h3 { color: var(--text_lit_2); }
-  .md-typeset h4 { color: var(--text_lit_2); }
-  .md-typeset h5 { color: var(--text_lit_2); }
-  .md-typeset h6 { color: var(--text_lit_2); }
+  .md-typeset h1 { color: var(--text_lit_2) !important; }
+  .md-typeset h2 { color: var(--text_lit_2) !important; }
+  .md-typeset h3 { color: var(--text_lit_2) !important; }
+  .md-typeset h4 { color: var(--text_lit_2) !important; }
+  .md-typeset h5 { color: var(--text_lit_2) !important; }
+  .md-typeset h6 { color: var(--text_lit_2) !important; }
 
 }
 
