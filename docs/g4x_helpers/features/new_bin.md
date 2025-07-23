@@ -4,6 +4,8 @@
 
 This tool will create a new `.bin` segmentation file compatible with the G4X-Viewer using the processed output from a G4X run. This is typically only needed to update older outputs to newer versions of the `.bin` format.
 
+--8<-- "_partials/section_break.md"
+
 ## usage 
 
 ```bash
@@ -16,7 +18,6 @@ $ new_bin
   --verbose <level>
 ```
 
-<br>
 
 ## Argument Descriptions
 

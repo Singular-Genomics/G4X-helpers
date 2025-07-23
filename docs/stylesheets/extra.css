@@ -99,6 +99,9 @@
   --md-default-fg-color--lighter: hsla(var(--md-hue), 10%, 45%, 0.5);
 
 
+
+
+
 }
 
 [data-md-color-scheme="slate"] {
@@ -107,10 +110,8 @@
   --md-default-bg-color: var(--surface);
 
   /* text */
-  --md-default-fg-color: var(--text_lit);
-  /* body */
-  --md-default-fg-color--light: var(--text_lit_2);
-  /* captions */
+  --md-default-fg-color: var(--text_lit);              /* body */
+  --md-default-fg-color--light: var(--text_lit_2);     /* captions */
 
 
   /* borders / separators / copy buttons */
@@ -123,6 +124,15 @@
 
   /* code backdrop */
   --md-code-bg-color: hsla(var(--md-hue), 10%, 20%, 1);
+
+  /* If you want per-level control */
+  .md-typeset h1 { color: var(--text_lit_2); }
+  .md-typeset h2 { color: var(--text_lit_2); }
+  .md-typeset h3 { color: var(--text_lit_2); }
+  .md-typeset h4 { color: var(--text_lit_2); }
+  .md-typeset h5 { color: var(--text_lit_2); }
+  .md-typeset h6 { color: var(--text_lit_2); }
+
 }
 
 [data-md-color-scheme="default"] {
@@ -145,6 +155,14 @@
 
   /* code backdrop */
   --md-code-bg-color: hsla(var(--md-hue), 10%, 90%, 1);
+
+  /* If you want per-level control */
+  .md-typeset h1 { color: var(--text_drk_2); }
+  .md-typeset h2 { color: var(--text_drk_2); }
+  .md-typeset h3 { color: var(--text_drk_2); }
+  .md-typeset h4 { color: var(--text_drk_2); }
+  .md-typeset h5 { color: var(--text_drk_2); }
+  .md-typeset h6 { color: var(--text_drk_2); }
 }
 
 .md-search-result__meta {
@@ -174,7 +192,11 @@
 
 .md-typeset h4 {
   font-size: 1.2rem !important;
-  font-weight: 100 !important;
+  font-weight: 300 !important;
+}
+
+.md-typeset h5 {
+  font-weight: 500 !important;
 }
 
 
@@ -222,14 +244,7 @@
   width: 1.5rem;
 }
 
-/* Prevent the shadow from the nav title from blurring the top link.
-The box shadow isn't really doing anything anyway.
-
-This is a consequence of the reduced nav spacing below. */
-.md-nav--primary .md-nav__title {
-  box-shadow: none;
-}
-
+/* ——— Navigation ——— */
 /* Omits the nav title entirely unless on a small screen, in which case
 the nav title is needed for backwards navigation in the collapsible
 nav variant.
@@ -239,6 +254,19 @@ See https://github.com/astral-sh/uv/issues/5130 */
   .md-nav__title {
     display: none;
   }
+}
+
+/* Prevent the shadow from the nav title from blurring the top link.
+The box shadow isn't really doing anything anyway.
+
+This is a consequence of the reduced nav spacing below. */
+.md-nav--primary .md-nav__title {
+  box-shadow: none;
+}
+
+/* Bold the active nav link for accessibility */
+.md-nav__link--active {
+  font-weight: bold;
 }
 
 
@@ -304,10 +332,7 @@ because the nav is in a hamburger menu anyway
   }
 }
 
-/* Bold the active nav link for accessibility */
-.md-nav__link--active {
-  font-weight: bold;
-}
+
 
 /* See: https://mkdocstrings.github.io/recipes/#prevent-selection-of-prompts-and-output-in-python-code-blocks */
 .highlight .gp,

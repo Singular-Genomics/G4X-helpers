@@ -1,6 +1,6 @@
 <br>
 
-# installation
+# source installation
 
 This page explains how you can install G4X-helpers on your local machine. However, if you’re happy running the tool via `Docker`, you can skip the installation steps below and head to the [docker usage](usage.md/#cli-usage) section.  
 
@@ -14,13 +14,8 @@ This page explains how you can install G4X-helpers on your local machine. Howeve
 
 if these use case apply to you, please read on
 
-<br>    
+--8<-- "_partials/section_break.md"
 
----
-
-<!-- end section -->
-
-<!-- begin section -->
 ## Step 1: clone the [`g4x-helpers`](https://github.com/Singular-Genomics/G4X-helpers) repository
 
 ```bash
@@ -42,12 +37,8 @@ $ cd G4X-helpers
     $ /path/to/current/directory/.../G4X-helpers
     ```
 
-<!-- end section -->
-<br>
+--8<-- "_partials/section_break.md"
 
----
-
-<!-- begin section -->
 ## Step 2: install the package
 
 !!! note
@@ -109,12 +100,8 @@ $ cd G4X-helpers
     $ source .venv/bin/activate
     ```
 
-<!-- end section -->
-<br>
+--8<-- "_partials/section_break.md"
 
----
-
-<!-- begin section -->
 ## Step 3: verify OpenJPEG installation
 
 After installation of `G4X-helpers`, you can confirm that Glymur recognizes OpenJPEG via:
@@ -141,12 +128,8 @@ Glymur does not detect OpenJPEG and reports `0.0.0` or other error.
 In this case we **strongly suggest** performing the G4X-helpers installation and the following steps to enable OpenJPEG in a Conda environment.  
 Hints on other systems are provided, but not supported! You can find further details in the [Glymur documentation](https://glymur.readthedocs.io/en/v0.14.2/detailed_installation.html) on advanced installation methods.
 
-<!-- end section -->
-<br>
+--8<-- "_partials/section_break.md"
 
----
-
-<!-- begin section -->
 ## Step 4: install OpenJPEG
 
 === "<span style="font-size:1rem">Conda (recommended)</span>"
@@ -179,9 +162,4 @@ Hints on other systems are provided, but not supported! You can find further det
     printf "[library]\nopenjp2 = /opt/homebrew/lib/libopenjp2.dylib\n" > ~/.config/glymur/glymurrc
     ```
 
-<!-- end section -->
-<br>
-
----
-
-<!-- begin section -->
+--8<-- "_partials/section_break.md"

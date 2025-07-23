@@ -4,6 +4,8 @@
 
 Replaces or updates the segmentation mask in a G4X run and regenerates all downstream single-cell data and `.bin` files.
 
+--8<-- "_partials/section_break.md"
+
 ## usage
 
 ``` bash
@@ -18,8 +20,6 @@ $ resegment
   --threads <n_threads> 
   --verbose <level>
 ```
-
-<br>
 
 ## Argument Descriptions
 

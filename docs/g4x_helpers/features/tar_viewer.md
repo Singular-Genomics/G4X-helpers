@@ -4,13 +4,14 @@
 
 Tars a G4X-Viewer folder by validating and organizing key viewer assets (e.g., `.bin`, `.ome.tiff`, `.tar`, etc.), generating the required `dataset.config.json` metadata file, and creating a `.tar` archive ready for use with the Single-File upload option in the G4X-Viewer.
 
+--8<-- "_partials/section_break.md"
+
 ## usage
 
 ```bash
 $ tar_viewer --viewer_dir /path/to/g4x_viewer_folder
 ```
 
-<br>
 
 ## Argument Descriptions
 

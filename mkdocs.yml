@@ -3,6 +3,8 @@ site_name: Singular Genomics - G4X-tutorials
 site_author: Singular Genomics
 site_url: https://shiny-tribble-2nl4loz.pages.github.io/
 site_description: Singular Genomics G4X data documentation site
+repo_name: g4x-helpers
+repo_url: https://github.com/Singular-Genomics/G4X-helpers
 
 # region Theme
 theme:
@@ -69,11 +71,12 @@ theme:
         name: Switch to dark mode
 
 
-repo_name: g4x-helpers
-repo_url: https://github.com/Singular-Genomics/G4X-helpers
-
 extra_css:
   - stylesheets/extra.css
+
+exclude_docs: |
+  _partials/section_break.md
+  _partials/**
 
 # region Nav
 nav:
@@ -81,15 +84,19 @@ nav:
 
   - G4X-helpers:
       - g4x_helpers/index.md
-      - installation: g4x_helpers/installation.md
-      - usage: g4x_helpers/usage.md
+      - installation:
+        - g4x_helpers/installation/index.md
+        - g4x_helpers/installation/source.md
+        - g4x_helpers/installation/docker.md
 
       - CLI features:
-          - g4x_helpers/features/index.md
-          - g4x_helpers/features/resegment.md
-          - g4x_helpers/features/update_bin.md
-          - g4x_helpers/features/new_bin.md
-          - g4x_helpers/features/tar_viewer.md
+        - g4x_helpers/features/index.md
+        - g4x_helpers/features/resegment.md
+        - g4x_helpers/features/update_bin.md
+        - g4x_helpers/features/new_bin.md
+        - g4x_helpers/features/tar_viewer.md
+
+      - usage: g4x_helpers/usage.md
 
   - G4X data:
       - g4x_data/index.md
@@ -110,7 +117,11 @@ markdown_extensions:
   - pymdownx.blocks.caption
   - pymdownx.superfences
   - pymdownx.inlinehilite
-  - pymdownx.snippets
+
+  - pymdownx.snippets:
+      check_paths: true
+      base_path: docs
+
   - pymdownx.details
 
   - pymdownx.tabbed:

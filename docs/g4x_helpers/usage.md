@@ -1,9 +1,6 @@
 <br>
 
 # usage
-
-
-<!-- begin section -->
 ## verify installation
 
 To start using G4X-helpers, ensure that you have activated the environment in which the package was installed. 
@@ -19,11 +16,8 @@ If your installation of G4X-helpers was successful, you can call the following c
 !!!tip
     [further down](#example-using-resegment-from-the-cli) you can see the output of such a `--help` statement
 
----
-<br>
-<!-- end section -->
+--8<-- "_partials/section_break.md"
 
-<!-- begin section -->
 ## CLI Usage
 
 G4X-helpers offers several tools for common post-processing needs, each of which is described in detail in the [CLI features](./features/index.md) section.
@@ -72,27 +66,10 @@ resegment \
     --sample_id sample_A01 \
     --out_dir /path/to/resegmentation/output 
 ```
-<!-- end section -->
-<br>
 
----
+--8<-- "_partials/section_break.md"
 
-<!-- begin section -->
 ## Docker Usage
-
-If you don’t want to install `g4x-helpers` locally, you can run all tools from the Docker image.
-
-!!! info "Why use Docker?"
-    - **No local installs**: skip creating a Python environment.  
-    - **Reproducibility**: everyone uses the same environment.  
-    - **Isolated**: nothing leaks into (or depends on) your system Python.  
-    - **Great for HPC/servers**: just bind your data directories.
-
-### prerequisites
-
-- Docker installed and running.
-- Access to the G4X-helpers image (e.g. `ghcr.io/singular-genomics/g4x-helpers:<tag>`).  
-  In your command, replace `<tag>` with a real version or `latest`.
 
 ---
 
@@ -132,9 +109,5 @@ docker run --rm \
     --sample_id sample_A01 \
     --out_dir /data/outputs/resegmentation
 ```
-<!-- end section -->
-<br>
 
----
-
-<!-- begin section -->
+--8<-- "_partials/section_break.md"

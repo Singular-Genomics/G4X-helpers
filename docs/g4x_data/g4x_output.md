@@ -111,10 +111,12 @@ Directory structure depends on run type.
     ├── summary_<sample_1>.html
     └── transcript_panel.csv
     ```
----
+
 <br>
 
 ## Sample sub-directory reference
+
+---
 
 ### root of sample_folder 
 > `run_meta.json`  
@@ -123,7 +125,7 @@ Directory structure depends on run type.
 > `transcript_panel.csv`  
 > `protein_panel.csv`  *(only when protein is included)*
 
----
+
 
 ### diagnostics
 > `transcript_table.parquet`

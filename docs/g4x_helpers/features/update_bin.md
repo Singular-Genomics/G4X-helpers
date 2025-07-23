@@ -4,6 +4,8 @@
 
 Updates an existing `.bin` segmentation file with new clustering, embedding, or color metadata from a CSV file.
 
+--8<-- "_partials/section_break.md"
+
 ## usage 
 
 ```bash
@@ -19,8 +21,6 @@ $ update_bin
   --emb_key <emb_key>
   --verbose <level>
 ```
-
-<br>
 
 ## Argument Descriptions
 
