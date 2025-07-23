@@ -9,6 +9,7 @@ exclude: (?x)(
   | ^.git
   | ^venv
   | ^.vscode
+  | ^docs/assets/
   | __pycache__
   | .pytest_cache
   | -egg-info
@@ -22,6 +23,7 @@ repos:
   hooks:
     - id: check-merge-conflict
     - id: check-yaml
+      exclude: mkdocs\.yml
     - id: check-json
     - id: check-toml
     - id: check-added-large-files

@@ -1,0 +1,385 @@
+:root {
+  /* greyscale */
+  --sg-black: #000000;
+  --sg-white: #FFFFFF;
+
+  --sg-grey-dark: #1E1E1E;
+  --sg-grey-dark-100: #212426;
+  --sg-grey-dark-300: #2E3337;
+  --sg-grey-dark-500: #3F4447;
+  --sg-grey-dark-700: #515558;
+  --sg-grey-dark-900: #626668;
+
+  --sg-grey-medium: #CCCCCC;
+  --sg-grey-medium-100: #7D7F81;
+  --sg-grey-medium-300: #8E9092;
+  --sg-grey-medium-500: #A0A1A2;
+  --sg-grey-medium-700: #B2B2B3;
+  --sg-grey-medium-900: #C3C3C4;
+
+  --sg-grey-light: #F2F2F2;
+  --sg-grey-light-100: #D0D0D0;
+  --sg-grey-light-300: #D7D7D7;
+  --sg-grey-light-500: #DFDFDF;
+  --sg-grey-light-700: #E7E7E7;
+  --sg-grey-light-900: #EEEEEE;
+
+  --sg-grey-extra-light: #F8F8F8;
+
+  --sg-blue-200: #182F3E;
+  --sg-blue-400: #123F5D;
+  --sg-blue-600: #0C507D;
+  --sg-blue-800: #06609C;
+
+  --sg-blgrn-200: #007EB7;
+  --sg-blgrn-400: #008BB2;
+  --sg-blgrn-600: #0097AE;
+  --sg-blgrn-800: #00B1A4;
+
+  --sg-green-200: #184137;
+  --sg-green-400: #12644F;
+  --sg-green-600: #0C8668;
+  --sg-green-800: #06A980;
+
+  --sg-blue: #0071BC;
+  --sg-green: #00CC99;
+  --sg-purple: #A661FF;
+  --sg-magenta: #DA54A4;
+  --sg-red: #F45959;
+  --sg-red_drk: #CB4A4A;
+  --sg-orange: #F28622;
+  --sg-yellow: #FFB800;
+
+  --sg-blgrn-dark: hsla(172, 35%, 25%, 1);
+}
+
+/* --- 2. semantic aliases that point at those tokens --- */
+:root {
+  --fg_light: var(--sg-grey-medium-900);
+
+  --text_drk: var(--sg-grey-dark-300);
+  --text_drk_2: var(--sg-grey-dark-500);
+
+  --text_lit: var(--sg-grey-medium-700);
+  --text_lit_2: var(--sg-grey-medium-300);
+
+  /* accent colours */
+  --acc_green: var(--sg-green-800);
+  --acc_blue: var(--sg-blgrn-600);
+  --acc_yellow: var(--sg-yellow);
+  --acc_orange: var(--sg-orange);
+  --acc_purple: var(--sg-purple);
+  --acc_red: var(--sg-red);
+  --marker: var(--sg-magenta);
+}
+
+[data-md-color-scheme] {
+  --md-hue: 172;
+
+  /* selectables (like tabs) */
+  --md-accent-fg-color: var(--acc_purple);
+
+  /* hover items */
+  --md-accent-bg-color: var(--acc_purple);
+  --md-accent-bg-color--light: var(--acc_red);
+
+  /* links and selected nav items */
+  --md-typeset-a-color: var(--acc_green);
+
+  /* header */
+  --md-primary-fg-color: hsla(var(--md-hue), 30%, 22%, 1);
+
+  /* header text and logos */
+  --md-primary-bg-color: var(--fg_light);
+
+  /* hover item like clickable nav arrow */
+  --md-accent-fg-color--transparent: hsla(var(--md-hue), 30%, 22%, 0.5);
+
+  /* scrollbars */
+  --md-default-fg-color--lighter: hsla(var(--md-hue), 10%, 45%, 0.5);
+
+
+
+
+
+}
+
+[data-md-color-scheme="slate"] {
+  /* surface */
+  --surface: hsla(var(--md-hue), 15%, 10%, 1);
+  --md-default-bg-color: var(--surface);
+
+  /* text */
+  --md-default-fg-color: var(--text_lit);              /* body */
+  --md-default-fg-color--light: var(--text_lit_2);     /* captions */
+
+
+  /* borders / separators / copy buttons */
+  --md-default-fg-color--lightest: var(--text_lit_2);
+
+  /* footer */
+  --md-footer-bg-color: var(--surface);
+  --md-footer-fg-color: var(--text_lit_2);
+  --md-footer-fg-color--light: var(--text_lit_2);
+
+  /* code backdrop */
+  --md-code-bg-color: hsla(var(--md-hue), 10%, 20%, 1);
+
+  /* If you want per-level control */
+  .md-typeset h1 { color: var(--text_lit_2) !important; }
+  .md-typeset h2 { color: var(--text_lit_2) !important; }
+  .md-typeset h3 { color: var(--text_lit_2) !important; }
+  .md-typeset h4 { color: var(--text_lit_2) !important; }
+  .md-typeset h5 { color: var(--text_lit_2) !important; }
+  .md-typeset h6 { color: var(--text_lit_2) !important; }
+
+}
+
+[data-md-color-scheme="default"] {
+  /* surface */
+  --surface: hsla(var(--md-hue), 15%, 82%, 1);
+  --md-default-bg-color: var(--surface);
+
+  /* text */
+  --md-default-fg-color: var(--text_drk);
+  --md-default-fg-color--light: var(--text_drk_2);
+  /* captions */
+
+  /* borders / separators / copy buttons */
+  --md-default-fg-color--lightest: var(--text_lit_2);
+
+  /* footer */
+  --md-footer-bg-color: var(--surface);
+  --md-footer-fg-color: var(--text_drk_2);
+  --md-footer-fg-color--light: var(--text_drk_2);
+
+  /* code backdrop */
+  --md-code-bg-color: hsla(var(--md-hue), 10%, 90%, 1);
+
+  /* If you want per-level control */
+  .md-typeset h1 { color: var(--text_drk_2); }
+  .md-typeset h2 { color: var(--text_drk_2); }
+  .md-typeset h3 { color: var(--text_drk_2); }
+  .md-typeset h4 { color: var(--text_drk_2); }
+  .md-typeset h5 { color: var(--text_drk_2); }
+  .md-typeset h6 { color: var(--text_drk_2); }
+}
+
+.md-search-result__meta {
+  background: #222 !important;
+}
+
+/* Base body text */
+.md-typeset {
+  font-size: 0.875rem !important;
+}
+
+/* Headings */
+.md-typeset h1 {
+  font-size: 2.5rem !important;
+  line-height: 0.25 !important;
+}
+
+.md-typeset h2 {
+  font-size: 1.8rem !important;
+  font-weight: 100 !important;
+}
+
+.md-typeset h3 {
+  font-size: 1.4rem !important;
+  font-weight: 100 !important;
+}
+
+.md-typeset h4 {
+  font-size: 1.2rem !important;
+  font-weight: 300 !important;
+}
+
+.md-typeset h5 {
+  font-weight: 500 !important;
+}
+
+
+/* Whole admonition block */
+.md-typeset .admonition,
+.md-typeset details.admonition {
+  font-size: 0.8rem !important;
+}
+
+/* The title line ("Note", "Warning", etc.) */
+.md-typeset .admonition>.admonition-title,
+.md-typeset details.admonition>summary {
+  font-size: 0.9rem !important;
+  font-weight: 500 !important;
+}
+
+
+
+/* See: https://github.com/squidfunk/mkdocs-material/issues/175#issuecomment-616694465 */
+.md-typeset__table {
+  min-width: 100%;
+}
+
+.md-typeset table:not([class]) {
+  display: table;
+}
+
+
+/* ——— Header (site title in top bar) ——— */
+.md-header__title,
+/* Material v10+          */
+.md-header__topic,
+/* Material ≤ v9          */
+.site-name {
+  /* Built-in mkdocs theme  */
+  font-weight: 200 !important;
+  font-size: 1.15rem !important;
+}
+
+
+/* Logo area, if you want it aligned with the new title height */
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 1.5rem;
+  width: 1.5rem;
+}
+
+/* ——— Navigation ——— */
+/* Omits the nav title entirely unless on a small screen, in which case
+the nav title is needed for backwards navigation in the collapsible
+nav variant.
+
+See https://github.com/astral-sh/uv/issues/5130 */
+@media screen and (min-width: 76.25em) {
+  .md-nav__title {
+    display: none;
+  }
+}
+
+/* Prevent the shadow from the nav title from blurring the top link.
+The box shadow isn't really doing anything anyway.
+
+This is a consequence of the reduced nav spacing below. */
+.md-nav--primary .md-nav__title {
+  box-shadow: none;
+}
+
+/* Bold the active nav link for accessibility */
+.md-nav__link--active {
+  font-weight: bold;
+}
+
+
+/* Always take the full screen for content, require scrolling to see the footer
+This stops the size of the nav from jumping around when you visit a page without
+a lot of content (i.e., an overview page). We don't apply this to sma screens
+because the nav is in a hamburger menu anyway
+*/
+@media screen and (min-width: 76.25em) {
+  .md-main {
+    min-height: 100vh;
+  }
+}
+
+/* Tweak the formatting of the primary nav on a large screen */
+@media screen and (min-width: 76.25em) {
+  .md-nav--primary .md-nav {
+    font-size: 0.75rem;
+  }
+
+  /* Remove the bold from the section headings, use a larger font instead */
+  .md-nav__item--section>.md-nav__link {
+    font-weight: normal;
+    font-size: 0.85rem;
+  }
+
+  /* Reducing spacing between nav items to fit more content
+  First, disable `nav__link` spacing then use `nav__item` to enforce margins this reduces inconsistencies in the spacing. */
+  .md-nav--primary .md-nav__link {
+    margin: 0.1em;
+  }
+
+  .md-nav--primary .md-nav__item {
+    margin-top: 0.35em;
+  }
+
+  /* Use larger spacing for the sections headings */
+  .md-nav--primary .md-nav__item--section {
+    margin-bottom: 1.75em;
+    margin-top: 1.75em;
+  }
+
+  /* Decrease the font size of items in a collapsible section */
+  .md-nav__item--section>.md-nav>.md-nav__list>.md-nav__item>.md-nav>.md-nav__list {
+    font-size: 0.725rem;
+  }
+
+  /* Increase top margin on the first item of a collapsible section */
+  .md-nav__item--section>.md-nav>.md-nav__list>.md-nav__item>.md-nav>.md-nav__list>.md-nav__item:first-of-type {
+    margin-top: 0.5em;
+  }
+
+  /* Increase bottom margin on the last item of a collapsible section */
+  .md-nav__item--section>.md-nav>.md-nav__list>.md-nav__item>.md-nav>.md-nav__list>.md-nav__item:last-of-type {
+    margin-bottom: 0.575em;
+  }
+
+  /* Increase the size of the first nav item to match the sections
+  It has no children, so it is not considered a section */
+  .md-nav--primary>.md-nav__list>.md-nav__item:first-of-type {
+    font-size: 0.85rem;
+    margin-bottom: 0.75em;
+  }
+}
+
+
+
+/* See: https://mkdocstrings.github.io/recipes/#prevent-selection-of-prompts-and-output-in-python-code-blocks */
+.highlight .gp,
+.highlight .go {
+  /* Generic.Prompt, Generic.Output */
+  user-select: none;
+}
+
+/* works with or without navigation.tabs */
+.md-nav__item--section>.md-nav__link,
+.md-nav__item--section>label {
+  /* label = collapsed sections */
+  font-weight: 500;
+  /* or 600 for semi-bold        */
+  font-size: 0.85rem;
+  /* default is 0.8 rem          */
+  letter-spacing: 0.02em;
+  /* optional for clarity        */
+}
+
+
+/* move every link that *isn’t* the section title 1 rem to the right */
+.md-nav__item--section .md-nav__item>.md-nav__link {
+  padding-left: 0.5rem;
+  /* tweak to taste */
+}
+
+/* Styling for anchor link headers */
+.toclink {
+  color: unset !important;
+}
+
+.toclink:hover {
+  color: var(--md-accent-fg-color) !important;
+}
+
+/* Omit the first breadcrumb item, which is the "Introduction" */
+.md-path__list>.md-path__item:first-of-type {
+  display: none;
+}
+
+.md-path__list>.md-path__item:nth-of-type(2):before {
+  display: none;
+}
+
+/* Hide the modified date — its positioning is awkward but will require theme
+modifications */
+.md-source-file__fact {
+  visibility: hidden;
+}
