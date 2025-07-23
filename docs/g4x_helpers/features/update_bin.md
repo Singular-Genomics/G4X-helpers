@@ -1,9 +1,10 @@
+
 # `--update_bin`
-# Update G4X-Viewer `.bin` file with new metadata
+#### Update G4X-Viewer `.bin` file with new metadata
 
 Updates an existing `.bin` segmentation file with new clustering, embedding, or color metadata from a CSV file.
 
-## Usage 
+## usage 
 
 ```bash
 $ update_bin 
@@ -22,51 +23,41 @@ $ update_bin
 <br>
 
 ## Argument Descriptions
----
 
-### `--bin_file` (required)
-> **Type:** `str`  
-> **Description:**  
+### required
+---
+#### `--bin_file`: (*type:* `str`)
+ 
 > Path to the existing `.bin` file used by the G4X-Viewer. This file will be updated with metadata from the provided CSV file.
 
-### `--out_path` (required)
-> **Type:** `str`  
-> **Description:**  
+#### `--out_path`: (*type:* `str`)
+
 > Output path where the updated `.bin` file will be saved. The directory will be created if it doesn't already exist.
 
-### `--metadata` (required)
-> **Type:** `str`  
-> **Description:**  
+#### `--metadata`: (*type:* `str`)
+
 > Path to a CSV file containing metadata to update the `.bin` file. This file must include a header row and should contain cell IDs, optional cluster assignments, colors, and embeddings.
 
-### `--cellid_key` (optional)
-> **Type:** `str`  
-> **Default:** `None`  
-> **Description:**  
+### optional
+---
+#### `--cellid_key`: (*type:* `str`  *default:* `None`)
+
 > Name of the column in the metadata file that contains cell IDs matching those in the `.bin` file. If not provided, the first column in the metadata will be used.
 
-### `--cluster_key` (optional)
-> **Type:** `str`  
-> **Default:** `None`  
-> **Description:**  
+#### `--cluster_key`: (*type:* `str`  *default:* `None`)
+
 > Column name in the metadata that provides cluster assignments for each cell. Required if `--cluster_color_key` is used.
 
-### `--cluster_color_key` (optional)
-> **Type:** `str`  
-> **Default:** `None`  
-> **Description:**  
+#### `--cluster_color_key`: (*type:* `str`  *default:* `None`)
+
 > Column name in the metadata that provides RGB or hex colors for each cluster. Must be used in conjunction with `--cluster_key`.
 
-### `--emb_key` (optional)
-> **Type:** `str`  
-> **Default:** `None`  
-> **Description:**  
+#### `--emb_key`: (*type:* `str`  *default:* `None`)
+
 > Prefix for embedding coordinates. The script will look for two columns: `{emb_key}_0` and `{emb_key}_1`. Used to embed cells in UMAP/tSNE/etc. space.
 
-### `--verbose` (optional)
-> **Type:** `int`  
-> **Default:** `1`  
-> **Description:**  
+#### `--verbose`: (*type:* `int`  *default:* `1`)
+
 > Logging verbosity level:
 > - `0` = WARNING  
 > - `1` = INFO  

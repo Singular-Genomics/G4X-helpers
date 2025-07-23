@@ -1,6 +1,8 @@
-# <span class="index-cat-header">G4X output structure</span>
+<br>
 
-### sample output directory
+# G4X output structure
+
+### Sample directory tree
 Directory structure depends on run type.
 
 === "Transcript & Protein"
@@ -112,7 +114,9 @@ Directory structure depends on run type.
 ---
 <br>
 
-## root of sample_folder 
+## Sample sub-directory reference
+
+### root of sample_folder 
 > `run_meta.json`  
 > `samplesheet.csv`  
 > `summary_<sample_1>.html`  
@@ -121,14 +125,14 @@ Directory structure depends on run type.
 
 ---
 
-## diagnostics
+### diagnostics
 > `transcript_table.parquet`
 
 ---
 
-## g4x_viewer
+### g4x_viewer
 > `<sample_1>.bin`  
-> `<sample_1>.ome.tiff  protein runs only`  
+> `<sample_1>.ome.tiff` *(only when protein is included)*  
 > `<sample_1>.tar`  
 > `<sample_1>_HE.ome.tiff`  
 > `<sample_1>_nuclear.ome.tiff`  
@@ -136,7 +140,7 @@ Directory structure depends on run type.
 
 ---
 
-## h_and_e
+### h_and_e
 > `eosin.jp2`  
 > `eosin_thumbnail.png`  
 > `h_and_e.jp2`  
@@ -146,13 +150,13 @@ Directory structure depends on run type.
 
 ---
 
-## metrics
+### metrics
 > `core_metrics.csv`  
 > `per_area_metrics.csv`  
 
 ---
 
-## protein 
+### protein 
 *(only when protein is included)*
 > `<protein_1>.jp2`  
 > `<protein_1>_thumbnail.png`  
@@ -162,17 +166,17 @@ Directory structure depends on run type.
 
 ---
 
-## rna
+### rna
 > `transcript_table.csv.gz`  
 
 ---
 
-## segmentation
+### segmentation
 > `segmentation_mask.npz`  
 
 ---
 
-## single_cell_data
+### single_cell_data
 > `cell_by_protein.csv.gz`  *(only when protein is included)*  
 > `cell_by_transcript.csv.gz`  
 > `cell_metadata.csv.gz`  

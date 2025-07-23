@@ -1,7 +1,9 @@
-# <span class="index-cat-header">CLI features</span>
+<br>
+
+# CLI features
 
 <!-- begin section -->
-### G4X-helpers provides the following CLI commands:
+#### G4X-helpers provides the following CLI commands:
 
 - [--resegment](./resegment.md) : reprocess G4X output with a new segmentation 
 - [--update_bin](./update_bin.md) : update G4X-viewer `.bin` file with new metadata

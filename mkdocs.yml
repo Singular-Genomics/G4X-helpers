@@ -50,6 +50,9 @@ theme:
 
     - toc.follow
 
+    - search.suggest
+    - search.share
+
   palette:
     - scheme: slate
       primary: custom

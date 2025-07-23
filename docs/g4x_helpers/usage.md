@@ -1,4 +1,6 @@
-# <span class="index-cat-header">usage</span>
+<br>
+
+# usage
 
 
 <!-- begin section -->
@@ -26,7 +28,7 @@ If your installation of G4X-helpers was successful, you can call the following c
 
 G4X-helpers offers several tools for common post-processing needs, each of which is described in detail in the [CLI features](./features/index.md) section.
 
-### Basic pattern
+### basic pattern
 every command follows standard CLI syntax:
 ```
 $ command_name --option_1 VALUE_OPTION_1 --option_2 VALUE_OPTION_2
@@ -35,7 +37,7 @@ $ command_name --option_1 VALUE_OPTION_1 --option_2 VALUE_OPTION_2
 To use these functions, you will need the contents of a [G4X output folder](../g4x_data/g4x_output.md), which is referred to as `run_base`, and in some cases some externally generated files.
 
 
-### Example: using `--resegment` from the CLI
+### example: using `--resegment` from the CLI
 In the following example we want to apply a custom cell segmentation to our data, which is done via the `--resegment` tool.
 
 In the [feature reference](./features/resegment.md) for this command, we can see that there are required and optional arguments.
@@ -86,7 +88,7 @@ If you don’t want to install `g4x-helpers` locally, you can run all tools from
     - **Isolated**: nothing leaks into (or depends on) your system Python.  
     - **Great for HPC/servers**: just bind your data directories.
 
-### Prerequisites
+### prerequisites
 
 - Docker installed and running.
 - Access to the G4X-helpers image (e.g. `ghcr.io/singular-genomics/g4x-helpers:<tag>`).  
@@ -94,7 +96,7 @@ If you don’t want to install `g4x-helpers` locally, you can run all tools from
 
 ---
 
-### Basic pattern
+### basic pattern
 
 When running via Docker, the pattern is similar to invoking a CLI command, with the exception that all paths and the Docker image need to be specified.
 Inside the container, always reference the mounted paths (e.g. /data/...), not the host paths ([see full example below](#example-using-resegment-in-docker)).
@@ -114,7 +116,7 @@ docker run --rm \
 + `ghcr.io/singular-genomics/g4x-helpers:latest` uses the latest version of G4X-helpers
 
 
-### Example: using `--resegment` in Docker
+### example: using `--resegment` in Docker
 
 Here we run the same --resegment command as in the [cli-example](#example-using-resegment-from-the-cli) above
 

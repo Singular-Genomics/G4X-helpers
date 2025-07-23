@@ -1,4 +1,6 @@
-# <span class="index-cat-header">installation</span>
+<br>
+
+# installation
 
 This page explains how you can install G4X-helpers on your local machine. However, if you’re happy running the tool via `Docker`, you can skip the installation steps below and head to the [docker usage](usage.md/#cli-usage) section.  
 
@@ -62,7 +64,7 @@ $ cd G4X-helpers
 
 === "<span style="font-size:1rem">Conda (recommended)</span>"
 
-    ### Create a `Conda` environment
+    #### Create a `Conda` environment
 
     Install **miniconda**, **conda**, or **mamba**. ([instructions](https://www.anaconda.com/docs/getting-started/miniconda/install))  
     <br>
@@ -81,7 +83,7 @@ $ cd G4X-helpers
     $ conda activate g4x-helpers_env
     ```
 
-    ### Install the package:
+    #### Install the package:
     
     ```bash
     $ pip install .
@@ -89,14 +91,14 @@ $ cd G4X-helpers
 
 === "<span style="font-size:1rem">pip</span>"
     
-    ### Install into your current python environment via `pip`
+    #### Install into your current python environment via `pip`
     
     ```bash
     $ pip install .
     ```
 
 === "<span style="font-size:1rem">uv</span>"
-    ### Create a `venv` using [uv](https://docs.astral.sh/uv/)
+    #### Create a `venv` using [uv](https://docs.astral.sh/uv/)
 
     ```bash
     $ uv sync

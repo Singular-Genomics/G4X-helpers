@@ -1,15 +1,17 @@
-# <span class="index-cat-header">G4X data import</span>
+<br>
+
+# G4X data import
 
 The multi-modal output of the G4X spatial sequencer comprises images, tables and annotated data matrices, which allow deep exploration of your sample. The `single_cell_data` folder in the G4X output contains the final processed form of the data, after transcript and image signals have been aggreagted for each each segmented cell. There are several excellent open-source tools available that enable the full stack of analytical needs to gain biological insight from this data.  
 
-### Below we illustrate data import strategies for [Python](#if-you-are-working-in-python) and [R](#if-you-are-working-in-r) users:
+#### Below we illustrate data import strategies for [Python](#if-you-are-working-in-python) and [R](#if-you-are-working-in-r) users:
 
 ---
 <br>
 <!-- end section -->
 
 <!-- begin section -->
-# if you are working in Python
+## if you are working in Python
 Some excellent tools are:
 
 + `scanpy`: full-featured single-cell analysis suite
@@ -22,7 +24,7 @@ Some excellent tools are:
 All of these tools accept, or incorporate `anndata` objects as the basic representation of your single-cell data. There are several ways to load your data as an `anndata` object into your Python session. Below we will illustrate a few methods that will produce equivalent outputs.
 
 
-## 1. G4X-helpers
+### 1. G4X-helpers
 
 If you have G4X-helpers installed, you can use the `G4Xoutput()` class to access the anndata of your sample via the `load_adata()` method.
 
@@ -36,14 +38,14 @@ sample = g4x.G4Xoutput(run_base=run_base)
 adata = sample.load_adata(remove_nontargeting=False, load_clustering=False) 
 ```
 
-!!!note 
-    ### `load_adata()` options
+!!!note "Note: `load_adata()` options"
+    
     Two options are provided that will impact what will be loaded. In the above example we are overriding the default so that the output matches the other methods.  
     `remove_nontargeting`: bool (default=True)  
     `load_clustering`: bool (default=True)
 
 
-## 2. scanpy
+### 2. scanpy
 
 You can achieve the same result by pointing scanpy's `read_h5ad()` function the `feature_matrix.h5` in your G4X output directory
 
@@ -61,7 +63,7 @@ adata = sc.read_h5ad(ad_file)
     If you have installed G4X-helpers, then `scanpy` will be available as one of its dependencies. If not, please refer to the [scanpy](https://scanpy.readthedocs.io/en/stable/) documentation for installation guides.
 
 
-## 3. building from raw data
+### 3. building from raw data
 
 If you do not wish to use the pre-generated `feature_matrix.h5` you can replicate a similar object by reading the counts and cell metadata into an `anndata` object.
 
@@ -93,7 +95,7 @@ adata.var_names = counts.columns
 <!-- end section -->
 
 <!-- begin section -->
-# if you are working in R
+## if you are working in R
 
 The most feature rich package for single-cell analysis in R is:
 

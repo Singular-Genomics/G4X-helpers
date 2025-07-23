@@ -1,11 +1,12 @@
+
 # `--resegment`
-# Reprocess G4X output with a new segmentation
+#### Reprocess G4X output with a new segmentation
 
 Replaces or updates the segmentation mask in a G4X run and regenerates all downstream single-cell data and `.bin` files.
 
 ## usage
 
-``` console
+``` bash
 $ resegment
   --run_base /path/to/G4X/output 
   --segmentation_mask /path/to/new_mask.npz 
@@ -20,29 +21,29 @@ $ resegment
 
 <br>
 
-# Argument Descriptions
+## Argument Descriptions
 
-## required
+### required
 ---
-### `--run_base`: (*type:* `str`)
+#### `--run_base`: (*type:* `str`)
  
 > Path to the G4X sample output folder (the base directory for the run). This directory must contain required files such as `run_meta.json`, segmentation masks, and panel files.
 
-### `--segmentation_mask`: (*type:* `str`)
+#### `--segmentation_mask`: (*type:* `str`)
 
 > Path to the new segmentation mask file. Supported formats include `.npy`, `.npz`, and `.geojson`. This file will be used to replace the existing mask for transcript and protein signal assignment.
 
-## optional
+### optional
 ---
-### `--sample_id`: (*type:* `str`  *default:* `None`)
+#### `--sample_id`: (*type:* `str`  *default:* `None`)
 
 > Optional sample identifier. If not provided, the sample ID will be inferred from the name of the `run_base` directory.
 
-### `--out_dir`: (*type:* `str`  *default:* `None`)
+#### `--out_dir`: (*type:* `str`  *default:* `None`)
 
 > Directory to write the updated segmentation and downstream output files. If not provided, existing files in the `run_base` directory will be overwritten in-place.
 
-### `--segmentation_mask_key`: (*type:* `str`  *default:* `None`)
+#### `--segmentation_mask_key`: (*type:* `str`  *default:* `None`)
 
 > Specifies the identifier for segmentation labels when loading mask data:
 
@@ -53,11 +54,11 @@ $ resegment
 > By default, cell labels are expected in a column named `label`.  
 > Use this argument to override and select a different column as the label source.
 
-### `--threads`: (*type:* `int`  *default:* `4`)
+#### `--threads`: (*type:* `int`  *default:* `4`)
 
 > Number of threads to use for segmentation, signal extraction, and downstream computation.
 
-### `--verbose`: (*type:* `int`  *default:* `1`)
+#### `--verbose`: (*type:* `int`  *default:* `1`)
 
 > Logging verbosity level.  
 > This affects how much information is printed to the console during execution.  
