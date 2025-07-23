@@ -1,5 +1,5 @@
 [tool.bumpversion]
-current_version = "0.4.0"
+current_version = "0.4.1"
 
 parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
 serialize = ["{major}.{minor}.{patch}"]
@@ -25,7 +25,7 @@ commit_args = ""
 setup_hooks = []
 pre_commit_hooks = ["pre-commit run --all-files"]
 post_commit_hooks = [
-  "mkdocs gh-deploy --clean --message 'docs: {current_version} → {new_version}'",
+  "mkdocs gh-deploy --clean --message \"docs: $(git describe --tags --abbrev=0)\"",
   "git push --follow-tags origin HEAD"
 ]
 
