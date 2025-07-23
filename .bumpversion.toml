@@ -24,7 +24,10 @@ moveable_tags = []
 commit_args = ""
 setup_hooks = []
 pre_commit_hooks = ["pre-commit run --all-files"]
-post_commit_hooks = ["git push --follow-tags origin HEAD"]
+post_commit_hooks = [
+  "mkdocs gh-deploy --clean --message 'docs: {current_version} → {new_version}'",
+  "git push --follow-tags origin HEAD"
+]
 
 [[tool.bumpversion.files]]
 filename = "pyproject.toml"
