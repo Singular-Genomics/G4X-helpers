@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import os
+import gzip
+import shutil
 import zipfile
 from pathlib import Path
 
@@ -124,3 +126,12 @@ def npzGetShape(npz, key):
             return shape
         else:
             raise KeyError('{} not in archive'.format(key))
+
+
+def gzip_file(outfile: str | Path, remove_original: bool = False) -> None:
+    outfile = Path(outfile)
+    with open(outfile, "rb") as f_in:
+        with gzip.open(outfile.with_suffix(".csv.gz"), "wb") as f_out:
+            shutil.copyfileobj(f_in, f_out)
+    if remove_original:
+        os.remove(outfile)
