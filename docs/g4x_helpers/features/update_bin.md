@@ -1,3 +1,4 @@
+<br>
 
 # `--update_bin`
 #### Update G4X-Viewer `.bin` file with new metadata

@@ -1,3 +1,4 @@
+<br>
 
 # `--new_bin`
 #### Generate G4X-viewer `.bin` files from G4X Sample Output

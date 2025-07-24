@@ -2,7 +2,7 @@
 
 # source installation
 
-This page explains how you can install G4X-helpers on your local machine. If you’re happy running the tool via `Docker`, you can skip these installation steps and head to the [Docker usage](usage.md/#cli-usage) section.  
+This page explains how you can install G4X-helpers on your local machine. If you’re happy running the tool via `Docker`, you can skip these installation steps and head to the [Docker setup](docker.md) section.  
 
 **You only need a local install if you want to:**
 
@@ -16,7 +16,7 @@ if these use case apply to you, please read on
 
 --8<-- "_partials/section_break.md"
 
-## Step 1: clone the [`g4x-helpers`](https://github.com/Singular-Genomics/G4X-helpers) repository
+## Step 1: clone the [`G4X-helpers`](https://github.com/Singular-Genomics/G4X-helpers) repository
 
 ```bash
 $ git clone git@github.com:Singular-Genomics/G4X-helpers.git
@@ -116,7 +116,7 @@ $ python -c "import glymur; print(glymur.version.openjpeg_version)"
     2.4.1
     ```
 
-An OpenJPEG version above `2.2.0` is detected. You can now proceed to [use](./usage.md) G4X-helpers
+An OpenJPEG version above `2.2.0` is detected. You can now proceed to [use](../usage.md) G4X-helpers
 
 !!! warning 
     ```

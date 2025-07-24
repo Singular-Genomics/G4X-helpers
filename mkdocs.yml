@@ -72,7 +72,9 @@ theme:
 
 
 extra_css:
+  - stylesheets/sg_colors.css
   - stylesheets/extra.css
+  - stylesheets/navbar.css
 
 exclude_docs: |
   _partials/section_break.md
@@ -86,15 +88,15 @@ nav:
       - g4x_helpers/index.md
       - installation:
         - g4x_helpers/installation/index.md
-        - g4x_helpers/installation/source.md
-        - g4x_helpers/installation/docker.md
+        - source install: g4x_helpers/installation/source.md
+        - Docker setup: g4x_helpers/installation/docker.md
 
       - CLI features:
         - g4x_helpers/features/index.md
-        - g4x_helpers/features/resegment.md
-        - g4x_helpers/features/update_bin.md
-        - g4x_helpers/features/new_bin.md
-        - g4x_helpers/features/tar_viewer.md
+        - --resegment: g4x_helpers/features/resegment.md
+        - --update_bin: g4x_helpers/features/update_bin.md
+        - --new_bin: g4x_helpers/features/new_bin.md
+        - --tar_viewer: g4x_helpers/features/tar_viewer.md
 
       - usage: g4x_helpers/usage.md
 

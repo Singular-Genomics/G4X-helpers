@@ -17,13 +17,13 @@ These pages provide documentation, example workflows, and helper tools for analy
 
 `$ git clone https://github.com/singular-genomics/g4x-helpers`
 
-With [`g4x-helpers`](https://github.com/Singular-Genomics/G4X-helpers) we provide an open-source toolkit for common post-processing tasks — such as applying custom segmentations or adding your own labels to the G4X-viewer. You can access its core features from the command-line interface (CLI) and additionally import it as a standalone Python package to interact with your data.
+With [G4X-helpers](https://github.com/Singular-Genomics/G4X-helpers) we provide an open-source toolkit for common post-processing tasks — such as applying custom segmentations or adding your own labels to the G4X-viewer. You can access its core features from the command-line interface (CLI) and additionally import it as a standalone Python package to interact with your data.
 
 #### In this section you can:
 
-+ learn how to [install](./g4x_helpers/installation.md) G4X-helpers on your system
++ learn how to [install](./g4x_helpers/installation/index.md) G4X-helpers on your system
 + get started with [using](./g4x_helpers/usage.md) the command line interface (CLI)
-+ find a description of [CLI features](./g4x_helpers/usage.md) 
++ find a description of [CLI features](./g4x_helpers/features/index.md) 
 
 --8<-- "_partials/section_break.md"
 
