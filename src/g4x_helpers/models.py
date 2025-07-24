@@ -349,25 +349,25 @@ class G4Xoutput:
         outfile = reseg._create_custom_out(self, out_dir, 'rna', 'transcript_table.csv')
         self.logger.debug(f'transcript table --> {outfile}')
         reads_new_labels.write_csv(outfile)
-        _= utils.gzip_file(outfile, remove_original= True)
+        _ = utils.gzip_file(outfile, remove_original=True)
 
         outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'cell_by_transcript.csv')
         self.logger.debug(f'cell x transcript --> {outfile}')
         cell_by_gene.write_csv(outfile)
-        _= utils.gzip_file(outfile, remove_original= True)
+        _ = utils.gzip_file(outfile, remove_original=True)
 
         outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'cell_by_protein.csv')
         self.logger.debug(f'cell x protein --> {outfile}')
         cell_by_protein.write_csv(outfile)
-        _= utils.gzip_file(outfile, remove_original= True)
-        
+        _ = utils.gzip_file(outfile, remove_original=True)
+
         outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'feature_matrix.h5')
         self.logger.debug(f'single-cell h5 --> {outfile}')
         adata.write_h5ad(outfile)
 
         outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'cell_metadata.csv.gz')
         self.logger.debug(f'cell metadata --> {outfile}')
-        adata.obs.to_csv(outfile, compression="gzip")
+        adata.obs.to_csv(outfile, compression='gzip')
 
         protein_only_list = [p for p in signal_list if p not in ['nuclear', 'eosin']]
         if gen_bin_file:

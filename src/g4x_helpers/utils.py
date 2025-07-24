@@ -130,8 +130,8 @@ def npzGetShape(npz, key):
 
 def gzip_file(outfile: str | Path, remove_original: bool = False) -> None:
     outfile = Path(outfile)
-    with open(outfile, "rb") as f_in:
-        with gzip.open(outfile.with_suffix(".csv.gz"), "wb") as f_out:
+    with open(outfile, 'rb') as f_in:
+        with gzip.open(outfile.with_suffix('.csv.gz'), 'wb') as f_out:
             shutil.copyfileobj(f_in, f_out)
     if remove_original:
         os.remove(outfile)
