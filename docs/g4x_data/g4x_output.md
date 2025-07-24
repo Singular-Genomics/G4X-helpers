@@ -186,10 +186,6 @@ Directory structure depends on run type.
 > `dgex.csv.gz`  
 > `feature_matrix.h5`  
 
-<br>
-
 ---
 
-
-
-<br>
+--8<-- "_partials/end_cap.md"

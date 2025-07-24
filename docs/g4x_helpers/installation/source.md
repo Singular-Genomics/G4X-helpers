@@ -28,13 +28,11 @@ $ cd G4X-helpers
 ```
 
 !!!note
-    all following steps assume that you are in the G4X-helpers directory. You can confirm this via:
+    all following steps assume that you are in the G4X-helpers directory. You can confirm this in your terminal via `pwd`.
+    You should see a path ending in: `/G4X-helpers`:
     ```bash
     $ pwd
-    ```
-    you should see a path ending in: G4X-helpers
-    ```bash
-    $ /path/to/current/directory/.../G4X-helpers
+    /path/to/current/directory/.../G4X-helpers
     ```
 
 --8<-- "_partials/section_break.md"
@@ -163,3 +161,22 @@ Hints on other systems are provided, but not supported! You can find further det
     ```
 
 --8<-- "_partials/section_break.md"
+
+
+## verify installation
+
+To start using G4X-helpers, ensure that you have activated the environment in which the package was installed. 
+If your installation of G4X-helpers was successful, you can call the following commands from any terminal and help statements should be printed:
+
+
++ `resegment --help`  
++ `update_bin --help`  
++ `new_bin --help`  
++ `tar_viewer --help`
+
+
+!!!tip
+    you can see the output of such a `--help` statement in the [CLI usage](../usage.md/#cli-usage) section.
+
+
+--8<-- "_partials/end_cap.md"

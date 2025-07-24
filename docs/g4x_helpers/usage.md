@@ -1,20 +1,6 @@
 <br>
 
 # usage
-## verify installation
-
-To start using G4X-helpers, ensure that you have activated the environment in which the package was installed. 
-If your installation of G4X-helpers was successful, you can call the following commands from any terminal and help statements should be printed:
-
-
-+ `resegment --help`  
-+ `update_bin --help`  
-+ `new_bin --help`  
-+ `tar_viewer --help`
-
-
-!!!tip
-    [further down](#example-using-resegment-from-the-cli) you can see the output of such a `--help` statement
 
 --8<-- "_partials/section_break.md"
 
@@ -110,4 +96,4 @@ docker run --rm \
     --out_dir /data/outputs/resegmentation
 ```
 
---8<-- "_partials/section_break.md"
+--8<-- "_partials/end_cap.md"

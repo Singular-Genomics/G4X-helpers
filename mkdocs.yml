@@ -154,6 +154,8 @@ extra:
     - icon: /fontawesome/regular/envelope
       name: support
       link: mailto:care@singulargenomics.com
+    - icon: fontawesome/brands/x-twitter
+      link: https://x.com/SingularGenomic
 
 validation:
   omitted_files: warn

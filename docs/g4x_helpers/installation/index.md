@@ -19,7 +19,7 @@ Which route to choose depends on your **use-case**:
 
 ### 2. Docker setup
 
-**Please head to the [Docker](./docker.md) section if you want to:**
+**Please head to the [Docker setup](./docker.md) section if you want to:**
 
 + avoid creating or managing local Python environments
 + guarantee reproducibility (everyone runs the exact same image)
@@ -30,3 +30,5 @@ things to know:
 
 + you still need to install Docker (or Apptainer/Singularity ... ).  
 + first pull can be large; subsequent runs are fast thanks to caching layers.
+
+--8<-- "_partials/end_cap.md"

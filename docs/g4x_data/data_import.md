@@ -113,4 +113,4 @@ metadata <- read.csv(metadata_path, row.names = 1)
 sobj <- CreateSeuratObject(counts = counts, meta.data = metadata)
 ```
 
---8<-- "_partials/section_break.md"
+--8<-- "_partials/end_cap.md"
