@@ -10,6 +10,4 @@
 - [--new_bin](./new_bin.md) : generate G4X-viewer `.bin` files from sample output
 - [--tar_viewer](./tar_viewer.md) : package G4X-viewer folder for distribution
   
----
-<br>
-<!-- end section -->
+--8<-- "_partials/end_cap.md"

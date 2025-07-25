@@ -6,9 +6,10 @@ The multi-modal output of the G4X spatial sequencer comprises images, tables and
 
 #### Below we illustrate data import strategies for [Python](#if-you-are-working-in-python) and [R](#if-you-are-working-in-r) users:
 
---8<-- "_partials/section_break.md"
+<br>
 
 ## if you are working in Python
+---
 Some excellent tools are:
 
 + `scanpy`: full-featured single-cell analysis suite
@@ -18,7 +19,7 @@ Some excellent tools are:
 
 <br>
 
-All of these tools accept, or incorporate `anndata` objects as the basic representation of your single-cell data. There are several ways to load your data as an `anndata` object into your Python session. Below we will illustrate a few methods that will produce equivalent outputs.
+All of these tools accept, or incorporate [`anndata`](https://anndata.readthedocs.io/en/stable/) objects as the basic representation of your single-cell data. There are several ways to load your data as an `anndata` object into your Python session. Below we will illustrate a few methods that will produce equivalent outputs.
 
 
 ### 1. G4X-helpers
@@ -57,7 +58,7 @@ adata = sc.read_h5ad(ad_file)
 ```
 
 !!!note
-    If you have installed G4X-helpers, then `scanpy` will be available as one of its dependencies. If not, please refer to the [scanpy](https://scanpy.readthedocs.io/en/stable/) documentation for installation guides.
+    If you have G4X-helpers installed, then `scanpy` will be available as one of its dependencies. If not, please refer to the [scanpy](https://scanpy.readthedocs.io/en/stable/) documentation for installation guides.
 
 
 ### 3. building from raw data
@@ -85,11 +86,12 @@ adata.var_names = counts.columns
 ```
 
 !!!note
-    If you have installed G4X-helpers, then `anndata`, `pandas` and `scipy` will be available as dependencies.
+    If you have G4X-helpers installed, then `anndata`, `pandas` and `scipy` will be available as dependencies.
 
---8<-- "_partials/section_break.md"
+<br>
 
 ## if you are working in R
+---
 
 The most feature rich package for single-cell analysis in R is:
 
@@ -113,4 +115,4 @@ metadata <- read.csv(metadata_path, row.names = 1)
 sobj <- CreateSeuratObject(counts = counts, meta.data = metadata)
 ```
 
---8<-- "_partials/section_break.md"
+--8<-- "_partials/end_cap.md"

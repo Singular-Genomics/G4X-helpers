@@ -7,18 +7,13 @@
 [MDAnalysis]: https://userguide.mdanalysis.org/stable/contributing.html
 
 
-<!-- <span class="index-cat-header">contributing</span> -->
+<!-- excluding this header from toc -->
+<h3>Contributions to G4X-helpers are welcome!</h3>  
 
-
-### Contributions to `G4X-helpers` are welcome!  
 This section provides some guidelines and tips to follow when you wish to enrich the project with your own code or documentation.
 
-<br>
-
----
-
-<!-- begin section -->
 ## Index
+---
 + [Development workflow](#development-workflow)  
 + [Working with git](#working-with-git)
 + [Building and managing your environment](#building-and-managing-your-environment)
@@ -28,17 +23,13 @@ This section provides some guidelines and tips to follow when you wish to enrich
 <br>
 
 !!!info
-    Parts of these guidelines have been adapted from the [scanpy docs][], which in turn built on the work done by [pandas][] and [MDAnalysis][].
+    Parts of these guidelines have been adapted from the [scanpy docs][], which in turn built on the work done by [pandas][] and [MDAnalysis][].  
     We highly recommend checking out these excellent guides to learn more.
 
 <br>
 
+## Development workflow
 ---
-<br>
-<!-- end section -->
-
-<!-- begin section -->
-# Development workflow
 
 The life-cycle of a new feature or other contribution should follow this pattern:
 
@@ -51,12 +42,8 @@ The life-cycle of a new feature or other contribution should follow this pattern
 
 <br>
 
+## Working with `git`
 ---
-<br>
-<!-- end section -->
-
-<!-- begin section -->
-# Working with `git`
 
 This section of the docs covers our practices for working with `git` on our codebase.  
 For more in-depth guides, we can recommend a few sources:
@@ -68,7 +55,7 @@ For more in-depth guides, we can recommend a few sources:
 : Configuring git to work with your GitHub user account
 
 
-## Forking and cloning
+### Forking and cloning
 
 To get the code, and be able to push changes back to the main project, you'll need to (1) fork the repository on github and (2) clone the repository to your local machine.
 
@@ -83,18 +70,17 @@ This will fork the repo to your github account, create a clone of the repo on yo
 To do this manually, first make a fork of the repository by clicking the "fork" button on our main github package. Then, on your machine, run:
 
 ```bash
-$ # Clone your fork of the repository (substitute in your username)
+# Clone your fork of the repository (substitute in your username)
 $ git clone https://github.com/{your-username}/G4X-helpers.git
 
-$ # Enter the cloned repository
+# Enter the cloned repository
 $ cd G4X-helpers
 
-$ # Add our repository as a remote
+# Add our repository as a remote
 $ git remote add upstream https://github.com/Singular-Genomics/G4X-helpers.git
-$ # git branch --set-upstream-to "upstream/main"
 ```
 
-## Creating a branch for your feature
+### Creating a branch for your feature
 
 All development should occur in branches dedicated to the particular work being done.
 Additionally, unless you are a maintainer, all changes should be directed at the `main` branch.
@@ -106,7 +92,7 @@ $ git pull                          # Syncing with the repo
 $ git switch -c {your-branch-name}  # Making and changing to the new branch
 ```
 
-## Committing your code
+### Committing your code
 
 Keep commits small, focused, and well-described. This makes code review easier and history clearer.
 When you are ready, add the files that belong to your commit:
@@ -129,15 +115,15 @@ $ git commit -m "Fix NPE in sample parser when header is missing"
     Need to fix the last commit before pushing?
     `git commit --amend` lets you change the message or add more files.
 
-## Opening a pull request
+### Opening a pull request
 
 When you're ready to have your code reviewed, push your changes up to your fork:
 
 ```bash
-$ # The first time you push the branch, you'll need to tell git where
+# The first time you push the branch, you'll need to tell git where
 $ git push --set-upstream origin {your-branch-name}
 
-$ # After that, just use
+# After that, just use
 $ git push
 ```
 
@@ -147,18 +133,14 @@ GitHub may also prompt you to open PRs for recently pushed branches.
 !!!info
     It is important to summarize your changes in the description of the PR so that they get included in the next change-log
 
-We'll try and get back to you soon!
+*We'll try and get back to you soon!*
 
 <br>
 
+## Building and managing your environment
 ---
-<br>
-<!-- end section -->
 
-<!-- begin section -->
-# Building and managing your environment
-
-## Installing project dependencies
+### Installing project dependencies
 
 It is recommended to develop your feature in an isolated virtual environment.
 There are many environment managers available for Python (conda, pyenv, Virtualenv ...)
@@ -179,7 +161,7 @@ $ source .venv/bin/activate
 
 <br>
 
-## Using pre-commit hooks
+### Using pre-commit hooks
 
 We use [pre-commit][] to run various checks on new code.  
 
@@ -197,7 +179,7 @@ If you choose not to run the hooks on each commit, you can run them manually wit
 `pre-commit run --files={your files}`.
 
 !!!note
-    If your environment manager did not install pre-commit as a dependency, you can do so via
+    If your environment manager did not install pre-commit as a dependency, you can do so via:
 
     ```bash
     $ pip install pre-commit
@@ -205,19 +187,15 @@ If you choose not to run the hooks on each commit, you can run them manually wit
 
 <br>
 
-## Code formatting and linting
+### Code formatting and linting
 We use [Ruff](https://docs.astral.sh/ruff) to format and lint the `G4X-helpers` codebase. Ruff is a project dependency and its rules are configured in `ruff.toml`. It  will be invoked on all code contributions via pre-commit hooks (see above) but you can also run it manually via `ruff check`.
 
 <br>
 
+## Documentation
 ---
-<br>
-<!-- end section -->
 
-<!-- begin section -->
-# Documentation
-
-## docstrings
+### docstrings
 
 We prefer the numpydoc style for writing docstrings.
 We'd primarily suggest looking at existing docstrings for examples, but the [napolean guide to numpy style docstrings][] is also a great source.
@@ -229,7 +207,7 @@ Look at [`sc.tl.leiden`](https://github.com/scverse/scanpy/blob/350c3424d2f96c4a
 [sphinx rst primer]: https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html
 
 
-### `Params` section
+#### `Params` section
 
 The `Params` abbreviation is a legit replacement for `Parameters`.
 
@@ -246,7 +224,7 @@ Always specify what these contain, e.g. `{'a': (1, 2)}` → `Mapping[str, Tuple[
 If you can’t use one of those, use a concrete class like `AnnData`.
 If your parameter only accepts an enumeration of strings, specify them like so: `Literal['elem-1', 'elem-2']`.
 
-### `Returns` section
+#### `Returns` section
 
 + Function returns nothing? Use None.
 + Single object: pd.DataFrame — description on the next line.
@@ -264,22 +242,14 @@ stats : dict
 ```
 <br>
 
+
+## Releasing and versioning
 ---
-<br>
-<!-- end section -->
 
-<!-- begin section -->
-# Releasing and versioning
+Versioning and release tagging in G4X-helpers is handled through `bump-my-version` and maintainers handle version bumps and publishing releases.  
 
-Versioning and release tagging in G4X-helpers is handled through `bump-my-version`.
-
-Please do not change the project version or the changelog. Maintainers handle version bumps and publishing releases.  
+Please do not change the project version or the changelog. 
 
 Just submit your code/docs and they will be incorporated into our release workflow.
-<br>
 
----
-<br>
-<!-- end section -->
-
-<!-- begin section -->
+--8<-- "_partials/end_cap.md"

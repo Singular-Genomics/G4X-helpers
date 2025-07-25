@@ -2,7 +2,7 @@
 
 # source installation
 
-This page explains how you can install G4X-helpers on your local machine. If you’re happy running the tool via `Docker`, you can skip these installation steps and head to the [Docker usage](usage.md/#cli-usage) section.  
+This page explains how you can install G4X-helpers on your local machine. If you’re happy running the tool via `Docker`, you can skip these installation steps and head to the [Docker setup](docker.md) section.  
 
 **You only need a local install if you want to:**
 
@@ -14,9 +14,10 @@ This page explains how you can install G4X-helpers on your local machine. If you
 
 if these use case apply to you, please read on
 
---8<-- "_partials/section_break.md"
+<br>
 
-## Step 1: clone the [`g4x-helpers`](https://github.com/Singular-Genomics/G4X-helpers) repository
+## Step 1: clone the [`G4X-helpers`](https://github.com/Singular-Genomics/G4X-helpers) repository
+---
 
 ```bash
 $ git clone git@github.com:Singular-Genomics/G4X-helpers.git
@@ -28,18 +29,17 @@ $ cd G4X-helpers
 ```
 
 !!!note
-    all following steps assume that you are in the G4X-helpers directory. You can confirm this via:
+    all following steps assume that you are in the G4X-helpers directory. You can confirm this in your terminal via `pwd`.
+    You should see a path ending in: `/G4X-helpers`:
     ```bash
     $ pwd
-    ```
-    you should see a path ending in: G4X-helpers
-    ```bash
-    $ /path/to/current/directory/.../G4X-helpers
+    /path/to/current/directory/.../G4X-helpers
     ```
 
---8<-- "_partials/section_break.md"
+<br>
 
 ## Step 2: install the package
+---
 
 !!! note
     
@@ -100,9 +100,11 @@ $ cd G4X-helpers
     $ source .venv/bin/activate
     ```
 
---8<-- "_partials/section_break.md"
+<br>
 
 ## Step 3: verify OpenJPEG installation
+---
+
 
 After installation of `G4X-helpers`, you can confirm that Glymur recognizes OpenJPEG via:
 
@@ -116,7 +118,7 @@ $ python -c "import glymur; print(glymur.version.openjpeg_version)"
     2.4.1
     ```
 
-An OpenJPEG version above `2.2.0` is detected. You can now proceed to [use](./usage.md) G4X-helpers
+An OpenJPEG version above `2.2.0` is detected. You can now proceed to [use](../usage.md) G4X-helpers
 
 !!! warning 
     ```
@@ -128,7 +130,7 @@ Glymur does not detect OpenJPEG and reports `0.0.0` or other error.
 In this case we **strongly suggest** performing the G4X-helpers installation and the following steps to enable OpenJPEG in a Conda environment.  
 Hints on other systems are provided, but not supported! You can find further details in the [Glymur documentation](https://glymur.readthedocs.io/en/v0.14.2/detailed_installation.html) on advanced installation methods.
 
---8<-- "_partials/section_break.md"
+<br>
 
 ## Step 4: install OpenJPEG
 
@@ -162,4 +164,23 @@ Hints on other systems are provided, but not supported! You can find further det
     printf "[library]\nopenjp2 = /opt/homebrew/lib/libopenjp2.dylib\n" > ~/.config/glymur/glymurrc
     ```
 
---8<-- "_partials/section_break.md"
+<br>
+
+## verify installation
+---
+
+To start using G4X-helpers, ensure that you have activated the environment in which the package was installed. 
+If your installation of G4X-helpers was successful, you can call the following commands from any terminal and help statements should be printed:
+
+
++ `resegment --help`  
++ `update_bin --help`  
++ `new_bin --help`  
++ `tar_viewer --help`
+
+
+!!!tip
+    you can see the output of such a `--help` statement in the [CLI usage](../usage.md/#cli-usage) section.
+
+
+--8<-- "_partials/end_cap.md"
