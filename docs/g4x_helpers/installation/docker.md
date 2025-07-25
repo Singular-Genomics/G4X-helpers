@@ -21,7 +21,7 @@ Otherwise, please read on to get started.
 ## 1. install Docker
 ---
 
-Docker is availabe for most plaforms. Please refer to the Docker installation guide for [Docker Engine](https://docs.docker.com/engine/) (Linux), or [Docker Desktop](https://docs.docker.com/desktop/) (MacOS/Windows). If you are not sure if Docker is already installed, you can simply call `docker --version` in your terminal.
+Docker is available for most platforms. Please refer to the Docker installation guide for [Docker Engine](https://docs.docker.com/engine/) (Linux), or [Docker Desktop](https://docs.docker.com/desktop/) (MacOS/Windows). If you are not sure if Docker is already installed, you can simply call `docker --version` in your terminal.
 
 <br>
 

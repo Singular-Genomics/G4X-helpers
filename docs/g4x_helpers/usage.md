@@ -2,7 +2,7 @@
 
 # usage
 
-G4X-helpers offers several tools for common post-processing needs, each of which is described in detail in the [CLI features](./features/index.md) section. On this page we will demonstrate how to excecute these tools either from the CLI or throught a Docker image (depending on how you [installed G4X-helpers](./installation/index.md)).
+G4X-helpers offers several tools for common post-processing needs, each of which is described in detail in the [CLI features](./features/index.md) section. On this page we will demonstrate how to execute these tools either from the CLI or through a Docker image (depending on how you [installed G4X-helpers](./installation/index.md)).
 !!!note
     G4X-helpers can also be imported as a Python module, in which case it can provide some convenience functions to access and interact with your data. Documentation for this will follow in a separate section.
 
