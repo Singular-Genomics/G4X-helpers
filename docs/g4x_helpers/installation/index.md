@@ -30,7 +30,7 @@ Which route to choose depends on your **use-case**:
  
 things to know:  
 
-+ you still need to install Docker (or Apptainer/Singularity ... ).  
++ you still need to install Docker (or Apptainer, Podman ... ) if you haven't already.
 + first pull can be large; subsequent runs are fast thanks to caching layers.
 
 --8<-- "_partials/end_cap.md"

@@ -157,17 +157,25 @@ label.md-nav__title {
 .site-name {
   /* Built-in mkdocs theme  */
   font-weight: 200 !important;
-  font-size: 1.15rem !important;
+  font-size: 1.35rem !important;
 }
 /* Logo area size */
 .md-header__button.md-logo img,
 .md-header__button.md-logo svg {
-  height: 1.5rem;
-  width: 1.5rem;
+  height: 1.75rem;
+  width: auto;
+  opacity: 0.75;
 }
 
 
 /* ——— ADMONITION ADJUSTMENTS ——— */
+
+/* title line ("Note", "Warning", etc.) */
+.md-typeset .admonition>.admonition-title,
+.md-typeset details.admonition>summary {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+}
 
 /* Whole admonition block */
 .md-typeset .admonition,
@@ -175,12 +183,7 @@ label.md-nav__title {
   font-size: 0.8rem !important;
 }
 
-/* title line ("Note", "Warning", etc.) */
-.md-typeset .admonition>.admonition-title,
-.md-typeset details.admonition>summary {
-  font-size: 0.9rem !important;
-  font-weight: 500 !important;
-}
+
 
 
 /* MISC */
