@@ -45,6 +45,7 @@
   --acc_1:        hsla(var(--acc_1-hue), var(--acc_1-sat), var(--acc_1-val), 1);
   --acc_2:        hsla(var(--acc_2-hue), var(--acc_2-sat), var(--acc_2-val), 1);
 
+  --trnsp-item:   hsla(0, 0%, var(--text-caption-val), 0.3);
 
   /* ASSIGN COLORS from those variables */
   --md-default-fg-color: var(--text-body);
@@ -69,7 +70,7 @@
   --md-default-fg-color--lighter: hsla(var(--site-hue), 10%, 45%, 0.5);     /* scrollbars */
 
   /* borders / separators / copy buttons */
-  --md-default-fg-color--lightest: var(--text-caption);
+  --md-default-fg-color--lightest: var(--trnsp-item);
 }
 
 [data-md-color-scheme="slate"] {
