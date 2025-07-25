@@ -287,7 +287,7 @@ wheels = [
 
 [[package]]
 name = "g4x-helpers"
-version = "0.4.3"
+version = "0.4.5"
 source = { editable = "." }
 dependencies = [
     { name = "geopandas" },
@@ -1475,11 +1475,11 @@ wheels = [
 
 [[package]]
 name = "session-info2"
-version = "0.1.2"
+version = "0.2"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/c9/68/b38d41c69044fdd2b73595fdbc854c5e3df964f26adf1fbd5c041bea30c9/session_info2-0.1.2.tar.gz", hash = "sha256:bdb75885128333611e0cf4357f31a0b5869bcb7889b93251ed8571aa4e4ad0b6", size = 22037, upload-time = "2024-12-17T12:27:47.635Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/76/6c/bb3b3a8a5b00977f006dc5a07110324c9d3c8325cee864c172060d1e3e72/session_info2-0.2.tar.gz", hash = "sha256:e925d34d0a298afe19421d55287e8fb9ace3c8f6390832aa11c641f01bab4177", size = 23156, upload-time = "2025-07-24T15:31:16.124Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/db/98/9578ce1d8ae951cf44e6b7434854824f0eae12d54b270e80014f8ab1971c/session_info2-0.1.2-py3-none-any.whl", hash = "sha256:8f5c010b621930556eee640f6a71d76f0c746ed1194b27ad227e6fe6e61883d4", size = 14716, upload-time = "2024-12-17T12:27:46.367Z" },
+    { url = "https://files.pythonhosted.org/packages/e0/e4/1e32328d993d0c7d24e5acc9a6f0f205a4a70e46c8cc35f0a64bae899889/session_info2-0.2-py3-none-any.whl", hash = "sha256:4e1a39ab1d791e0c2967dca9d0f69f243c6821e0319a9fc68f8428ec8e8aa54f", size = 15986, upload-time = "2025-07-24T15:31:14.981Z" },
 ]
 
 [[package]]
