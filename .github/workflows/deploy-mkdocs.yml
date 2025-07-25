@@ -7,12 +7,21 @@ on:
     tags:
       - 'v*.*.*'
 
+# gh-pages needs a push, so grant write; read is implied
+permissions:
+  contents: write
+
+concurrency: docs        # auto-cancel superseded runs
+
 jobs:
   deploy:
+    if: github.repository == 'singular-genomics/g4x-helpers' # Avoid running in forks that copy this workflow
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: "Set up Python"
         uses: actions/setup-python@v5
@@ -22,15 +31,13 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v6
         with:
-          version: "0.8.3"
+          version: "0.8.0" # <- make sure this matches the version in Dockerfile as well
+          enable-cache: false
 
       - name: Sync dependencies from uv.lock
         run: uv sync --frozen --only-dev
 
       - name: Deploy to GitHub Pages
-        run: |
-          # grab the most recent tag into a variable
-          TAG=$(git describe --tags --abbrev=0)
-          
-          # run mkdocs with the tag in the commit message
-          uv run mkdocs gh-deploy --force --clean --message "docs: $TAG"
+        env:
+          TAG: ${{ github.ref_name }}      # e.g. v1.2.3
+        run: uv run mkdocs gh-deploy --force --clean --message "docs: $TAG"
