@@ -23,7 +23,7 @@ message = "new version: {current_version} → {new_version}"
 moveable_tags = []
 commit_args = ""
 setup_hooks = []
-pre_commit_hooks = ["pre-commit run --all-files"]
+pre_commit_hooks = ["uv lock -U", "pre-commit run --all-files"]
 post_commit_hooks = []
 
 [[tool.bumpversion.files]]
