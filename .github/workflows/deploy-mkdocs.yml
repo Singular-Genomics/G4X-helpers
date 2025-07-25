@@ -1,0 +1,35 @@
+# .github/workflows/deploy-mkdocs.yml
+name: Deploy mkdocs on new tag
+
+# Trigger on sem-version tag
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Check out the repo
+      - uses: actions/checkout@v3
+
+      # 2. Set up Python
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Sync dependencies from uv.lock
+        run: uv sync --frozen
+
+      - name: Deploy to GitHub Pages
+        run: |
+          # grab the most recent tag into a variable
+          TAG=$(git describe --tags --abbrev=0)
+          
+          # run mkdocs with the tag in the commit message
+          uv run mkdocs gh-deploy --clean --message "docs: $TAG"
