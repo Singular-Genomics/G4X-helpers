@@ -45,6 +45,7 @@
   --acc_1:        hsla(var(--acc_1-hue), var(--acc_1-sat), var(--acc_1-val), 1);
   --acc_2:        hsla(var(--acc_2-hue), var(--acc_2-sat), var(--acc_2-val), 1);
 
+  --trnsp-item:   hsla(0, 0%, var(--text-caption-val), 0.3);
 
   /* ASSIGN COLORS from those variables */
   --md-default-fg-color: var(--text-body);
@@ -69,7 +70,7 @@
   --md-default-fg-color--lighter: hsla(var(--site-hue), 10%, 45%, 0.5);     /* scrollbars */
 
   /* borders / separators / copy buttons */
-  --md-default-fg-color--lightest: var(--text-caption);
+  --md-default-fg-color--lightest: var(--trnsp-item);
 }
 
 [data-md-color-scheme="slate"] {
@@ -156,17 +157,25 @@ label.md-nav__title {
 .site-name {
   /* Built-in mkdocs theme  */
   font-weight: 200 !important;
-  font-size: 1.15rem !important;
+  font-size: 1.35rem !important;
 }
 /* Logo area size */
 .md-header__button.md-logo img,
 .md-header__button.md-logo svg {
-  height: 1.5rem;
-  width: 1.5rem;
+  height: 1.75rem;
+  width: auto;
+  opacity: 0.75;
 }
 
 
 /* ——— ADMONITION ADJUSTMENTS ——— */
+
+/* title line ("Note", "Warning", etc.) */
+.md-typeset .admonition>.admonition-title,
+.md-typeset details.admonition>summary {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+}
 
 /* Whole admonition block */
 .md-typeset .admonition,
@@ -174,12 +183,7 @@ label.md-nav__title {
   font-size: 0.8rem !important;
 }
 
-/* title line ("Note", "Warning", etc.) */
-.md-typeset .admonition>.admonition-title,
-.md-typeset details.admonition>summary {
-  font-size: 0.9rem !important;
-  font-weight: 500 !important;
-}
+
 
 
 /* MISC */

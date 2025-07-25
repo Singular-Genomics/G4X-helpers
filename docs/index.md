@@ -15,7 +15,7 @@ These pages provide documentation, example workflows, and helper tools for analy
 ---
 #### Helper models and post-processing tools for G4X data.  
 
-```
+```bash
 $ git clone https://github.com/singular-genomics/g4x-helpers
 ```
 
@@ -31,7 +31,7 @@ With [G4X-helpers](https://github.com/Singular-Genomics/G4X-helpers) we provide 
 
 ## :material-map-legend: G4X data
 ---
-#### Reference and analysis import guides.  
+#### Output reference and analysis import guides.  
 
 The G4X produces multi-modal output containing tables, images, arrays and annotated matrices for single-cell analysis.
 The files found in the output directory are compatible with popular Python libraries from the [`scverse`](https://github.com/scverse) ecosystem, like `scanpy, rapids-singlecell, squidpy, and spatial-data` and, if you prefer working in R, can be easily imported into [`Seurat`](https://satijalab.org/seurat/).

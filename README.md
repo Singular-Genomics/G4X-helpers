@@ -9,8 +9,8 @@ Please refer to [G4X-tutorials](https://shiny-tribble-2nl4loz.pages.github.io/) 
 <div align="left">
   <a target="_blank" href="https://www.singulargenomics.com" style="background:none">
     <img
-    src="docs/assets/LogoType_White.svg" 
+    src="docs/assets/sg_logo_text.svg" 
     alt="Made by Singular Genomics" 
-    style="width: 150px; height: auto;opacity:0.65;">
+    style="opacity:0.65;">
   </a>
 </div>
