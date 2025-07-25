@@ -5,10 +5,8 @@
 
 Replaces or updates the segmentation mask in a G4X run and regenerates all downstream single-cell data and `.bin` files.
 
---8<-- "_partials/section_break.md"
-
 ## usage
-
+---
 ``` bash
 $ resegment
   --run_base /path/to/G4X/output 
@@ -22,10 +20,9 @@ $ resegment
   --verbose <level>
 ```
 
-## Argument Descriptions
-
-### required
+## argument descriptions
 ---
+### required
 #### `--run_base`: (*type:* `str`)
  
 > Path to the G4X sample output folder (the base directory for the run). This directory must contain required files such as `run_meta.json`, segmentation masks, and panel files.
@@ -34,8 +31,7 @@ $ resegment
 
 > Path to the new segmentation mask file. Supported formats include `.npy`, `.npz`, and `.geojson`. This file will be used to replace the existing mask for transcript and protein signal assignment.
 
-### optional
----
+### optional 
 #### `--sample_id`: (*type:* `str`  *default:* `None`)
 
 > Optional sample identifier. If not provided, the sample ID will be inferred from the name of the `run_base` directory.

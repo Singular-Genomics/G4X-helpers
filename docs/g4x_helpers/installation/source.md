@@ -14,9 +14,10 @@ This page explains how you can install G4X-helpers on your local machine. If you
 
 if these use case apply to you, please read on
 
---8<-- "_partials/section_break.md"
+<br>
 
 ## Step 1: clone the [`G4X-helpers`](https://github.com/Singular-Genomics/G4X-helpers) repository
+---
 
 ```bash
 $ git clone git@github.com:Singular-Genomics/G4X-helpers.git
@@ -35,9 +36,10 @@ $ cd G4X-helpers
     /path/to/current/directory/.../G4X-helpers
     ```
 
---8<-- "_partials/section_break.md"
+<br>
 
 ## Step 2: install the package
+---
 
 !!! note
     
@@ -98,9 +100,11 @@ $ cd G4X-helpers
     $ source .venv/bin/activate
     ```
 
---8<-- "_partials/section_break.md"
+<br>
 
 ## Step 3: verify OpenJPEG installation
+---
+
 
 After installation of `G4X-helpers`, you can confirm that Glymur recognizes OpenJPEG via:
 
@@ -126,7 +130,7 @@ Glymur does not detect OpenJPEG and reports `0.0.0` or other error.
 In this case we **strongly suggest** performing the G4X-helpers installation and the following steps to enable OpenJPEG in a Conda environment.  
 Hints on other systems are provided, but not supported! You can find further details in the [Glymur documentation](https://glymur.readthedocs.io/en/v0.14.2/detailed_installation.html) on advanced installation methods.
 
---8<-- "_partials/section_break.md"
+<br>
 
 ## Step 4: install OpenJPEG
 
@@ -160,10 +164,10 @@ Hints on other systems are provided, but not supported! You can find further det
     printf "[library]\nopenjp2 = /opt/homebrew/lib/libopenjp2.dylib\n" > ~/.config/glymur/glymurrc
     ```
 
---8<-- "_partials/section_break.md"
-
+<br>
 
 ## verify installation
+---
 
 To start using G4X-helpers, ensure that you have activated the environment in which the package was installed. 
 If your installation of G4X-helpers was successful, you can call the following commands from any terminal and help statements should be printed:

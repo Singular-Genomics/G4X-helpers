@@ -6,9 +6,10 @@ The multi-modal output of the G4X spatial sequencer comprises images, tables and
 
 #### Below we illustrate data import strategies for [Python](#if-you-are-working-in-python) and [R](#if-you-are-working-in-r) users:
 
---8<-- "_partials/section_break.md"
+<br>
 
 ## if you are working in Python
+---
 Some excellent tools are:
 
 + `scanpy`: full-featured single-cell analysis suite
@@ -87,9 +88,10 @@ adata.var_names = counts.columns
 !!!note
     If you have G4X-helpers installed, then `anndata`, `pandas` and `scipy` will be available as dependencies.
 
---8<-- "_partials/section_break.md"
+<br>
 
 ## if you are working in R
+---
 
 The most feature rich package for single-cell analysis in R is:
 

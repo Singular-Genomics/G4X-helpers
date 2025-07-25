@@ -6,9 +6,10 @@ These pages explains how you can obtain G4X-helpers and prepare your system to u
 This can be done either via source installation or Docker.  
 Which route to choose depends on your **use-case**:
 
----
+<br>
 
 ### 1. source installation
+---
 
 **Please head to the [source installation](./source.md) section if you want to:**
 
@@ -18,6 +19,7 @@ Which route to choose depends on your **use-case**:
 + integrate pieces of the library into your own Python environment
 
 ### 2. Docker setup
+---
 
 **Please head to the [Docker setup](./docker.md) section if you want to:**
 

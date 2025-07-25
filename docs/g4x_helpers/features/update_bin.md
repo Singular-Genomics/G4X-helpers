@@ -5,9 +5,8 @@
 
 Updates an existing `.bin` segmentation file with new clustering, embedding, or color metadata from a CSV file.
 
---8<-- "_partials/section_break.md"
-
 ## usage 
+---
 
 ```bash
 $ update_bin 
@@ -23,10 +22,10 @@ $ update_bin
   --verbose <level>
 ```
 
-## Argument Descriptions
-
-### required
+## argument descriptions
 ---
+### required 
+
 #### `--bin_file`: (*type:* `str`)
  
 > Path to the existing `.bin` file used by the G4X-Viewer. This file will be updated with metadata from the provided CSV file.
@@ -39,8 +38,8 @@ $ update_bin
 
 > Path to a CSV file containing metadata to update the `.bin` file. This file must include a header row and should contain cell IDs, optional cluster assignments, colors, and embeddings.
 
-### optional
----
+### optional 
+
 #### `--cellid_key`: (*type:* `str`  *default:* `None`)
 
 > Name of the column in the metadata file that contains cell IDs matching those in the `.bin` file. If not provided, the first column in the metadata will be used.
