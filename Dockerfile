@@ -1,17 +1,23 @@
 # Use a pinned Python image >>> THIS STRATEGY DOES NOT PROVIDE MULTI-PLATFORM SUPPORT <<<
 # FROM python@sha256:68763c64e640977ad219a74dde8c445f6fac5d2a229c4e01058a88fcdab2249c
-FROM python:3.10-bookworm
+FROM python:3.10-slim-bookworm
 
 LABEL org.opencontainers.image.source="https://github.com/Singular-Genomics/G4X-helpers"
 
 # Add uv to the image
 COPY --from=ghcr.io/astral-sh/uv:0.8.0 /uv /uvx /bin/
 
-
 RUN apt-get update -qq \
  && apt-get install -y --no-install-recommends \
       libexpat1 \
       libopenjp2-7 \
+      gdal-bin \
+      libgdal-dev \
+      libproj-dev \
+      libgeos-dev \
+      build-essential \
+      python3-dev \
+      pkg-config \
  && rm -rf /var/lib/apt/lists/*
 
 # Install the project into `/app`
