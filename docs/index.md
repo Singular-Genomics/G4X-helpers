@@ -44,9 +44,23 @@ The files found in the output directory are compatible with popular Python libra
 <br>
 
 ## support
+---
 
 Have feedback or ideas for additional tutorials?  
-Drop us a note at [care@suingulargenomics.com](mailto:care@singulargenomics.com)  
-Check out how to [contribute](./contributing/index.md) 
+
++ Drop us a note at [care@singulargenomics.com](mailto:care@singulargenomics.com)  
+
+You would like to report a bug or other problem regarding G4X-helpers?
+
++ please file a new issue on the G4X-helpers [issue tracker](https://github.com/Singular-Genomics/G4X-helpers/issues)  
+
+Want to get involved and add new features?
+
++ Check out how to [contribute](./contributing/index.md) 
 
 --8<-- "_partials/end_cap.md"
+
+<br>
+<br>
+<br>
+<br>
