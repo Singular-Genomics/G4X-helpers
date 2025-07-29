@@ -48,7 +48,7 @@ jobs:
           ghcr.io/singular-genomics/g4x-helpers:latest
           ghcr.io/singular-genomics/g4x-helpers:${{ github.ref_name }}
        
-        # platforms: linux/amd64,linux/arm64
-        # # Optional registry-cache configuration ----------------------
-        # cache-from: type=registry,ref=ghcr.io/singular-genomics/g4x-helpers:cache
-        # cache-to:   type=registry,ref=ghcr.io/singular-genomics/g4x-helpers:cache,mode=max
+        platforms: linux/amd64,linux/arm64
+        # Optional registry-cache configuration ----------------------
+        cache-from: type=registry,ref=ghcr.io/singular-genomics/g4x-helpers:cache
+        cache-to:   type=registry,ref=ghcr.io/singular-genomics/g4x-helpers:cache,mode=max
