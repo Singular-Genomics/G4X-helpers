@@ -1,5 +1,16 @@
-
 # Changelog
+
+## v0.4.13 – (2025-07-29)
+
+#### Docs:
+- Included changelog into docs
+- Expanded support section
+- Replaced private docs url with public
+
+#### Package:
+- Published repo
+- ARM64 support for docker image
+
 
 ## v0.4.12 – (2025-07-25)
 
@@ -23,23 +34,28 @@
 - Cleaned up .gitignore file
 - Cleaned up README.md
 
+
 ## v0.2.4 - v0.4.11 (unreleased)
 
 - Release preparation
 - Add Dockerfile
 - Update dependency information
 
+
 ## v0.2.3 – (2025-06-25)
 
 - Add tar_viewer tool to tar up a G4X-Viewer folder for the single-file upload option.
+
 
 ## v0.2.2 – (2025-06-24)
 
 - Add new_bin tool to more quickly generate a new bin file
 
+
 ## v0.2.1 – (2025-06-02)
 
 - Bug fixes for MVP functionality
+
 
 ## v0.2.0 – (2025-05-16)
 
