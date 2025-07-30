@@ -13,11 +13,11 @@ RUN apt-get update -qq \
       libopenjp2-7 \
       gdal-bin \
       libgdal-dev \
-      libproj-dev \
-      libgeos-dev \
-      build-essential \
-      python3-dev \
-      pkg-config \
+    #   libproj-dev \
+    #   libgeos-dev \
+    #   build-essential \
+    #   python3-dev \
+    #   pkg-config \
  && rm -rf /var/lib/apt/lists/*
 
 # Install the project into `/app`
