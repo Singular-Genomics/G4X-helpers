@@ -1,7 +1,9 @@
 name: Test ARM64 runner availability
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - pr-21
 
 jobs:
   arm-check:
