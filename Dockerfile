@@ -1,5 +1,6 @@
-# Use a pinned Python image
-FROM python@sha256:68763c64e640977ad219a74dde8c445f6fac5d2a229c4e01058a88fcdab2249c
+# Use a pinned Python image >>> THIS STRATEGY DOES NOT PROVIDE MULTI-PLATFORM SUPPORT <<<
+# FROM python@sha256:68763c64e640977ad219a74dde8c445f6fac5d2a229c4e01058a88fcdab2249c
+FROM python:3.10-bookworm
 
 LABEL org.opencontainers.image.source="https://github.com/Singular-Genomics/G4X-helpers"
 
@@ -11,6 +12,14 @@ RUN apt-get update -qq \
  && apt-get install -y --no-install-recommends \
       libexpat1 \
       libopenjp2-7 \
+      build-essential \
+      gcc \
+      g++ \
+      gfortran \
+      python3-dev \
+      libopenblas-dev \
+      liblapack-dev \
+      libgdal-dev gdal-bin \
  && rm -rf /var/lib/apt/lists/*
 
 # Install the project into `/app`
