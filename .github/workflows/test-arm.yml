@@ -2,8 +2,8 @@ name: Build Docker image on new tag
 
 on:
   push:
-    branches:
-      - pr-21
+    tags:
+      - 'v*.*.*'          # e.g. v1.2.3
 
 permissions:
   contents: read
@@ -44,8 +44,8 @@ jobs:
             ${{ env.IMAGE_BASE }}:latest-amd64
             ${{ env.IMAGE_BASE }}:${{ github.ref_name }}-amd64
           # Optional per-arch cache (you can adjust names):
-          cache-from: type=registry,ref=${{ env.IMAGE_BASE }}:cache-amd64
-          cache-to: type=registry,ref=${{ env.IMAGE_BASE }}:cache-amd64,mode=max
+          # cache-from: type=registry,ref=${{ env.IMAGE_BASE }}:cache-amd64
+          # cache-to: type=registry,ref=${{ env.IMAGE_BASE }}:cache-amd64,mode=max
 
   build-arm64:
     name: Build arm64 image
@@ -80,8 +80,8 @@ jobs:
           tags: |
             ${{ env.IMAGE_BASE }}:latest-arm64
             ${{ env.IMAGE_BASE }}:${{ github.ref_name }}-arm64
-          cache-from: type=registry,ref=${{ env.IMAGE_BASE }}:cache-arm64
-          cache-to: type=registry,ref=${{ env.IMAGE_BASE }}:cache-arm64,mode=max
+          # cache-from: type=registry,ref=${{ env.IMAGE_BASE }}:cache-arm64
+          # cache-to: type=registry,ref=${{ env.IMAGE_BASE }}:cache-arm64,mode=max
 
   create-manifest:
     name: Create multi-arch manifest
