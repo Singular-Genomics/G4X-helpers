@@ -1,67 +1,63 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
-         <loc>https://docs.singulargenomics.com/G4X-helpers/</loc>
-         <lastmod>2025-07-30</lastmod>
+         <loc>https://shiny-tribble-2nl4loz.pages.github.io/</loc>
+         <lastmod>2025-08-01</lastmod>
     </url>
     <url>
-         <loc>https://docs.singulargenomics.com/G4X-helpers/changelog/</loc>
-         <lastmod>2025-07-30</lastmod>
+         <loc>https://shiny-tribble-2nl4loz.pages.github.io/contributing/</loc>
+         <lastmod>2025-08-01</lastmod>
     </url>
     <url>
-         <loc>https://docs.singulargenomics.com/G4X-helpers/contributing/</loc>
-         <lastmod>2025-07-30</lastmod>
+         <loc>https://shiny-tribble-2nl4loz.pages.github.io/g4x_data/</loc>
+         <lastmod>2025-08-01</lastmod>
     </url>
     <url>
-         <loc>https://docs.singulargenomics.com/G4X-helpers/g4x_data/</loc>
-         <lastmod>2025-07-30</lastmod>
+         <loc>https://shiny-tribble-2nl4loz.pages.github.io/g4x_data/data_import/</loc>
+         <lastmod>2025-08-01</lastmod>
     </url>
     <url>
-         <loc>https://docs.singulargenomics.com/G4X-helpers/g4x_data/data_import/</loc>
-         <lastmod>2025-07-30</lastmod>
+         <loc>https://shiny-tribble-2nl4loz.pages.github.io/g4x_data/g4x_output/</loc>
+         <lastmod>2025-08-01</lastmod>
     </url>
     <url>
-         <loc>https://docs.singulargenomics.com/G4X-helpers/g4x_data/g4x_output/</loc>
-         <lastmod>2025-07-30</lastmod>
+         <loc>https://shiny-tribble-2nl4loz.pages.github.io/g4x_helpers/</loc>
+         <lastmod>2025-08-01</lastmod>
     </url>
     <url>
-         <loc>https://docs.singulargenomics.com/G4X-helpers/g4x_helpers/</loc>
-         <lastmod>2025-07-30</lastmod>
+         <loc>https://shiny-tribble-2nl4loz.pages.github.io/g4x_helpers/usage/</loc>
+         <lastmod>2025-08-01</lastmod>
     </url>
     <url>
-         <loc>https://docs.singulargenomics.com/G4X-helpers/g4x_helpers/usage/</loc>
-         <lastmod>2025-07-30</lastmod>
+         <loc>https://shiny-tribble-2nl4loz.pages.github.io/g4x_helpers/features/</loc>
+         <lastmod>2025-08-01</lastmod>
     </url>
     <url>
-         <loc>https://docs.singulargenomics.com/G4X-helpers/g4x_helpers/features/</loc>
-         <lastmod>2025-07-30</lastmod>
+         <loc>https://shiny-tribble-2nl4loz.pages.github.io/g4x_helpers/features/new_bin/</loc>
+         <lastmod>2025-08-01</lastmod>
     </url>
     <url>
-         <loc>https://docs.singulargenomics.com/G4X-helpers/g4x_helpers/features/new_bin/</loc>
-         <lastmod>2025-07-30</lastmod>
+         <loc>https://shiny-tribble-2nl4loz.pages.github.io/g4x_helpers/features/resegment/</loc>
+         <lastmod>2025-08-01</lastmod>
     </url>
     <url>
-         <loc>https://docs.singulargenomics.com/G4X-helpers/g4x_helpers/features/resegment/</loc>
-         <lastmod>2025-07-30</lastmod>
+         <loc>https://shiny-tribble-2nl4loz.pages.github.io/g4x_helpers/features/tar_viewer/</loc>
+         <lastmod>2025-08-01</lastmod>
     </url>
     <url>
-         <loc>https://docs.singulargenomics.com/G4X-helpers/g4x_helpers/features/tar_viewer/</loc>
-         <lastmod>2025-07-30</lastmod>
+         <loc>https://shiny-tribble-2nl4loz.pages.github.io/g4x_helpers/features/update_bin/</loc>
+         <lastmod>2025-08-01</lastmod>
     </url>
     <url>
-         <loc>https://docs.singulargenomics.com/G4X-helpers/g4x_helpers/features/update_bin/</loc>
-         <lastmod>2025-07-30</lastmod>
+         <loc>https://shiny-tribble-2nl4loz.pages.github.io/g4x_helpers/installation/</loc>
+         <lastmod>2025-08-01</lastmod>
     </url>
     <url>
-         <loc>https://docs.singulargenomics.com/G4X-helpers/g4x_helpers/installation/</loc>
-         <lastmod>2025-07-30</lastmod>
+         <loc>https://shiny-tribble-2nl4loz.pages.github.io/g4x_helpers/installation/docker/</loc>
+         <lastmod>2025-08-01</lastmod>
     </url>
     <url>
-         <loc>https://docs.singulargenomics.com/G4X-helpers/g4x_helpers/installation/docker/</loc>
-         <lastmod>2025-07-30</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.singulargenomics.com/G4X-helpers/g4x_helpers/installation/source/</loc>
-         <lastmod>2025-07-30</lastmod>
+         <loc>https://shiny-tribble-2nl4loz.pages.github.io/g4x_helpers/installation/source/</loc>
+         <lastmod>2025-08-01</lastmod>
     </url>
 </urlset>
