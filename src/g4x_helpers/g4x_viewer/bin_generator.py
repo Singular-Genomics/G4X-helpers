@@ -1,13 +1,13 @@
-import logging
-import multiprocessing
 import random
 from collections import deque
 from pathlib import Path
 
-import anndata as ad
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import ray
+import logging
+import anndata as ad
 from numba import njit
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
@@ -16,9 +16,8 @@ from skimage.measure import approximate_polygon
 from skimage.morphology import dilation, disk, erosion
 from tqdm import tqdm
 
-import g4x_helpers.utils as utils
-
 from . import CellMasksSchema_pb2 as CellMasksSchema
+import g4x_helpers.utils as utils
 
 
 def generate_cluster_palette(clusters: list, max_colors: int = 256) -> dict:
@@ -205,6 +204,7 @@ def pointsToSingleSmoothPath(points: np.ndarray, tolerance: float) -> np.ndarray
     return simplified_path
 
 
+@ray.remote(num_cpus=1)
 def refine_polygon(k, cx, cy, sorted_nonzero_values_ref, sorted_rows_ref, sorted_cols_ref):
     start_idx, end_idx = get_start_stop_idx(sorted_nonzero_values_ref, k)
     points = np.vstack((sorted_rows_ref[start_idx:end_idx], sorted_cols_ref[start_idx:end_idx])).T
@@ -316,14 +316,24 @@ def seg_converter(
 
     ## refine polygons
     logger.debug('Refining polygons.')
+    ray.init(
+        num_cpus=n_threads,
+        logging_level='WARNING',
+        include_dashboard=False,
+        address='local',
+        _node_ip_address='127.0.0.1',
+    )
 
+    sorted_nonzero_values_ref = ray.put(sorted_nonzero_values)
+    sorted_rows_ref = ray.put(sorted_rows)
+    sorted_cols_ref = ray.put(sorted_cols)
     pq_args = [
-        (k, cx, cy, sorted_nonzero_values, sorted_rows, sorted_cols)
-        for k, cx, cy in zip(np.arange(1, num_cells + 1), centroid_x, centroid_y)
+        (k, cx, cy, sorted_nonzero_values_ref, sorted_rows_ref, sorted_cols_ref)
+        for k, cx, cy in zip(np.arange(start=1, stop=len(cell_ids) + 1), centroid_x, centroid_y)
     ]
+    polygons = ray.get([refine_polygon.remote(*args) for args in pq_args])
 
-    with multiprocessing.Pool() as pool:
-        polygons = pool.starmap(refine_polygon, pq_args)
+    ray.shutdown()
 
     ## do conversion
     # logger.debug(f"{sample_id}: Converting data to protobuff format...")

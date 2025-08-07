@@ -7,7 +7,6 @@ name = "g4x_helpers"
 version = "0.4.12"
 
 description = "Python helpers for G4X."
-urls = { repository = "https://github.com/Singular-Genomics/G4X-helpers" }
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
@@ -25,26 +24,26 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 
+urls = { Homepage = "https://github.com/Singular-Genomics/G4X-helpers" }
 dependencies = [
     "geopandas ~= 1.0",
     "glymur ~= 0.13",
     "matplotlib ~= 3.7",
     "polars ~= 1.30",
-    "protobuf ~= 5.26",
     "rasterio ~= 1.4",
+    "ray ~= 2.44",
     "scanpy ~= 1.10",
     "scikit-image ~= 0.25",
     "shapely ~= 2.1",
-    "pyarrow ~= 16.1",
 ]
 
 [dependency-groups]
 dev = [
-    "mkdocs ~= 1.6",
-    "mkdocs-material ~= 9.6",
-    "pre-commit ~= 4.2",
-    "bump-my-version ~= 1.2",
-    "ruff == 0.12.2",         # pinned to match pre-commit version
+    "mkdocs >= 1.6.1",
+    "mkdocs-material >= 9.6.15",
+    "pre-commit >= 4.2.0",
+    "ruff == 0.12.2", # pinned to match pre-commit version
+    "bump-my-version ~= 1.2.0",
 ]
 
 [project.scripts]
