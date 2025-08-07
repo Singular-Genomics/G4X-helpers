@@ -1,13 +1,13 @@
+import logging
+import multiprocessing
 import random
 from collections import deque
 from pathlib import Path
 
+import anndata as ad
 import matplotlib.pyplot as plt
-import multiprocessing
 import numpy as np
 import pandas as pd
-import logging
-import anndata as ad
 from numba import njit
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
@@ -16,8 +16,9 @@ from skimage.measure import approximate_polygon
 from skimage.morphology import dilation, disk, erosion
 from tqdm import tqdm
 
-from . import CellMasksSchema_pb2 as CellMasksSchema
 import g4x_helpers.utils as utils
+
+from . import CellMasksSchema_pb2 as CellMasksSchema
 
 
 def generate_cluster_palette(clusters: list, max_colors: int = 256) -> dict:
@@ -316,17 +317,13 @@ def seg_converter(
     ## refine polygons
     logger.debug('Refining polygons.')
 
-    sorted_nonzero_values_ref = ray.put(sorted_nonzero_values)
-    sorted_rows_ref = ray.put(sorted_rows)
-    sorted_cols_ref = ray.put(sorted_cols)
     pq_args = [
-        (k, cx, cy, sorted_nonzero_values_ref, sorted_rows_ref, sorted_cols_ref)
-        for k, cx, cy in zip(np.arange(start=1, stop=len(cell_ids) + 1), centroid_x, centroid_y)
+        (k, cx, cy, sorted_nonzero_values, sorted_rows, sorted_cols)
+        for k, cx, cy in zip(np.arange(1, num_cells + 1), centroid_x, centroid_y)
     ]
 
     with multiprocessing.Pool() as pool:
         polygons = pool.starmap(refine_polygon, pq_args)
-
 
     ## do conversion
     # logger.debug(f"{sample_id}: Converting data to protobuff format...")
