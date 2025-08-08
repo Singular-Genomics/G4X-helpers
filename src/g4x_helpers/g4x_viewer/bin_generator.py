@@ -491,7 +491,8 @@ def seg_updater(
             if update_cluster:
                 cell.clusterId = str(metadata.loc[current_cellid, cluster_key])
             if update_cluster_color:
-                cell.color.clear()
+                # clear out the existing color entries:
+                cell.ClearField('color')
                 cell.color.extend(metadata.loc[current_cellid, cluster_color_key])
             if update_emb:
                 cell.umapValues.umapX = metadata.loc[current_cellid, f'{emb_key}_1']
@@ -499,7 +500,8 @@ def seg_updater(
         else:
             logger.debug(f'{current_cellid} not found in metadata, not updating data for this cell.')
     if update_cluster_color:
-        cell_masks.colormap.clear()
+        # clear the entire colormap list:
+        cell_masks.ClearField('colormap')
         for cluster_id, color in cluster_palette.items():
             entry = CellMasksSchema.ColormapEntry()
             entry.clusterId = cluster_id

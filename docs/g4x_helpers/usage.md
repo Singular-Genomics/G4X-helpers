@@ -121,7 +121,7 @@ docker run --rm \
   -v /path/to/g4x_output/directory:/data/g4x_output \
   -v /path/to/custom/segmentation:/data/inputs \
   -v /path/to/resegmentation/output:/data/outputs \
-  ghcr.io/your-org/g4x-helpers:latest \
+  ghcr.io/singular-genomics/g4x-helpers:latest \
   resegment \
     --run_base /data/g4x_output/sample_id \
     --segmentation_mask /data/inputs/seg_mask.npz \
