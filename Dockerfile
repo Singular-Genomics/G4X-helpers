@@ -4,7 +4,7 @@ FROM python:3.10-slim-bookworm
 LABEL org.opencontainers.image.source="https://github.com/Singular-Genomics/G4X-helpers"
 
 # Add uv to the image
-COPY --from=ghcr.io/astral-sh/uv:0.8.5 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.8.8 /uv /uvx /bin/
 
 # Install build dependencies
 RUN apt-get update -qq \

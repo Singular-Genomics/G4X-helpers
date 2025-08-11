@@ -32,7 +32,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v6
         with:
-          version: "0.8.0" # <- make sure this matches the version in Dockerfile as well
+          version-file: "pyproject.toml"
           enable-cache: false
 
       - name: Sync dependencies from uv.lock
