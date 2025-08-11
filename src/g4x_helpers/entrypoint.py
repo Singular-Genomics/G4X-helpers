@@ -1,14 +1,14 @@
 import argparse
+import json
 import os
+import shutil
+import tarfile
 from pathlib import Path
 
 import geopandas
 import numpy as np
-import tarfile
-import json
-import shutil
 
-from g4x_helpers.g4x_viewer.bin_generator import seg_updater, seg_converter
+from g4x_helpers.g4x_viewer.bin_generator import seg_converter, seg_updater
 from g4x_helpers.models import G4Xoutput
 from g4x_helpers.utils import verbose_to_log_level
 

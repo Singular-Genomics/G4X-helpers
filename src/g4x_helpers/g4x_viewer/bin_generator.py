@@ -1,6 +1,7 @@
 import logging
 import multiprocessing
 import random
+import warnings
 from collections import deque
 from pathlib import Path
 
@@ -230,6 +231,13 @@ def seg_converter(
     logger: logging.Logger | None = None,
     log_level: int = logging.DEBUG,
 ) -> None:
+    warnings.filterwarnings(
+        'ignore',
+        message='FNV hashing is not implemented in Numba',
+        category=UserWarning,
+        module='numba.cpython.old_hashing',
+    )
+
     if logger is None:
         logger = utils.setup_logger(
             'seg_converter',
@@ -322,7 +330,7 @@ def seg_converter(
         for k, cx, cy in zip(np.arange(1, num_cells + 1), centroid_x, centroid_y)
     ]
 
-    with multiprocessing.Pool() as pool:
+    with multiprocessing.Pool(processes=n_threads) as pool:
         polygons = pool.starmap(refine_polygon, pq_args)
 
     ## do conversion
