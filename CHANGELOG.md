@@ -1,6 +1,15 @@
 
 # Changelog
 
+## v0.4.14 – (2025-08-12)
+
+#### Fixes:
+- `tar_viewer` will now exit leaving the source folder unchanged
+
+#### Improvements:
+- `tar_viwer` now requires an out_path
+
+
 ## v0.4.13 – (2025-08-11)
 
 #### Docs:
