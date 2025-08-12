@@ -1,7 +1,7 @@
 # region Site
 site_name: G4X-tutorials
 site_author: Singular Genomics
-site_url: https://shiny-tribble-2nl4loz.pages.github.io/
+site_url: https://docs.singulargenomics.com/G4X-helpers/
 site_description: Singular Genomics G4X data documentation site
 repo_name: G4X-helpers
 repo_url: https://github.com/Singular-Genomics/G4X-helpers
@@ -85,14 +85,14 @@ nav:
   - Introduction: index.md
 
   - G4X-helpers:
-      - g4x_helpers/index.md
+      - G4X-helpers: g4x_helpers/index.md
       - installation:
-        - g4x_helpers/installation/index.md
+        - installation: g4x_helpers/installation/index.md
         - source install: g4x_helpers/installation/source.md
         - Docker setup: g4x_helpers/installation/docker.md
 
       - CLI features:
-        - g4x_helpers/features/index.md
+        - CLI features: g4x_helpers/features/index.md
         - --resegment: g4x_helpers/features/resegment.md
         - --update_bin: g4x_helpers/features/update_bin.md
         - --new_bin: g4x_helpers/features/new_bin.md
@@ -106,7 +106,11 @@ nav:
       - data import: g4x_data/data_import.md
 
   - contributing:
-      - contributing/index.md
+      - contributing: contributing/index.md
+
+  - changelog:
+      - changelog/index.md
+
 
 
 # region Extensions
@@ -154,8 +158,12 @@ extra:
     - icon: /fontawesome/regular/envelope
       name: support
       link: mailto:care@singulargenomics.com
+
     - icon: fontawesome/brands/x-twitter
       link: https://x.com/SingularGenomic
+
+    - icon: fontawesome/solid/earth-americas
+      link: https://www.singulargenomics.com/
 
 validation:
   omitted_files: warn
