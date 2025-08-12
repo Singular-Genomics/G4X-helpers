@@ -298,10 +298,11 @@ def launch_new_bin():
 
 def launch_tar_viewer():
     parser = argparse.ArgumentParser(allow_abbrev=False)
-    parser.add_argument('--viewer_dir', help='Path to G4X-viewer folder to tar',
-                        action='store', type=str, required=True)
+    parser.add_argument(
+        '--viewer_dir', help='Path to G4X-viewer folder to tar', action='store', type=str, required=True
+    )
     parser.add_argument('--out_path', help='Output file path', action='store', type=str, required=True)
-    
+
     args = parser.parse_args()
 
     print('Checking files.')
@@ -365,6 +366,7 @@ def launch_tar_viewer():
 
     def _handle_signal(sig):
         import signal as _signal
+
         sig_name = _signal.Signals(sig).name
         print(f'Received {sig_name}; cleaning up…', file=sys.stderr)
         restore_he()
