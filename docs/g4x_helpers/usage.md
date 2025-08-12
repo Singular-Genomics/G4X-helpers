@@ -107,9 +107,9 @@ docker run --rm \
   command_name --option_1 VALUE_OPTION_1 --option_2 VALUE_OPTION_2
 ```
 
-+ `-v host:container` mounts your folder to let the container see your files. 
-+ `--rm` cleans up the container after it exits.+
-+ `ghcr.io/singular-genomics/g4x-helpers:latest` uses the latest version of G4X-helpers
++ `-v host:container` mounts your folder to let the container see your files  
++ `--rm` cleans up the container after it exits  
++ `ghcr.io/singular-genomics/g4x-helpers:latest` uses the latest version of G4X-helpers  
 
 
 ### example: using `--resegment` in Docker
