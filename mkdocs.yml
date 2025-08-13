@@ -1,8 +1,8 @@
 # region Site
-site_name: G4X-tutorials
+site_name: G4X Documentation
 site_author: Singular Genomics
 site_url: https://shiny-tribble-2nl4loz.pages.github.io/
-site_description: Singular Genomics G4X data documentation site
+site_description: Singular Genomics G4X documentation site
 repo_name: G4X-helpers
 repo_url: https://github.com/Singular-Genomics/G4X-helpers
 
@@ -84,26 +84,45 @@ exclude_docs: |
 nav:
   - Introduction: index.md
 
-  - G4X-helpers:
-      - g4x_helpers/index.md
-      - installation:
-        - g4x_helpers/installation/index.md
-        - source install: g4x_helpers/installation/source.md
-        - Docker setup: g4x_helpers/installation/docker.md
-
-      - CLI features:
-        - g4x_helpers/features/index.md
-        - --resegment: g4x_helpers/features/resegment.md
-        - --update_bin: g4x_helpers/features/update_bin.md
-        - --new_bin: g4x_helpers/features/new_bin.md
-        - --tar_viewer: g4x_helpers/features/tar_viewer.md
-
-      - usage: g4x_helpers/usage.md
+  - G4X Reports:
+      - g4x_reports/index.md
+      - HTML Summary: g4x_reports/html_summary.md
+      - Custom Panel Report: g4x_reports/custom_panel_report.md
 
   - G4X data:
       - g4x_data/index.md
       - G4X output: g4x_data/g4x_output.md
       - data import: g4x_data/data_import.md
+
+  - G4X Tools:
+      - g4x_tools/index.md
+      - G4X Viewer:
+        - g4x_tools/g4x_viewer/index.md
+        - installation: g4x_tools/g4x_viewer/installation.md
+        - resources: g4x_tools/g4x_viewer/resources.md
+
+      - G4X-helpers:
+        - g4x_tools/g4x_helpers/index.md
+        - installation:
+          - g4x_tools/g4x_helpers/installation/index.md
+          - source install: g4x_tools/g4x_helpers/installation/source.md
+          - Docker setup: g4x_tools/g4x_helpers/installation/docker.md
+
+        - CLI features:
+          - g4x_tools/g4x_helpers/features/index.md
+          - --resegment: g4x_tools/g4x_helpers/features/resegment.md
+          - --update_bin: g4x_tools/g4x_helpers/features/update_bin.md
+          - --new_bin: g4x_tools/g4x_helpers/features/new_bin.md
+          - --tar_viewer: g4x_tools/g4x_helpers/features/tar_viewer.md
+
+        - usage: g4x_tools/g4x_helpers/usage.md
+
+  - G4X Tutorials:
+      - g4x_tutorials/index.md
+      - plot spatial: g4x_tutorials/plot_spatial.md
+      - segment data: g4x_tutorials/segment_data.md
+      - spatial workflows:
+          - g4x_tutorials/spatial_workflows/index.md
 
   - contributing:
       - contributing/index.md
@@ -115,6 +134,7 @@ markdown_extensions:
   - attr_list
   - md_in_html
   - admonition
+  - tables
 
   - pymdownx.blocks.caption
   - pymdownx.superfences

@@ -174,7 +174,7 @@ Directory structure depends on run type.
 
 
 
-### /protein/ *(only when protein is included)*
+### /protein/ *(Only in Multiomics runs)*
 > `<protein_name>.jp2:` Full-sized image used for analysis purposes. Shows the `<protein_name>` stain for selected tissue block.
 
 > `<protein_name>_thumbnail.png:` Downsampled image of the .jp2 file for easier viewing. Shows the `<protein_name>` stain for selected tissue block.
