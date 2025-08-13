@@ -1,16 +1,19 @@
-# Use a pinned Python image
-FROM python@sha256:68763c64e640977ad219a74dde8c445f6fac5d2a229c4e01058a88fcdab2249c
+# Use a slim Python base image
+FROM python:3.10-slim-bookworm
 
 LABEL org.opencontainers.image.source="https://github.com/Singular-Genomics/G4X-helpers"
 
 # Add uv to the image
-COPY --from=ghcr.io/astral-sh/uv:0.8.0 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-
+# Install build dependencies
 RUN apt-get update -qq \
  && apt-get install -y --no-install-recommends \
       libexpat1 \
       libopenjp2-7 \
+      gcc \
+      g++ \
+      libgdal-dev gdal-bin \
  && rm -rf /var/lib/apt/lists/*
 
 # Install the project into `/app`

@@ -1,8 +1,8 @@
 # region Site
 site_name: G4X Documentation
 site_author: Singular Genomics
-site_url: https://shiny-tribble-2nl4loz.pages.github.io/
-site_description: Singular Genomics G4X documentation site
+site_url: https://docs.singulargenomics.com/G4X-helpers/
+site_description: Singular Genomics G4X data documentation site
 repo_name: G4X-helpers
 repo_url: https://github.com/Singular-Genomics/G4X-helpers
 
@@ -125,7 +125,11 @@ nav:
           - g4x_tutorials/spatial_workflows/index.md
 
   - contributing:
-      - contributing/index.md
+      - contributing: contributing/index.md
+
+  - changelog:
+      - changelog/index.md
+
 
 
 # region Extensions
@@ -174,8 +178,12 @@ extra:
     - icon: /fontawesome/regular/envelope
       name: support
       link: mailto:care@singulargenomics.com
+
     - icon: fontawesome/brands/x-twitter
       link: https://x.com/SingularGenomic
+
+    - icon: fontawesome/solid/earth-americas
+      link: https://www.singulargenomics.com/
 
 validation:
   omitted_files: warn
