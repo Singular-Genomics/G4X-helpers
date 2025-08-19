@@ -84,6 +84,11 @@ exclude_docs: |
 nav:
   - Introduction: index.md
 
+  - G4X data:
+      - g4x_data/index.md
+      - G4X output: g4x_data/g4x_output.md
+      - data import: g4x_data/data_import.md
+
   - G4X-helpers:
       - G4X-helpers: g4x_helpers/index.md
       - installation:
@@ -100,10 +105,15 @@ nav:
 
       - usage: g4x_helpers/usage.md
 
-  - G4X data:
-      - g4x_data/index.md
-      - G4X output: g4x_data/g4x_output.md
-      - data import: g4x_data/data_import.md
+  - G4X-viewer:
+    - g4x_viewer/index.md
+    - resources: g4x_viewer/resources.md
+
+
+  - G4X-tutorials:
+      - Introduction: g4x_tutorials/index.md
+      - plot spatial: g4x_tutorials/plot_spatial.md
+      - segment data: g4x_tutorials/segment_data.md
 
   - contributing:
       - contributing: contributing/index.md
