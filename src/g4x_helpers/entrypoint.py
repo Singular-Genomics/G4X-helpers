@@ -2,6 +2,7 @@ import argparse
 import atexit
 import json
 import os
+import re
 import shutil
 import signal
 import sys
@@ -11,7 +12,6 @@ from pathlib import Path
 import geopandas
 import numpy as np
 
-from g4x_helpers.g4x_viewer.bin_generator import seg_converter, seg_updater
 from g4x_helpers.models import G4Xoutput
 from g4x_helpers.utils import verbose_to_log_level
 
@@ -212,6 +212,8 @@ def launch_update_bin():
     os.makedirs(out_dir, exist_ok=True)
 
     ## run converter
+    from g4x_helpers.g4x_viewer.bin_generator import seg_updater
+
     _ = seg_updater(
         bin_file=bin_file,
         metadata_file=metadata,
@@ -282,6 +284,8 @@ def launch_new_bin():
         outfile = run_base / 'g4x_viewer' / f'{sample.sample_id}.bin'
 
     ## make new bin file
+    from g4x_helpers.g4x_viewer.bin_generator import seg_converter
+
     sample.logger.info('Making G4X-Viewer bin file.')
     _ = seg_converter(
         adata=adata,
@@ -405,3 +409,77 @@ def launch_tar_viewer():
             atexit.unregister(restore_he)
         except Exception:
             pass
+
+
+def launch_redemux():
+    parser = argparse.ArgumentParser(allow_abbrev=False)
+
+    parser.add_argument('--run_base', help='Path to G4X sample output folder', action='store', type=str, required=True)
+    parser.add_argument('--manifest', help='Path to manifest for demuxing.', action='store', type=str, required=True)
+    parser.add_argument(
+        '--sample_id', help='sample_id (Optional)', action='store', type=str, required=False, default=None
+    )
+    parser.add_argument(
+        '--batch_size',
+        help='Number of transcripts to process per batch.',
+        action='store',
+        type=int,
+        required=False,
+        default=1_000_000,
+    )
+    parser.add_argument(
+        '--out_dir',
+        help='Output directory where new files will be saved. Will be created if it does not exist. If not provided, the files in run_base will be updated in-place.',
+        action='store',
+        type=str,
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        '--verbose',
+        help='Set logging level WARNING (0), INFO (1), or DEBUG (2). [1]',
+        action='store',
+        type=int,
+        default=1,
+    )
+
+    args = parser.parse_args()
+
+    ## preflight checks
+    run_base = Path(args.run_base)
+    assert run_base.exists(), f'{run_base} does not appear to exist.'
+    manifest = Path(args.manifest)
+    assert manifest.exists(), f'{manifest} does not appear to exist.'
+
+    ## initialize G4X sample
+    sample = G4Xoutput(
+        run_base=run_base, sample_id=args.sample_id, out_dir=args.out_dir, log_level=verbose_to_log_level(args.verbose)
+    )
+    print(sample)
+
+    from g4x_helpers.demux import batched_dot_product_hamming_matrix, demux
+    import polars as pl
+    import pandas as pd
+
+    manifest = pd.read_csv(manifest, index_col=None, header=0)
+    target_list = manifest['target'].tolist()
+
+    p = re.compile('-[ACGT]{2,30}')
+    match = re.findall(pattern=p, string=target_list[0])
+    if len(match) == 0:
+        probe_dict = {p: '-'.join(p.split('-')[:-1]) for p in target_list}
+    else:
+        probe_dict = {}
+        for probe in target_list:
+            match = re.findall(pattern=p, string=probe)
+            probe_dict[probe] = probe.split(match[0])[0]
+    probe_dict['UNDETERMINED'] = 'UNDETERMINED'
+
+    reads = sample.load_transcript_table(return_polars=True)
+    seqs = reads.select(pl.col('sequence_to_demux')).to_series().to_list()
+    codes = manifest['sequence'].tolist()
+    codebook_target_ids = np.array(manifest.target.values)
+
+    hammings = batched_dot_product_hamming_matrix(seqs, codes, batch_size=args.batch_size)
+
+    reads = demux(hammings, reads, 2, 2, codebook_target_ids, probe_dict)
