@@ -27,7 +27,7 @@ classifiers = [
 
 dependencies = [
     "geopandas ~= 1.0",
-    "glymur ~= 0.13",
+    "glymur ~= 0.12",
     "matplotlib ~= 3.7",
     "polars ~= 1.30",
     "protobuf ~= 4.25",
