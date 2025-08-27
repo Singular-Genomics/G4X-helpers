@@ -216,6 +216,7 @@ def launch_update_bin():
         bin_file=bin_file,
         metadata_file=metadata,
         out_path=out_path,
+        cellid_key=args.cellid_key,
         cluster_key=args.cluster_key,
         cluster_color_key=args.cluster_color_key,
         emb_key=args.emb_key,
