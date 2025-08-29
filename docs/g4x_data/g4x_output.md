@@ -32,6 +32,7 @@ Directory structure depends on run type.
     │
     ├── metrics 
     │   ├── core_metrics.csv
+    |   ├── protein_core_metrics.csv
     │   └── per_area_metrics.csv
     │
     ├── protein                             
@@ -172,7 +173,20 @@ Directory structure depends on run type.
 
 <br>
 
+### /metrics/
+
+> `core_metrics.csv:` CSV file containing a set of core metrics for the tissue block including total transcripts, total area, number of cells and more.
+
+> `protein_core_metrics.csv:` CSV file containing a set of core protein metrics for the tissue block including SNR, background intensity, and Fisher's exact scores for the coocurrence of the protein signal with its assocaited transcript signal (`<protein>_fisher_score`) and a random background (`<protein>_fisher_score_background`). These scores indicating the likelihood of the signal being true signal compared to the measured background. *Multiomics runs only.*
+
+> `per_area_metrics.csv:` CSV file containing a set of per-area metrics for the tissue block (coordinate location, number of transcripts, and number of cells), separated out into images from before the images were stitched together into one whole block.
+
+<br>
+
 ### /h_and_e/
+
+!!! tip
+    The .jp2 images in this folder and the `/protein/` folder are suitable to use for both nuclear and cytoplasmic segmentation. For more information on how you might do this, see [segment data](../g4x_tutorials/segment_data.md).
 
 > `eosin.jp2:` Full-sized eosin stained JPEG image used for analysis purposes for selected tissue block.
 
@@ -188,14 +202,6 @@ Directory structure depends on run type.
 
 <br>
 
-### /metrics/
-
-> `core_metrics.csv:` CSV file containing a set of core metrics for the tissue block including total transcripts, total area, number of cells and more.
-
-> `per_area_metrics.csv:` CSV file containing a set of per-area metrics for the tissue block (coordinate location, number of transcripts, and number of cells), separated out into images from before the images were stitched together into one whole block.
-
-<br>
-
 ### /protein/ *(Only in Multiomics runs)*
 
 > `<protein_name>.jp2:` Full-sized JPEG image used for analysis purposes. Shows the `<protein_name>` stain for selected tissue block.
@@ -206,7 +212,7 @@ Directory structure depends on run type.
 
 ### /rna/
 
-> `transcript_table.csv.gz:` CSV file containing a transcript table showing all transcripts identified on the whole tissue block. Contains coordinate information, z-layer, gene identity, and cell_id fields. All transcripts here are high confidence transcripts post-filtering and processing.
+> `transcript_table.csv.gz:` CSV file containing a transcript table showing all demuxed transcripts on the whole tissue block. Contains coordinate information, z-layer, gene identity, and cell_id fields. All transcripts here are high confidence transcripts post-filtering and processing.
 
 <br>
 

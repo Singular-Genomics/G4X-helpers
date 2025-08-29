@@ -1,6 +1,6 @@
 <br>
 
-# :material-map-legend: G4X data
+# :material-file: G4X Data
 #### Output reference and analysis import guides.  
 
 The G4X produces multi-modal output containing tables, images, arrays and annotated matrices for single-cell analysis.

@@ -40,14 +40,8 @@ adata.obsm['X_spatial_cell'] = adata.obs[['cell_x', 'cell_y']].to_numpy()
 
 ```python
 # Plot the spatial coordinates
-fig, ax = plt.subplots(figsize=(10, 8))  # create a figure and axis
-sc.pl.scatter(
-    adata,
-    basis='spatial_cell',
-    color='log1p_total_counts',
-    show=False,
-    ax=ax
-)
+plt.figure(figsize=(10,8))
+ax = sc.pl.scatter(adata, basis='spatial_cell', color='log1p_total_counts', show=False)
 
 # Flip the y-axis to match image orientation
 ax.invert_yaxis()
