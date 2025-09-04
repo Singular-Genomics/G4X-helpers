@@ -19,4 +19,6 @@ A slide deck to walk you through the core functions of the G4X Viewer, including
 [![G4X Viewer Introductary Slides](./images/g4x_slides_image.png)](https://singulargenomicssystems.sharepoint.com/sites/FieldApplications/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2FFieldApplications%2FShared%20Documents%2FEAP%2FG4X%20Training%20Documents%2FTraining%20PPTS%2FG4X%20Viewer%20Training%2Epdf&parent=%2Fsites%2FFieldApplications%2FShared%20Documents%2FEAP%2FG4X%20Training%20Documents%2FTraining%20PPTS)
 
 <br>
----
+
+
+--8<-- "_partials/end_cap.md"
