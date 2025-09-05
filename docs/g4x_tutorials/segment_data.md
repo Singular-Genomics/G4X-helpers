@@ -1,6 +1,6 @@
 <br>
 
-# Segmenting G4X (Cellpose)
+# Segmenting G4X Data
 
 Here, we lay out a basic approach to resegment your G4X data. We strongly encourage you to start this process by looking at the existing segmentation using our [G4X Viewer](../g4x_viewer/index.md). This will allow you to identify where it fails to capture your desired cell morphology. 
 
