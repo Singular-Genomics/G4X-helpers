@@ -203,7 +203,7 @@ np.savez_compressed("/path/to/output/folder/resegmented_masks.npz",
 
 #### Regenerate your G4X outputs
 
-After you have a segmentation that you are happy with, use out resegmentation tool to regenerate it for each tissue block. For installation tips, see our guide on [installing G4X-helpers](../g4x_helpers/install_g4x_helpers.md). For advanced usage tips, see our [resegment documentation](../g4x_helpers/features/resegment.md).
+After you have a segmentation that you are happy with, use out resegmentation tool to regenerate it for each tissue block. For installation tips, see our guide on [installing G4X-helpers](../g4x_helpers/installation/index.md). For advanced usage tips, see our [resegment documentation](../g4x_helpers/features/resegment.md).
 
 ```bash
 resegment 

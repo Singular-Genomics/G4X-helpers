@@ -62,7 +62,6 @@ G4X Tutorials are a collection of example workflows that demonstrate how to anal
 
 + learn how to [plot spatial](./g4x_tutorials/plot_spatial.md) tissue information from the G4X data
 + generate novel nuclear or cytoplasmic [segmentations](./g4x_tutorials/segment_data.md) with popular models
-+ see example workflows for [spatial transcriptomics analysis](./g4x_tutorials/spatial_workflows/index.md)
 
 <br>
 
