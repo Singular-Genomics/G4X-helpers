@@ -440,6 +440,14 @@ def launch_redemux():
         default=None,
     )
     parser.add_argument(
+        '--threads',
+        help='Number of threads to use for processing. [4]',
+        action='store',
+        type=int,
+        required=False,
+        default=4,
+    )
+    parser.add_argument(
         '--verbose',
         help='Set logging level WARNING (0), INFO (1), or DEBUG (2). [1]',
         action='store',
@@ -512,3 +520,5 @@ def launch_redemux():
     os.remove(final_tx_table_path)
 
     ## now regenerate the secondary files
+    labels = sample.load_segmentation()
+    _ = sample.intersect_segmentation(labels=labels, out_dir=out_dir, n_threads=args.threads)

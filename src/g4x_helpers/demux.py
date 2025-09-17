@@ -38,7 +38,7 @@ def batched_dot_product_hamming_matrix(
     assert all(len(seq) == seq_len for seq in codebook), 'All codebook entries must be same length'
 
     # One-hot encode the codebook once
-    codebook_oh = one_hot_encode_str_array(codebook, seq_len)  # (M, L*4)
+    codebook_oh = one_hot_encode_str_array(codebook, seq_len)
     M = len(codebook)
 
     # Prepare final result
@@ -47,8 +47,8 @@ def batched_dot_product_hamming_matrix(
 
     for i in tqdm(range(0, N, batch_size), desc='Demuxing transcripts'):
         batch_reads = reads[i : i + batch_size]
-        batch_oh = one_hot_encode_str_array(batch_reads, seq_len)  # (B, L*4)
-        matches = batch_oh @ codebook_oh.T  # (B, M)
+        batch_oh = one_hot_encode_str_array(batch_reads, seq_len)
+        matches = batch_oh @ codebook_oh.T
         hamming = seq_len - matches
         hamming_matrix[i : i + len(batch_reads)] = hamming
 
@@ -63,7 +63,6 @@ def demux(
     max_ham_dist: int = 2,
     min_delta: int = 2,
 ) -> pl.DataFrame:
-    ## apply demuxing
     demuxed = np.zeros(hammings.shape[0], dtype=bool)
     for i in range(max_ham_dist + 1):
         hits = hammings == i
