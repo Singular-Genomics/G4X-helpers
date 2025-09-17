@@ -5,7 +5,7 @@ from dataclasses import InitVar, dataclass  # , asdict, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
-
+from collections.abc import Iterator
 import anndata as ad
 import glymur
 import matplotlib.pyplot as plt
@@ -268,11 +268,43 @@ class G4Xoutput:
         else:
             return arr['nuclei']
 
-    def load_transcript_table(self, return_polars: bool = False) -> pd.DataFrame | pl.DataFrame:
-        reads = pl.read_csv(self.run_base / 'rna' / 'transcript_table.csv.gz')
+    def _load_table(
+        self, file_path: str | Path, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
+    ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
+        if lazy:
+            reads = pl.scan_csv(file_path)
+        else:
+            reads = pl.read_csv(file_path)
+        if columns:
+            reads = reads.select(columns)
         if not return_polars:
-            reads = reads.to_pandas()
+            reads = reads.collect().to_pandas()
         return reads
+
+    def load_feature_table(
+        self, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
+    ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
+        file_path = self.run_base / 'diagnostics' / 'transcript_table.parquet'
+        return self._load_table(file_path, return_polars, lazy, columns)
+
+    def load_transcript_table(
+        self, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
+    ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
+        file_path = self.run_base / 'rna' / 'transcript_table.csv.gz'
+        return self._load_table(file_path, return_polars, lazy, columns)
+
+    def stream_features(self, batch_size: int, columns: str | list[str] | None = None) -> Iterator[pl.DataFrame]:
+        file_path = self.run_base / 'diagnostics' / 'transcript_table.parquet'
+        df = pl.scan_parquet(file_path)
+        if columns:
+            df = df.select(columns)
+        offset = 0
+        while True:
+            batch = df.slice(offset, batch_size).collect()
+            if batch.is_empty():
+                break
+            yield batch
+            offset += batch_size
 
     def list_content(self, subdir=None):
         if subdir is None:

@@ -1,5 +1,9 @@
+import re
 import numpy as np
+import pandas as pd
+import polars as pl
 from tqdm import tqdm
+from pathlib import Path
 
 BASE_ORDER = 'CTGA'
 LUT = np.zeros((256, 4), dtype=np.float32)
@@ -41,7 +45,7 @@ def batched_dot_product_hamming_matrix(
     N = len(reads)
     hamming_matrix = np.empty((N, M), dtype=np.uint8)
 
-    for i in tqdm(range(0, N, batch_size), desc='Demuxing transcripts.'):
+    for i in tqdm(range(0, N, batch_size), desc='Demuxing transcripts'):
         batch_reads = reads[i : i + batch_size]
         batch_oh = one_hot_encode_str_array(batch_reads, seq_len)  # (B, L*4)
         matches = batch_oh @ codebook_oh.T  # (B, M)
@@ -51,9 +55,14 @@ def batched_dot_product_hamming_matrix(
     return hamming_matrix
 
 
-def demux(hammings, reads, max_ham_dist, min_delta, codebook_target_ids, probe_dict):
-    import polars as pl
-
+def demux(
+    hammings: np.ndarray,
+    reads: pl.DataFrame,
+    codebook_target_ids: np.ndarray,
+    probe_dict: dict,
+    max_ham_dist: int = 2,
+    min_delta: int = 2,
+) -> pl.DataFrame:
     ## apply demuxing
     demuxed = np.zeros(hammings.shape[0], dtype=bool)
     for i in range(max_ham_dist + 1):
@@ -72,7 +81,6 @@ def demux(hammings, reads, max_ham_dist, min_delta, codebook_target_ids, probe_d
         # """)
 
     # --- Get best hits ---
-    min_hams = hammings.min(axis=1)
     hit_ids = hammings.argmin(axis=1)
     hit_targets = codebook_target_ids[hit_ids]
     transcripts = np.where(demuxed, hit_targets, 'UNDETERMINED')
@@ -80,8 +88,6 @@ def demux(hammings, reads, max_ham_dist, min_delta, codebook_target_ids, probe_d
 
     reads = reads.with_columns(
         [
-            pl.Series('hamming_new', min_hams),
-            pl.Series('closest_hit_new', hit_targets),
             pl.Series('transcript_new', transcripts),
             pl.Series('transcript_condensed_new', transcript_condensed),
             pl.Series('demuxed_new', demuxed),
@@ -89,3 +95,21 @@ def demux(hammings, reads, max_ham_dist, min_delta, codebook_target_ids, probe_d
     )
 
     return reads
+
+
+def load_manifest(file_path: str | Path) -> tuple[pd.DataFrame, dict]:
+    manifest = pd.read_csv(file_path, index_col=None, header=0)
+    target_list = manifest['target'].tolist()
+
+    p = re.compile('-[ACGT]{2,30}')
+    match = re.findall(pattern=p, string=target_list[0])
+    if len(match) == 0:
+        probe_dict = {p: '-'.join(p.split('-')[:-1]) for p in target_list}
+    else:
+        probe_dict = {}
+        for probe in target_list:
+            match = re.findall(pattern=p, string=probe)
+            probe_dict[probe] = probe.split(match[0])[0]
+    probe_dict['UNDETERMINED'] = 'UNDETERMINED'
+
+    return manifest, probe_dict

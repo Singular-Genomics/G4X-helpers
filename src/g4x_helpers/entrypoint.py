@@ -2,7 +2,6 @@ import argparse
 import atexit
 import json
 import os
-import re
 import shutil
 import signal
 import sys
@@ -412,6 +411,11 @@ def launch_tar_viewer():
 
 
 def launch_redemux():
+    from g4x_helpers.demux import batched_dot_product_hamming_matrix, demux, load_manifest
+    import polars as pl
+    from tqdm import tqdm
+    import gzip
+
     parser = argparse.ArgumentParser(allow_abbrev=False)
 
     parser.add_argument('--run_base', help='Path to G4X sample output folder', action='store', type=str, required=True)
@@ -450,6 +454,10 @@ def launch_redemux():
     assert run_base.exists(), f'{run_base} does not appear to exist.'
     manifest = Path(args.manifest)
     assert manifest.exists(), f'{manifest} does not appear to exist.'
+    out_dir = Path(args.out_dir)
+    batch_dir = out_dir / 'batches'
+    os.makedirs(batch_dir, exist_ok=True)
+    demux_batch_size = args.batch_size
 
     ## initialize G4X sample
     sample = G4Xoutput(
@@ -457,29 +465,50 @@ def launch_redemux():
     )
     print(sample)
 
-    from g4x_helpers.demux import batched_dot_product_hamming_matrix, demux
-    import polars as pl
-    import pandas as pd
+    ## load the new manifest file that we will demux against
+    manifest, probe_dict = load_manifest(manifest)
 
-    manifest = pd.read_csv(manifest, index_col=None, header=0)
-    target_list = manifest['target'].tolist()
+    ## do the re-demuxing
+    cols_to_select = [
+        'x_coord_shift',
+        'y_coord_shift',
+        'z',
+        'demuxed',
+        'transcript_condensed',
+        'meanQS',
+        'cell_id',
+        'sequence_to_demux',
+        'transcript',
+        'TXUID',
+    ]
+    for i, reads in tqdm(
+        enumerate(sample.stream_features(args.batch_size, cols_to_select)), desc='Processing transcripts'
+    ):
+        seqs = reads['sequence_to_demux'].to_list()
+        codes = manifest['sequence'].tolist()
+        codebook_target_ids = np.array(manifest.target.values)
+        hammings = batched_dot_product_hamming_matrix(seqs, codes, batch_size=demux_batch_size)
+        reads = demux(hammings, reads, codebook_target_ids, probe_dict)
+        reads.write_parquet(batch_dir / f'batch_{i}.parquet')
 
-    p = re.compile('-[ACGT]{2,30}')
-    match = re.findall(pattern=p, string=target_list[0])
-    if len(match) == 0:
-        probe_dict = {p: '-'.join(p.split('-')[:-1]) for p in target_list}
-    else:
-        probe_dict = {}
-        for probe in target_list:
-            match = re.findall(pattern=p, string=probe)
-            probe_dict[probe] = probe.split(match[0])[0]
-    probe_dict['UNDETERMINED'] = 'UNDETERMINED'
+    ## concatenate results into final csv
+    final_tx_table_path = out_dir / 'redemuxed_transcript_table.csv'
+    _ = (
+        pl.scan_parquet(list(batch_dir.glob('*.parquet')))
+        .filter(pl.col('demuxed_new'))
+        .drop('transcript', 'transcript_condensed', 'demuxed')
+        .rename(
+            {
+                'transcript_new': 'transcript',
+                'transcript_condensed_new': 'transcript_condensed',
+                'demuxed_new': 'demuxed',
+            }
+        )
+        .sink_csv(final_tx_table_path)
+    )
+    with open(final_tx_table_path, 'rb') as f_in:
+        with gzip.open(final_tx_table_path.with_suffix('.csv.gz'), 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
+    os.remove(final_tx_table_path)
 
-    reads = sample.load_transcript_table(return_polars=True)
-    seqs = reads.select(pl.col('sequence_to_demux')).to_series().to_list()
-    codes = manifest['sequence'].tolist()
-    codebook_target_ids = np.array(manifest.target.values)
-
-    hammings = batched_dot_product_hamming_matrix(seqs, codes, batch_size=args.batch_size)
-
-    reads = demux(hammings, reads, 2, 2, codebook_target_ids, probe_dict)
+    ## now regenerate the secondary files

@@ -89,7 +89,7 @@ def get_mask_properties(sample: 'G4Xoutput', mask: np.ndarray) -> pl.DataFrame:
 
 
 def assign_tx_to_mask_labels(sample: 'G4Xoutput', mask: np.ndarray) -> pl.DataFrame:
-    reads = sample.load_transcript_table(return_polars=True)
+    reads = sample.load_transcript_table()
 
     # assuming coord order == 'yx':
     coord_order = ['y_pixel_coordinate', 'x_pixel_coordinate']
