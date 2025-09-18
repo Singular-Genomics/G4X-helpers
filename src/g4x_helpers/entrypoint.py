@@ -12,7 +12,7 @@ import geopandas
 import numpy as np
 
 from g4x_helpers.models import G4Xoutput
-from g4x_helpers.utils import verbose_to_log_level
+from g4x_helpers.utils import verbose_to_log_level, gzip_file
 
 SUPPORTED_MASK_FILETYPES = ['.npz', '.npy', '.geojson']
 
@@ -415,7 +415,6 @@ def launch_redemux():
     from g4x_helpers.g4x_viewer.tx_generator import tx_converter
     import polars as pl
     from tqdm import tqdm
-    import gzip
 
     parser = argparse.ArgumentParser(allow_abbrev=False)
 
@@ -500,13 +499,12 @@ def launch_redemux():
         'demuxed',
         'transcript_condensed',
         'meanQS',
-        'cell_id',
         'sequence_to_demux',
         'transcript',
         'TXUID',
     ]
     for i, reads in tqdm(
-        enumerate(sample.stream_features(args.batch_size, cols_to_select)), desc='Processing transcripts'
+        enumerate(sample.stream_features(args.batch_size, cols_to_select)), desc='Demuxing transcripts'
     ):
         seqs = reads['sequence_to_demux'].to_list()
         codes = manifest['sequence'].tolist()
@@ -514,6 +512,9 @@ def launch_redemux():
         hammings = batched_dot_product_hamming_matrix(seqs, codes, batch_size=demux_batch_size)
         reads = demux(hammings, reads, codebook_target_ids, probe_dict)
         reads.write_parquet(batch_dir / f'batch_{i}.parquet')
+
+    ## set run_base to the redemux output folder
+    sample.run_base = out_dir
 
     ## concatenate results into final csv
     sample.logger.info('Writing updated transcript table.')
@@ -525,20 +526,28 @@ def launch_redemux():
     _ = (
         pl.scan_parquet(list(batch_dir.glob('*.parquet')))
         .filter(pl.col('demuxed_new'))
-        .drop('transcript', 'transcript_condensed', 'demuxed')
+        .drop(
+            'transcript',
+            'transcript_new',
+            'transcript_condensed',
+            'demuxed',
+            'demuxed_new',
+            'sequence_to_demux',
+            'TXUID',
+        )
         .rename(
             {
-                'transcript_new': 'transcript',
-                'transcript_condensed_new': 'transcript_condensed',
-                'demuxed_new': 'demuxed',
+                'transcript_condensed_new': 'gene_name',
+                'x_coord_shift': 'y_pixel_coordinate',
+                'y_coord_shift': 'x_pixel_coordinate',
+                'z': 'z_level',
+                'meanQS': 'confidence_score',
+                'cell_id': 'cell_id',
             }
         )
         .sink_csv(final_tx_table_path)
     )
-    with open(final_tx_table_path, 'rb') as f_in:
-        with gzip.open(final_tx_table_path.with_suffix('.csv.gz'), 'wb') as f_out:
-            shutil.copyfileobj(f_in, f_out)
-    os.remove(final_tx_table_path)
+    _ = gzip_file(final_tx_table_path)
 
     ## now regenerate the secondary files
     sample.logger.info('Regenerating downstream files.')

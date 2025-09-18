@@ -379,17 +379,17 @@ class G4Xoutput:
         np.savez(outfile, cell_labels=mask)
 
         outfile = reseg._create_custom_out(self, out_dir, 'rna', 'transcript_table.csv')
-        self.logger.debug(f'transcript table --> {outfile}')
+        self.logger.debug(f'transcript table --> {outfile}.gz')
         reads_new_labels.write_csv(outfile)
         _ = utils.gzip_file(outfile, remove_original=True)
 
         outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'cell_by_transcript.csv')
-        self.logger.debug(f'cell x transcript --> {outfile}')
+        self.logger.debug(f'cell x transcript --> {outfile}.gz')
         cell_by_gene.write_csv(outfile)
         _ = utils.gzip_file(outfile, remove_original=True)
 
         outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'cell_by_protein.csv')
-        self.logger.debug(f'cell x protein --> {outfile}')
+        self.logger.debug(f'cell x protein --> {outfile}.gz')
         cell_by_protein.write_csv(outfile)
         _ = utils.gzip_file(outfile, remove_original=True)
 
