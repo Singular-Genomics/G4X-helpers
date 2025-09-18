@@ -282,13 +282,13 @@ class G4Xoutput:
         return reads
 
     def load_feature_table(
-        self, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
+        self, *, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
     ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
         file_path = self.run_base / 'diagnostics' / 'transcript_table.parquet'
         return self._load_table(file_path, return_polars, lazy, columns)
 
     def load_transcript_table(
-        self, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
+        self, *, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
     ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
         file_path = self.run_base / 'rna' / 'transcript_table.csv.gz'
         return self._load_table(file_path, return_polars, lazy, columns)

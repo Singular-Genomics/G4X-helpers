@@ -412,6 +412,7 @@ def launch_tar_viewer():
 
 def launch_redemux():
     from g4x_helpers.demux import batched_dot_product_hamming_matrix, demux, load_manifest
+    from g4x_helpers.g4x_viewer.tx_generator import tx_converter
     import polars as pl
     from tqdm import tqdm
     import gzip
@@ -487,9 +488,11 @@ def launch_redemux():
     print(sample)
 
     ## load the new manifest file that we will demux against
+    sample.logger.info('Loading manifest file.')
     manifest, probe_dict = load_manifest(manifest)
 
     ## do the re-demuxing
+    sample.logger.info('Performing re-demuxing.')
     cols_to_select = [
         'x_coord_shift',
         'y_coord_shift',
@@ -513,6 +516,7 @@ def launch_redemux():
         reads.write_parquet(batch_dir / f'batch_{i}.parquet')
 
     ## concatenate results into final csv
+    sample.logger.info('Writing updated transcript table.')
     final_tx_table_path = out_dir / 'rna' / 'transcript_table.csv'
     if final_tx_table_path.exists() or final_tx_table_path.is_symlink():
         final_tx_table_path.unlink()
@@ -537,5 +541,14 @@ def launch_redemux():
     os.remove(final_tx_table_path)
 
     ## now regenerate the secondary files
+    sample.logger.info('Regenerating downstream files.')
     labels = sample.load_segmentation()
+    sample.logger.info('Intersecting with existing segmentation.')
     _ = sample.intersect_segmentation(labels=labels, out_dir=out_dir, n_threads=args.threads)
+    sample.logger.info('Generating viewer transcript file.')
+    _ = tx_converter(
+        sample,
+        out_path=out_dir / 'g4x_viewer' / f'{sample.sample_id}.tar',
+        n_threads=args.threads,
+        logger=sample.logger,
+    )
