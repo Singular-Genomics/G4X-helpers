@@ -39,8 +39,3 @@ nav:
 
   - changelog:
       - changelog/index.md
-
-extra:
-  social:
-    - icon: fontawesome/brands/github
-      link: https://github.com/Singular-Genomics/G4X-helpers
