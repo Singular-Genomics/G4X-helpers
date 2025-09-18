@@ -183,4 +183,4 @@ If your installation of G4X-helpers was successful, you can call the following c
     you can see the output of such a `--help` statement in the [CLI usage](../usage.md/#cli-usage) section.
 
 
---8<-- "_partials/end_cap.md"
+--8<-- "_core/_partials/end_cap.md"

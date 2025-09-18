@@ -11,4 +11,4 @@ The files found in the output directory are compatible with popular Python libra
 + details on the [G4X output](./g4x_output.md) files and their organization
 + guides on [importing](./data_import.md) G4X data into popular analysis tools in Python and R 
 
---8<-- "_partials/end_cap.md"
+--8<-- "_core/_partials/end_cap.md"

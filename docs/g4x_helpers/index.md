@@ -15,4 +15,4 @@ With [G4X-helpers](https://github.com/Singular-Genomics/G4X-helpers) we provide 
 + get started with [using](./usage.md) the command line interface (CLI)
 + find a description of [CLI features](./features/index.md) 
 
---8<-- "_partials/end_cap.md"
+--8<-- "_core/_partials/end_cap.md"

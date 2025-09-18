@@ -252,4 +252,4 @@ Please do not change the project version or the changelog.
 
 Just submit your code/docs and they will be incorporated into our release workflow.
 
---8<-- "_partials/end_cap.md"
+--8<-- "_core/_partials/end_cap.md"
