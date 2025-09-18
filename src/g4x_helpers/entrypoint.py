@@ -462,10 +462,23 @@ def launch_redemux():
     assert run_base.exists(), f'{run_base} does not appear to exist.'
     manifest = Path(args.manifest)
     assert manifest.exists(), f'{manifest} does not appear to exist.'
-    out_dir = Path(args.out_dir)
-    batch_dir = out_dir / 'batches'
-    os.makedirs(batch_dir, exist_ok=True)
     demux_batch_size = args.batch_size
+
+    ## make output directory with symlinked files from original
+    out_dir = Path(args.out_dir)
+    batch_dir = out_dir / 'diagnostics' / 'batches'
+    batch_dir.mkdir(parents=True, exist_ok=True)
+
+    for root, dirs, files in os.walk(run_base):
+        rel_root = Path(root).relative_to(run_base)
+        dst_root = out_dir / rel_root
+        dst_root.mkdir(parents=True, exist_ok=True)
+        for f in files:
+            src_file = Path(root) / f
+            dst_file = dst_root / f
+            if dst_file.exists():
+                dst_file.unlink()
+            dst_file.symlink_to(src_file)
 
     ## initialize G4X sample
     sample = G4Xoutput(
@@ -500,7 +513,11 @@ def launch_redemux():
         reads.write_parquet(batch_dir / f'batch_{i}.parquet')
 
     ## concatenate results into final csv
-    final_tx_table_path = out_dir / 'redemuxed_transcript_table.csv'
+    final_tx_table_path = out_dir / 'rna' / 'transcript_table.csv'
+    if final_tx_table_path.exists() or final_tx_table_path.is_symlink():
+        final_tx_table_path.unlink()
+    if final_tx_table_path.with_suffix('.csv.gz').exists() or final_tx_table_path.with_suffix('.csv.gz').is_symlink():
+        final_tx_table_path.with_suffix('.csv.gz').unlink()
     _ = (
         pl.scan_parquet(list(batch_dir.glob('*.parquet')))
         .filter(pl.col('demuxed_new'))
