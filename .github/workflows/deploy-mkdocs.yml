@@ -27,6 +27,7 @@ jobs:
           fetch-depth: 1
           submodules: recursive  # fetch submodules as well
           token: ${{ secrets.CORE_DOCS_ASSETS_READ }}
+          persist-credentials: false
 
       - name: "Set up Python"
         uses: actions/setup-python@v5
