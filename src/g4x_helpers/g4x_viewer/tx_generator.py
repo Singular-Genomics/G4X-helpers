@@ -124,10 +124,10 @@ def tx_converter(
     palette = {gene: [int(255 * c) for c in base_cmap(i / num_genes)[:3]] for i, gene in enumerate(unique_genes)}
 
     df = df.with_columns(
-        (pl.col('x_pixel_coordinate') / MIN_TILE_SIZE).cast(pl.Int32).alias('tile_x_coord'),
-        (pl.col('y_pixel_coordinate') / MIN_TILE_SIZE).cast(pl.Int32).alias('tile_y_coord'),
+        (pl.col('x_pixel_coordinate') / MIN_TILE_SIZE).cast(pl.Int32).alias('tile_y_coord'),
+        (pl.col('y_pixel_coordinate') / MIN_TILE_SIZE).cast(pl.Int32).alias('tile_x_coord'),
         pl.col(tx_column).replace_strict(palette, default=[127, 127, 127]).alias('color'),
-        pl.concat_list(['y_pixel_coordinate', 'x_pixel_coordinate']).alias('position'),
+        pl.concat_list(['x_pixel_coordinate', 'y_pixel_coordinate']).alias('position'),
     )
 
     num_tiles_x, num_tiles_y = GetPyramidTilesConfigData(IMAGE_RESOLUTION, MIN_TILE_SIZE)
