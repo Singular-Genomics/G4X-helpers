@@ -6,13 +6,14 @@ import math
 import os
 import shutil
 import tarfile
+import multiprocessing as mp
 from pathlib import Path
-
 import matplotlib.pyplot as plt
 import polars as pl
 
 import g4x_helpers.utils as utils
-from . import MetadataSchema_pb2 as MetadataSchema
+
+mp.set_start_method('spawn', force=True)
 
 if TYPE_CHECKING:
     # This import is only for type checkers (mypy, PyCharm, etc.), not at runtime
@@ -77,6 +78,31 @@ def save_configuration_file(
 
     with open(f'{outputDirPath}/config.json', 'w') as json_file:
         json.dump(config_data, json_file, indent=2)
+
+
+def process_x(tileOutputDirPath, y_num_of_tiles, scaling_factor):
+    from . import MetadataSchema_pb2 as MetadataSchema
+
+    for tile_y_index in range(y_num_of_tiles):
+        outputTileData = MetadataSchema.TileData()
+
+        df_current = (
+            pl.scan_parquet(tileOutputDirPath / 'tmp.parquet')
+            .filter(((pl.col('tile_y_coord') // scaling_factor) == tile_y_index))
+            .drop('tile_y_coord')
+            .collect()
+        )
+        # Iterate over rows directly
+        ## this can potentially be done lazily with this PR: https://github.com/pola-rs/polars/pull/23980
+        for position, color, gene, segmentation_cell_id in df_current.iter_rows():
+            outputPointData = outputTileData.pointsData.add()
+            _ = outputPointData.position.extend(position)
+            _ = outputPointData.color.extend(color)
+            outputPointData.geneName = gene
+            outputPointData.cellId = str(segmentation_cell_id)
+
+        with open(f'{tileOutputDirPath}/{tile_y_index}.bin', 'wb') as file:
+            _ = file.write(outputTileData.SerializeToString())
 
 
 def tx_converter(
@@ -147,6 +173,7 @@ def tx_converter(
     save_configuration_file(out_dir, IMAGE_RESOLUTION, MIN_TILE_SIZE, NUMBER_OF_LEVELS, palette)
     logger.info('Parsing and classifying tiles...')
 
+    pq_args = []
     for level_index in reversed(range(NUMBER_OF_LEVELS + 1)):
         ## subsampling factor
         sampling_factor = sampling_fraction ** (NUMBER_OF_LEVELS - level_index)
@@ -166,29 +193,21 @@ def tx_converter(
         for tile_x_index in range(x_num_of_tiles):
             tileOutputDirPath = out_dir / f'{level_index}' / f'{tile_x_index}'
             os.makedirs(tileOutputDirPath, exist_ok=True)
-            for tile_y_index in range(y_num_of_tiles):
-                outputTileData = MetadataSchema.TileData()
+            pq_args.append([tileOutputDirPath, y_num_of_tiles, scaling_factor])
 
-                df_current = (
-                    df.filter(
-                        ((pl.col('tile_x_coord') // scaling_factor) == tile_x_index),
-                        ((pl.col('tile_y_coord') // scaling_factor) == tile_y_index),
-                    )
-                    .select(['position', 'color', tx_column, 'segmentation_cell_id'])
-                    .collect()
-                    .sample(fraction=sampling_factor)
+            _ = (
+                df.filter(
+                    ((pl.col('tile_x_coord') // scaling_factor) == tile_x_index),
                 )
-                # Iterate over rows directly
-                ## this can potentially be done lazily with this PR: https://github.com/pola-rs/polars/pull/23980
-                for position, color, gene, segmentation_cell_id in df_current.iter_rows():
-                    outputPointData = outputTileData.pointsData.add()
-                    _ = outputPointData.position.extend(position)
-                    _ = outputPointData.color.extend(color)
-                    outputPointData.geneName = gene
-                    outputPointData.cellId = str(segmentation_cell_id)
+                .select(['position', 'color', tx_column, 'cell_id', 'tile_y_coord'])
+                .collect()
+                .sample(fraction=sampling_factor)
+                .write_parquet(tileOutputDirPath / 'tmp.parquet')
+            )
 
-                with open(f'{tileOutputDirPath}/{tile_y_index}.bin', 'wb') as file:
-                    _ = file.write(outputTileData.SerializeToString())
+    ctx = mp.get_context('spawn')
+    with ctx.Pool(processes=n_threads) as pool:
+        pool.starmap(process_x, pq_args)
 
     logger.info('Tarring up.')
     if out_path.exists() or out_path.is_symlink():
