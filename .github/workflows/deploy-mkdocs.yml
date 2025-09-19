@@ -6,6 +6,7 @@ on:
   push:
     tags:
       - 'v*.*.*'
+      - 'test_docs_*'
   workflow_dispatch:
 
 # gh-pages needs a push, so grant write; read is implied
@@ -20,9 +21,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo with submodule
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
+          submodules: recursive  # fetch submodules as well
+          token: ${{ secrets.CORE_DOCS_ASSETS_READ }}
 
       - name: "Set up Python"
         uses: actions/setup-python@v5
@@ -36,7 +40,7 @@ jobs:
           enable-cache: false
 
       - name: Sync dependencies from uv.lock
-        run: uv sync --frozen --only-dev
+        run: uv sync --frozen --group docs
 
       - name: Deploy to GitHub Pages
         env:

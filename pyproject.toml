@@ -40,12 +40,11 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "mkdocs ~= 1.6",
-    "mkdocs-material ~= 9.6",
     "pre-commit ~= 4.2",
     "bump-my-version ~= 1.2",
     "ruff == 0.12.2",         # pinned to match pre-commit version
 ]
+docs = ["mkdocs ~= 1.6", "mkdocs-material ~= 9.6"]
 
 [project.scripts]
 new_bin = "g4x_helpers.entrypoint:launch_new_bin"
