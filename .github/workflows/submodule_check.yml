@@ -1,0 +1,19 @@
+name: Show Submodule Docs
+
+on:
+  workflow_dispatch:  # allows manual trigger
+
+jobs:
+  show-submodule-contents:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive  # fetch submodules as well
+
+      - name: List contents of docs/_core
+        run: |
+          echo "Listing contents of docs/_core..."
+          ls -la docs/_core || echo "docs/_core does not exist"
