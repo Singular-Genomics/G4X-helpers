@@ -40,8 +40,8 @@ jobs:
           version-file: "pyproject.toml"
           enable-cache: false
 
-      - name: Sync dependencies from uv.lock
-        run: uv sync --frozen --only-group docs
+      # - name: Sync dependencies from uv.lock
+      #   run: uv sync --frozen --only-group docs
 
       - name: Checkout repo again with default GITHUB_TOKEN
         uses: actions/checkout@v4
@@ -59,4 +59,4 @@ jobs:
         env:
           TAG: ${{ github.ref_name }} 
         run: |
-          uv run mkdocs gh-deploy --force --clean --message "docs: $TAG"
+          uv run --only-group docs mkdocs gh-deploy --force --clean --message "docs: $TAG"
