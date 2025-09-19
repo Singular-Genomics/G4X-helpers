@@ -199,7 +199,7 @@ def tx_converter(
                 df.filter(
                     ((pl.col('tile_x_coord') // scaling_factor) == tile_x_index),
                 )
-                .select(['position', 'color', tx_column, 'cell_id', 'tile_y_coord'])
+                .select(['position', 'color', tx_column, 'segmentation_cell_id', 'tile_y_coord'])
                 .collect()
                 .sample(fraction=sampling_factor)
                 .write_parquet(tileOutputDirPath / 'tmp.parquet')

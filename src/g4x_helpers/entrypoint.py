@@ -542,7 +542,6 @@ def launch_redemux():
                 'y_coord_shift': 'x_pixel_coordinate',
                 'z': 'z_level',
                 'meanQS': 'confidence_score',
-                'cell_id': 'cell_id',
             }
         )
         .sink_csv(final_tx_table_path)
