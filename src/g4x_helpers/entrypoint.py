@@ -7,7 +7,7 @@ import signal
 import sys
 import tarfile
 from pathlib import Path
-
+from datetime import datetime
 import geopandas
 import numpy as np
 
@@ -421,9 +421,6 @@ def launch_redemux():
     parser.add_argument('--run_base', help='Path to G4X sample output folder', action='store', type=str, required=True)
     parser.add_argument('--manifest', help='Path to manifest for demuxing.', action='store', type=str, required=True)
     parser.add_argument(
-        '--sample_id', help='sample_id (Optional)', action='store', type=str, required=False, default=None
-    )
-    parser.add_argument(
         '--batch_size',
         help='Number of transcripts to process per batch.',
         action='store',
@@ -469,11 +466,16 @@ def launch_redemux():
     batch_dir = out_dir / 'diagnostics' / 'batches'
     batch_dir.mkdir(parents=True, exist_ok=True)
 
+    ignore_file_list = ['clustering_umap.csv.gz', 'dgex.csv.gz']
     for root, dirs, files in os.walk(run_base):
         rel_root = Path(root).relative_to(run_base)
+        if str(rel_root) == 'metrics':
+            continue
         dst_root = out_dir / rel_root
         dst_root.mkdir(parents=True, exist_ok=True)
         for f in files:
+            if f in ignore_file_list:
+                continue
             src_file = Path(root) / f
             dst_file = dst_root / f
             if dst_file.exists():
@@ -481,10 +483,20 @@ def launch_redemux():
             dst_file.symlink_to(src_file)
 
     ## initialize G4X sample
-    sample = G4Xoutput(
-        run_base=run_base, sample_id=args.sample_id, out_dir=args.out_dir, log_level=verbose_to_log_level(args.verbose)
-    )
+    sample = G4Xoutput(run_base=run_base, out_dir=out_dir, log_level=verbose_to_log_level(args.verbose))
     print(sample)
+
+    ## update metadata and transcript panel file
+    shutil.copy(manifest, out_dir / 'transcript_panel.csv')
+    with open(out_dir / 'run_meta.json', 'r') as f:
+        meta = json.load(f)
+    meta['transcript_panel'] = manifest.name
+    meta['redemuxed_timestamp'] = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
+    with open(out_dir / 'run_meta.json', 'w') as f:
+        _ = json.dump(meta, f)
+    meta = {'run_metadata': meta}
+    with open(out_dir / 'g4x_viewer' / f'{sample.sample_id}_run_metadata.json', 'w') as f:
+        _ = json.dump(meta, f)
 
     ## load the new manifest file that we will demux against
     sample.logger.info('Loading manifest file.')

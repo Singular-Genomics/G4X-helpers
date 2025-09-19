@@ -20,13 +20,10 @@ if TYPE_CHECKING:
     from g4x_helpers.models import G4Xoutput
 
 
-def create_tar_from_directory(directory_path, archive_name):
-    # Ensure the directory path exists
+def create_tar_from_directory(directory_path: str | Path, archive_name: str | Path) -> None:
     if not os.path.isdir(directory_path):
         raise ValueError(f'The directory {directory_path} does not exist.')
-
     with tarfile.open(archive_name, 'w') as tar:
-        # Add the directory to the tar file
         tar.add(directory_path, arcname=os.path.basename(directory_path))
 
 
@@ -80,7 +77,7 @@ def save_configuration_file(
         json.dump(config_data, json_file, indent=2)
 
 
-def process_x(tileOutputDirPath, y_num_of_tiles, scaling_factor):
+def _process_x(tileOutputDirPath: Path, y_num_of_tiles: int, scaling_factor: int) -> None:
     from . import MetadataSchema_pb2 as MetadataSchema
 
     for tile_y_index in range(y_num_of_tiles):
@@ -207,7 +204,7 @@ def tx_converter(
 
     ctx = mp.get_context('spawn')
     with ctx.Pool(processes=n_threads) as pool:
-        pool.starmap(process_x, pq_args)
+        pool.starmap(_process_x, pq_args)
 
     logger.info('Tarring up.')
     if out_path.exists() or out_path.is_symlink():
