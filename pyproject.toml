@@ -53,4 +53,5 @@ tar_viewer = "g4x_helpers.entrypoint:launch_tar_viewer"
 update_bin = "g4x_helpers.entrypoint:launch_update_bin"
 
 [tool.uv]
-required-version = ">=0.8.8" # also update in Dockerfile
+required-version = ">=0.8.8"     # also update in Dockerfile
+default-groups = ["dev", "docs"]
