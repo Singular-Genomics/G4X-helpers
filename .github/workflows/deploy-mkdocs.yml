@@ -17,7 +17,6 @@ concurrency: docs        # auto-cancel superseded runs
 
 jobs:
   deploy:
-    if: github.repository == 'singular-genomics/g4x-helpers' # Avoid running in forks that copy this workflow
     runs-on: ubuntu-latest
 
     steps:
@@ -27,7 +26,12 @@ jobs:
           fetch-depth: 1
           submodules: recursive  # fetch submodules as well
           token: ${{ secrets.CORE_DOCS_ASSETS_READ }}
-          # persist-credentials: false
+
+      - name: Checkout repo again to restore default GITHUB_TOKEN
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          clean: false
 
       - name: "Set up Python"
         uses: actions/setup-python@v5
@@ -39,21 +43,6 @@ jobs:
         with:
           version-file: "pyproject.toml"
           enable-cache: false
-
-      # - name: Sync dependencies from uv.lock
-      #   run: uv sync --frozen --only-group docs
-
-      - name: Checkout repo again with default GITHUB_TOKEN
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          clean: false
-
-      # - name: Re-configure default git credentials for push
-      #   run: |
-      #     git remote set-url origin https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
-      #     git config user.name  "github-actions[bot]"
-      #     git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Deploy to GitHub Pages
         env:
