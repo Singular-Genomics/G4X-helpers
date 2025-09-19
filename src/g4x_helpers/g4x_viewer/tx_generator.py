@@ -121,7 +121,7 @@ def GenerateInitialTiles(
                     tile_y_index: {
                         'points': (
                             df.filter(pl.col('tile_x_coord') == tile_x_index, pl.col('tile_y_coord') == tile_y_index)
-                            .select(['position', 'color', 'transcript_condensed', 'cell_id'])
+                            .select(['position', 'color', 'gene_name', 'segmentation_cell_id'])
                             .to_dicts()
                         )
                     }
@@ -211,7 +211,7 @@ def write_tile_file_from_df(
     Write .bin file directly from a filtered Polars DataFrame.
     No intermediate dictionary creation is done here.
 
-    df_tile must contain columns: position, color, transcript_condensed, cell_id.
+    df_tile must contain columns: position, color, gene_name, segmentation_cell_id.
     """
     fullOutputDirPath = f'{outputDirPath}/{outputDirName}'
     tileOutputDirPath = f'{fullOutputDirPath}/{level}/{tile_x}'
@@ -220,15 +220,15 @@ def write_tile_file_from_df(
     outputTileData = MetadataSchema.TileData()
 
     # Iterate over rows directly
-    for position, color, gene, cell_id in df_tile.select(
-        ['position', 'color', 'transcript_condensed', 'cell_id']
+    for position, color, gene, segmentation_cell_id in df_tile.select(
+        ['position', 'color', 'gene_name', 'segmentation_cell_id']
     ).iter_rows():
         outputPointData = outputTileData.pointsData.add()
         try:
             outputPointData.position.extend(position)
             outputPointData.color.extend(color)
             outputPointData.geneName = gene
-            outputPointData.cellId = str(cell_id)
+            outputPointData.cellId = str(segmentation_cell_id)
         except Exception as e:
             print(e)
             continue
@@ -284,8 +284,8 @@ def save_multi_files(
                         try:
                             outputPointData.position.extend(point['position'])
                             outputPointData.color.extend(point['color'])
-                            outputPointData.geneName = point['transcript_condensed']
-                            outputPointData.cellId = f'{point["cell_id"]}'
+                            outputPointData.geneName = point['gene_name']
+                            outputPointData.cellId = f'{point["segmentation_cell_id"]}'
                         except Exception as e:
                             logger.error(e)
                             logger.error(traceback.format_exc())
@@ -352,12 +352,12 @@ def tx_converter(
     if aggregation_level == 'probe':
         tx_column = 'transcript'
     else:
-        tx_column = 'transcript_condensed'
-    keep_cols = ['x_coord_shift', 'y_coord_shift', 'cell_id', tx_column]
-    df = sample.load_transcript_table(columns=keep_cols)
+        tx_column = 'gene_name'
+    keep_cols = ['x_pixel_coordinate', 'y_pixel_coordinate', 'segmentation_cell_id', tx_column]
+    df = sample.load_transcript_table(lazy=True, columns=keep_cols)
 
     ## make colormap
-    unique_genes = df[tx_column].unique().to_list()
+    unique_genes = df.select(tx_column).collect().unique().to_series().to_list()
     num_genes = len(unique_genes)
     base_cmap = plt.get_cmap('hsv', num_genes)
     palette = {gene: [int(255 * c) for c in base_cmap(i / num_genes)[:3]] for i, gene in enumerate(unique_genes)}
@@ -365,12 +365,12 @@ def tx_converter(
     ## actual processing
     df = (
         df.with_columns(
-            (pl.col('x_coord_shift') / MIN_TILE_SIZE).cast(pl.Int32).alias('tile_x_coord'),
-            (pl.col('y_coord_shift') / MIN_TILE_SIZE).cast(pl.Int32).alias('tile_y_coord'),
+            (pl.col('x_pixel_coordinate') / MIN_TILE_SIZE).cast(pl.Int32).alias('tile_x_coord'),
+            (pl.col('y_pixel_coordinate') / MIN_TILE_SIZE).cast(pl.Int32).alias('tile_y_coord'),
             pl.col(tx_column).replace(palette, default=[127, 127, 127]).alias('color'),
-            pl.concat_list(['y_coord_shift', 'x_coord_shift']).alias('position'),
+            pl.concat_list(['y_pixel_coordinate', 'x_pixel_coordinate']).alias('position'),
         )
-        .rename({tx_column: 'transcript_condensed'})
+        .rename({tx_column: 'gene_name'})
         .collect()
     )
 
