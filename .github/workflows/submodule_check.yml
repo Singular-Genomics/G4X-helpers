@@ -1,6 +1,9 @@
 name: Show Submodule Docs
 
 on:
+  push:
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:  # allows manual trigger
 
 jobs:
