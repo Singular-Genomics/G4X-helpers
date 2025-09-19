@@ -41,7 +41,7 @@ jobs:
           enable-cache: false
 
       - name: Sync dependencies from uv.lock
-        run: uv sync --frozen --group docs
+        run: uv sync --frozen --only-group docs
 
       - name: Re-configure default git credentials for push
         run: |
@@ -51,6 +51,6 @@ jobs:
 
       - name: Deploy to GitHub Pages
         env:
-          TAG: ${{ github.ref_name }}      # e.g. v1.2.3
+          TAG: ${{ github.ref_name }} 
         run: |
           uv run mkdocs gh-deploy --force --clean --message "docs: $TAG"
