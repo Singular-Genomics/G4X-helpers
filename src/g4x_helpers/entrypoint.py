@@ -561,3 +561,5 @@ def launch_redemux():
         n_threads=args.threads,
         logger=sample.logger,
     )
+
+    sample.logger.info('Completed redemux.')
