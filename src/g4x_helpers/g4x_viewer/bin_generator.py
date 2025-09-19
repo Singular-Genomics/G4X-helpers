@@ -6,6 +6,7 @@ from collections import deque
 from pathlib import Path
 
 import anndata as ad
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -70,6 +71,10 @@ def generate_cluster_palette(clusters: list, max_colors: int = 256) -> dict:
     cluster_palette['-1'] = [int(191), int(191), int(191)]
 
     return cluster_palette
+
+
+def hex2rgb(hex: str) -> list[int, int, int]:
+    return [int(x * 255) for x in mcolors.to_rgb(hex)]
 
 
 @njit
@@ -462,6 +467,8 @@ def seg_updater(
             raise ValueError('cluster_color_key was provided, but cluster_key was not provided.')
         if cluster_color_key not in metadata.columns:
             raise KeyError(f'{cluster_color_key} not a valid column in metadata.')
+        color = metadata[cluster_color_key].iat[0]
+        assert color.startswith('#'), 'Cluster colors must be provided as hexcodes.'
         update_cluster_color = True
         logger.debug('Updating cluster colors.')
         cluster_palette = (
@@ -469,7 +476,7 @@ def seg_updater(
             .set_index(cluster_key)
             .to_dict()[cluster_color_key]
         )
-        cluster_palette = {str(k): v for k, v in cluster_palette.items()}
+        cluster_palette = {str(k): hex2rgb(v) for k, v in cluster_palette.items()}
     else:
         if cluster_key is not None:
             update_cluster_color = True

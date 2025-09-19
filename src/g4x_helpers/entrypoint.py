@@ -176,7 +176,7 @@ def launch_update_bin():
     )
     parser.add_argument(
         '--cluster_color_key',
-        help='Column name in metadata containing cluster colors. If provided, cluster_key must also be provided. If not provided, skips updating cluster colors.',
+        help='Column name in metadata containing cluster colors. Colors must be provided as hex codes. If provided, cluster_key must also be provided. If not provided, skips updating cluster colors.',
         action='store',
         type=str,
         required=False,
