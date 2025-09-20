@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*.*.*'          # e.g. v1.2.3
+      - 'test_package_*'
   workflow_dispatch:
 
 permissions:

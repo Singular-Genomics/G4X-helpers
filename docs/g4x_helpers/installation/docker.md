@@ -68,4 +68,4 @@ A useful one-shot cleanup command is:
 $ docker system prune -a
 ```
 
---8<-- "_partials/end_cap.md"
+--8<-- "_core/_partials/end_cap.md"

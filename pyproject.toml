@@ -40,12 +40,11 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "mkdocs ~= 1.6",
-    "mkdocs-material ~= 9.6",
     "pre-commit ~= 4.2",
     "bump-my-version ~= 1.2",
     "ruff == 0.12.2",         # pinned to match pre-commit version
 ]
+docs = ["mkdocs ~= 1.6", "mkdocs-material ~= 9.6"]
 
 [project.scripts]
 new_bin = "g4x_helpers.entrypoint:launch_new_bin"
@@ -54,4 +53,5 @@ tar_viewer = "g4x_helpers.entrypoint:launch_tar_viewer"
 update_bin = "g4x_helpers.entrypoint:launch_update_bin"
 
 [tool.uv]
-required-version = ">=0.8.8" # also update in Dockerfile
+required-version = ">=0.8.8"     # also update in Dockerfile
+default-groups = ["dev", "docs"]

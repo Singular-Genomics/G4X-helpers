@@ -55,7 +55,7 @@ Found a bug or want to report another problem regarding G4X-helpers?
 Want to get involved and add new features?  
 :material-arrow-right-thin: check out how to [contribute](./contributing/index.md) 
 
---8<-- "_partials/end_cap.md"
+--8<-- "_core/_partials/end_cap.md"
 
 <br>
 <br>
