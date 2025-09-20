@@ -35,11 +35,6 @@ jobs:
           git checkout main
           git pull origin main
       
-      - name: List contents of docs/_core
-        run: |
-          echo "Listing contents of docs/_core..."
-          ls -la docs/_core || echo "docs/_core does not exist"          
-      
       - name: Checkout repo again to restore default GITHUB_TOKEN
         uses: actions/checkout@v4
         with:
