@@ -9,7 +9,7 @@ exclude: (?x)(
   | ^.git
   | ^venv
   | ^.vscode
-  | ^docs/assets/
+  | ^docs/_core
   | __pycache__
   | .pytest_cache
   | -egg-info
@@ -34,7 +34,7 @@ repos:
       exclude: ^.*\.(txt|md)$
 
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.12.2 # Ruff version.
+  rev: v0.13.1 # Ruff version.
   hooks:
 
     # Run the linter.
