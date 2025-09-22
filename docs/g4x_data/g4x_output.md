@@ -124,7 +124,7 @@ Directory structure depends on run type.
 
 > `run_meta.json:` JSON file containing versioning information for the panels used and analysis pipelines as well as the ID for the sequencer on which the experiment was run.
 
-> `samplesheet.csv:` CSV file containing detailed run information. Details the experimental design, flow cell layout, tissue type, panel utilized, etc. This file is useful when performing analyses to identify which tissue blocks are which.
+> `samplesheet.csv:` CSV file containing detailed run information. Details the experimental design, flow cell layout, tissue type, panel utilized, etc. This file is useful for analysis, as it designates where each tissue section is positioned on the flow cell.
 
 > `summary_<sample_id>.html:` HTML file which gives a high level overview of the experiment outputs, data quality, and performance for the selected tissue block.
 
@@ -177,7 +177,7 @@ Directory structure depends on run type.
 
 > `core_metrics.csv:` CSV file containing a set of core metrics for the tissue block including total transcripts, total area, number of cells and more.
 
-> `protein_core_metrics.csv:` CSV file containing a set of core protein metrics for the tissue block including SNR, background intensity, and Fisher's exact scores for the coocurrence of the protein signal with its assocaited transcript signal (`<protein>_fisher_score`) and a random background (`<protein>_fisher_score_background`). These scores indicating the likelihood of the signal being true signal compared to the measured background. *Multiomics runs only.*
+> `protein_core_metrics.csv:` CSV file containing a set of core protein metrics for the tissue block including SNR, background intensity, and Fisher's exact scores for the coocurrence of the protein signal with its associated transcript signal (`<protein>_fisher_score`) and a random background (`<protein>_fisher_score_background`). These scores indicate the likelihood of the signal being true signal compared to the measured background. *Multiomics runs only.*
 
 > `per_area_metrics.csv:` CSV file containing a set of per-area metrics for the tissue block (coordinate location, number of transcripts, and number of cells), separated out into images from before the images were stitched together into one whole block.
 
