@@ -41,7 +41,6 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pre-commit ~= 4.2",
-    "bump-my-version ~= 1.2",
     "ruff == 0.13.1",         # pinned to match pre-commit version
 ]
 docs = ["mkdocs ~= 1.6", "mkdocs-material ~= 9.6"]
@@ -56,3 +55,7 @@ redemux = "g4x_helpers.entrypoint:launch_redemux"
 [tool.uv]
 required-version = ">=0.8.8"     # also update in Dockerfile
 default-groups = ["dev", "docs"]
+
+[tool.uv-ship]
+release-branch = "main"
+changelog-path = "CHANGELOG.md"
