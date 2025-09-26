@@ -2,8 +2,8 @@
 
 # Installing G4X-helpers
 
-These pages explains how you can obtain G4X-helpers and prepare your system to use it. 
-This can be done either via source installation or Docker.  
+These pages explain how you can obtain G4X-helpers and set up your system to use it. 
+Installation can be done either via source installation or utilizing a Docker image.  
 Which route to choose depends on your **use-case**:
 
 <br>
@@ -28,9 +28,9 @@ Which route to choose depends on your **use-case**:
 + run G4X-helpers easily on different systems
 + stay isolated and want to ensure that nothing leaks to or depends on your system
  
-things to know:  
+Things to know:  
 
 + you still need to install Docker (or Apptainer, Podman ... ) if you haven't already.
 + first pull can be large; subsequent runs are fast thanks to caching layers.
 
---8<-- "_core/_partials/end_cap.md"
+--8<-- "_partials/end_cap.md"
