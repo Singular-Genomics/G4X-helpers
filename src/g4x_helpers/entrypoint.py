@@ -5,6 +5,7 @@ import os
 import shutil
 import signal
 import sys
+import math
 import tarfile
 from pathlib import Path
 from datetime import datetime
@@ -516,7 +517,7 @@ def launch_redemux():
     ## do the re-demuxing
     sample.logger.info('Performing re-demuxing.')
     num_features = pl.scan_parquet(sample.feature_table_path).select(pl.len()).collect().item()
-    num_expected_batches = num_features // args.batch_size
+    num_expected_batches = math.ceil(num_features / args.batch_size)
     cols_to_select = [
         'x_coord_shift',
         'y_coord_shift',
