@@ -91,12 +91,12 @@ def _process_x(tileOutputDirPath: Path, y_num_of_tiles: int, scaling_factor: int
         )
         # Iterate over rows directly
         ## this can potentially be done lazily with this PR: https://github.com/pola-rs/polars/pull/23980
-        for position, color, gene, segmentation_cell_id in df_current.iter_rows():
+        for position, color, gene, cell_id in df_current.iter_rows():
             outputPointData = outputTileData.pointsData.add()
             _ = outputPointData.position.extend(position)
             _ = outputPointData.color.extend(color)
             outputPointData.geneName = gene
-            outputPointData.cellId = str(segmentation_cell_id)
+            outputPointData.cellId = str(cell_id)
 
         with open(f'{tileOutputDirPath}/{tile_y_index}.bin', 'wb') as file:
             _ = file.write(outputTileData.SerializeToString())
@@ -137,7 +137,7 @@ def tx_converter(
         tx_column = 'transcript'
     else:
         tx_column = 'gene_name'
-    keep_cols = ['x_pixel_coordinate', 'y_pixel_coordinate', 'segmentation_cell_id', tx_column]
+    keep_cols = ['x_pixel_coordinate', 'y_pixel_coordinate', 'cell_id', tx_column]
     df = sample.load_transcript_table(lazy=True, columns=keep_cols)
 
     ## make colormap
@@ -196,7 +196,7 @@ def tx_converter(
                 df.filter(
                     ((pl.col('tile_x_coord') // scaling_factor) == tile_x_index),
                 )
-                .select(['position', 'color', tx_column, 'segmentation_cell_id', 'tile_y_coord'])
+                .select(['position', 'color', tx_column, 'cell_id', 'tile_y_coord'])
                 .collect()
                 .sample(fraction=sampling_factor)
                 .write_parquet(tileOutputDirPath / 'tmp.parquet')
