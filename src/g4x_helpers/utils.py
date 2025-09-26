@@ -128,8 +128,15 @@ def npzGetShape(npz, key):
             raise KeyError('{} not in archive'.format(key))
 
 
+def delete_existing(outfile: str | Path) -> None:
+    outfile = Path(outfile)
+    if outfile.exists() or outfile.is_symlink():
+        outfile.unlink()
+
+
 def gzip_file(outfile: str | Path, remove_original: bool = False) -> None:
     outfile = Path(outfile)
+    delete_existing(outfile.with_suffix('.csv.gz'))
     with open(outfile, 'rb') as f_in:
         with gzip.open(outfile.with_suffix('.csv.gz'), 'wb') as f_out:
             shutil.copyfileobj(f_in, f_out)

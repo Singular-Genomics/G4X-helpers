@@ -374,37 +374,37 @@ class G4Xoutput:
         else:
             self.logger.info(f'No output directory specified, saving to ["custom"] directories in {self.run_base}.')
 
-        outfile = reseg._create_custom_out(self, out_dir, 'segmentation', 'segmentation_mask_updated.npz')
+        outfile = self._create_custom_out(out_dir, 'segmentation', 'segmentation_mask_updated.npz')
         self.logger.debug(f'segmentation mask --> {outfile}')
         np.savez(outfile, cell_labels=mask)
 
-        outfile = reseg._create_custom_out(self, out_dir, 'rna', 'transcript_table.csv')
+        outfile = self._create_custom_out(out_dir, 'rna', 'transcript_table.csv')
         self.logger.debug(f'transcript table --> {outfile}.gz')
         reads_new_labels.write_csv(outfile)
         _ = utils.gzip_file(outfile, remove_original=True)
 
-        outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'cell_by_transcript.csv')
+        outfile = self._create_custom_out(out_dir, 'single_cell_data', 'cell_by_transcript.csv')
         self.logger.debug(f'cell x transcript --> {outfile}.gz')
         cell_by_gene.write_csv(outfile)
         _ = utils.gzip_file(outfile, remove_original=True)
 
-        outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'cell_by_protein.csv')
+        outfile = self._create_custom_out(out_dir, 'single_cell_data', 'cell_by_protein.csv')
         self.logger.debug(f'cell x protein --> {outfile}.gz')
         cell_by_protein.write_csv(outfile)
         _ = utils.gzip_file(outfile, remove_original=True)
 
-        outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'feature_matrix.h5')
+        outfile = self._create_custom_out(out_dir, 'single_cell_data', 'feature_matrix.h5')
         self.logger.debug(f'single-cell h5 --> {outfile}')
         adata.write_h5ad(outfile)
 
-        outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'cell_metadata.csv.gz')
+        outfile = self._create_custom_out(out_dir, 'single_cell_data', 'cell_metadata.csv.gz')
         self.logger.debug(f'cell metadata --> {outfile}')
         adata.obs.to_csv(outfile, compression='gzip')
 
         protein_only_list = [p for p in signal_list if p not in ['nuclear', 'eosin']]
         if gen_bin_file:
             self.logger.info('Making G4X-Viewer bin file.')
-            outfile = reseg._create_custom_out(self, out_dir, 'g4x_viewer', f'{self.sample_id}.bin')
+            outfile = self._create_custom_out(out_dir, 'g4x_viewer', f'{self.sample_id}.bin')
             _ = bin_gen.seg_converter(
                 adata=adata,
                 seg_mask=mask,
@@ -456,3 +456,21 @@ class G4Xoutput:
             if not p.is_file():
                 self.logger.error(f'{p} does not exist.')
                 raise FileNotFoundError(f'{p} does not exist.')
+
+    def _create_custom_out(
+        self,
+        out_dir: Path | str,
+        parent_folder: Path | str | None = None,
+        file_name: str | None = None,
+    ) -> Path:
+        custom_out = Path(out_dir) / parent_folder
+
+        # Ensure the directory exists
+        custom_out.mkdir(parents=True, exist_ok=True)
+
+        # Prepare output file path
+        outfile = custom_out / file_name
+
+        utils.delete_existing(outfile)
+
+        return outfile

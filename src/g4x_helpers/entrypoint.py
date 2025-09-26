@@ -12,7 +12,7 @@ import geopandas
 import numpy as np
 
 from g4x_helpers.models import G4Xoutput
-from g4x_helpers.utils import verbose_to_log_level, gzip_file
+from g4x_helpers.utils import verbose_to_log_level, gzip_file, delete_existing
 
 SUPPORTED_MASK_FILETYPES = ['.npz', '.npy', '.geojson']
 
@@ -420,7 +420,13 @@ def launch_redemux():
     parser = argparse.ArgumentParser(allow_abbrev=False)
 
     parser.add_argument('--run_base', help='Path to G4X sample output folder', action='store', type=str, required=True)
-    parser.add_argument('--manifest', help='Path to manifest for demuxing.', action='store', type=str, required=True)
+    parser.add_argument(
+        '--manifest',
+        help='Path to manifest for demuxing. The manifest must be a 3-column csv with the following header: target,sequence,read.',
+        action='store',
+        type=str,
+        required=True,
+    )
     parser.add_argument(
         '--batch_size',
         help='Number of transcripts to process per batch.',
@@ -467,7 +473,7 @@ def launch_redemux():
     batch_dir = out_dir / 'diagnostics' / 'batches'
     batch_dir.mkdir(parents=True, exist_ok=True)
 
-    ignore_file_list = ['clustering_umap.csv.gz', 'dgex.csv.gz']
+    ignore_file_list = ['clustering_umap.csv.gz', 'dgex.csv.gz', 'transcript_panel.csv']
     for root, dirs, files in os.walk(run_base):
         rel_root = Path(root).relative_to(run_base)
         if str(rel_root) == 'metrics':
@@ -493,15 +499,19 @@ def launch_redemux():
         meta = json.load(f)
     meta['transcript_panel'] = manifest.name
     meta['redemuxed_timestamp'] = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
+    (out_dir / 'run_meta.json').unlink()
     with open(out_dir / 'run_meta.json', 'w') as f:
         _ = json.dump(meta, f)
     meta = {'run_metadata': meta}
+    (out_dir / 'g4x_viewer' / f'{sample.sample_id}_run_metadata.json').unlink()
     with open(out_dir / 'g4x_viewer' / f'{sample.sample_id}_run_metadata.json', 'w') as f:
         _ = json.dump(meta, f)
 
     ## load the new manifest file that we will demux against
     sample.logger.info('Loading manifest file.')
     manifest, probe_dict = load_manifest(manifest)
+    seq_reads = manifest['read'].unique().to_list()
+    seq_reads = [int(x.split('_')[-1]) if isinstance(x, str) else x for x in seq_reads]
 
     ## do the re-demuxing
     sample.logger.info('Performing re-demuxing.')
@@ -516,29 +526,38 @@ def launch_redemux():
         'transcript',
         'TXUID',
     ]
-    for i, reads in tqdm(
+    for i, feature_batch in tqdm(
         enumerate(sample.stream_features(args.batch_size, cols_to_select)), desc='Demuxing transcripts'
     ):
-        seqs = reads['sequence_to_demux'].to_list()
-        codes = manifest['sequence'].tolist()
-        codebook_target_ids = np.array(manifest.target.values)
-        hammings = batched_dot_product_hamming_matrix(seqs, codes, batch_size=demux_batch_size)
-        reads = demux(hammings, reads, codebook_target_ids, probe_dict)
-        reads.write_parquet(batch_dir / f'batch_{i}.parquet')
+        feature_batch = feature_batch.with_columns(pl.col('TXUID').str.split('_').list.last().cast(int).alias('read'))
+        redemuxed_feature_batch = []
+        for seq_read in seq_reads:
+            feature_batch_read = feature_batch.filter(pl.col('read') == seq_read)
+            manifest_read = manifest.filter(pl.col('read') == seq_read)
+            if len(feature_batch_read) == 0 or len(manifest_read) == 0:
+                continue
+            seqs = feature_batch_read['sequence_to_demux'].to_list()
+            codes = manifest_read['sequence'].to_list()
+            codebook_target_ids = np.array(manifest_read['target'].to_list())
+            hammings = batched_dot_product_hamming_matrix(seqs, codes, batch_size=demux_batch_size)
+            feature_batch_read = demux(hammings, feature_batch_read, codebook_target_ids, probe_dict)
+            redemuxed_feature_batch.append(feature_batch_read)
+        pl.concat(redemuxed_feature_batch).write_parquet(batch_dir / f'batch_{i}.parquet')
 
     ## set run_base to the redemux output folder
     sample.run_base = out_dir
 
-    ## concatenate results into final csv
+    ## concatenate results into final csv and parquet
     sample.logger.info('Writing updated transcript table.')
     final_tx_table_path = out_dir / 'rna' / 'transcript_table.csv'
-    if final_tx_table_path.exists() or final_tx_table_path.is_symlink():
-        final_tx_table_path.unlink()
-    if final_tx_table_path.with_suffix('.csv.gz').exists() or final_tx_table_path.with_suffix('.csv.gz').is_symlink():
-        final_tx_table_path.with_suffix('.csv.gz').unlink()
+    final_tx_pq_path = out_dir / 'diagnostics' / 'transcript_table.parquet'
+    delete_existing(final_tx_table_path)
+    delete_existing(final_tx_table_path.with_suffix('.csv.gz'))
+    delete_existing(final_tx_pq_path)
+    tx_table = pl.scan_parquet(list(batch_dir.glob('*.parquet')))
+    tx_table.sink_parquet(final_tx_pq_path)
     _ = (
-        pl.scan_parquet(list(batch_dir.glob('*.parquet')))
-        .filter(pl.col('demuxed_new'))
+        tx_table.filter(pl.col('demuxed_new'))
         .drop(
             'transcript',
             'transcript_new',

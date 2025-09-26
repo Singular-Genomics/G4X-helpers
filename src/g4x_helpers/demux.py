@@ -1,6 +1,5 @@
 import re
 import numpy as np
-import pandas as pd
 import polars as pl
 from tqdm import tqdm
 from pathlib import Path
@@ -96,9 +95,9 @@ def demux(
     return reads
 
 
-def load_manifest(file_path: str | Path) -> tuple[pd.DataFrame, dict]:
-    manifest = pd.read_csv(file_path, index_col=None, header=0)
-    target_list = manifest['target'].tolist()
+def load_manifest(file_path: str | Path) -> tuple[pl.DataFrame, dict]:
+    manifest = pl.read_csv(file_path)
+    target_list = manifest['target'].to_list()
 
     p = re.compile('-[ACGT]{2,30}')
     match = re.findall(pattern=p, string=target_list[0])
