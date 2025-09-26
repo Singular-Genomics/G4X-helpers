@@ -1,11 +1,12 @@
 import json
 import logging
 import os
+from collections.abc import Iterator
 from dataclasses import InitVar, dataclass  # , asdict, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
-from collections.abc import Iterator
+
 import anndata as ad
 import glymur
 import matplotlib.pyplot as plt
@@ -213,6 +214,11 @@ class G4Xoutput:
             adata.obs = adata.obs.merge(df, how='left', left_index=True, right_index=True)
             umap_key = '_'.join(sorted([x for x in adata.obs.columns if 'X_umap' in x])[0].split('_')[:-1])
             adata.obsm['X_umap'] = adata.obs[[f'{umap_key}_1', f'{umap_key}_2']].to_numpy(dtype=float)
+
+            # convert clustering columns to categorical
+            for col in adata.obs.columns:
+                if 'leiden' in col:
+                    adata.obs[col] = adata.obs[col].astype('category')
 
         adata.obs_names = f'{self.sample_id}-' + adata.obs['cell_id'].str.split('-').str[1]
         return adata
