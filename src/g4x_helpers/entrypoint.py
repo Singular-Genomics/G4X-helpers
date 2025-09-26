@@ -579,6 +579,7 @@ def launch_redemux():
         .sink_csv(final_tx_table_path)
     )
     _ = gzip_file(final_tx_table_path)
+    shutil.rmtree(batch_dir)
 
     ## now regenerate the secondary files
     sample.logger.info('Regenerating downstream files.')
