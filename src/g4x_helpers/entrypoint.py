@@ -515,6 +515,8 @@ def launch_redemux():
 
     ## do the re-demuxing
     sample.logger.info('Performing re-demuxing.')
+    num_features = pl.scan_parquet(sample.feature_table_path).select(pl.len()).collect().item()
+    num_expected_batches = num_features // args.batch_size
     cols_to_select = [
         'x_coord_shift',
         'y_coord_shift',
@@ -527,7 +529,10 @@ def launch_redemux():
         'TXUID',
     ]
     for i, feature_batch in tqdm(
-        enumerate(sample.stream_features(args.batch_size, cols_to_select)), desc='Demuxing transcripts'
+        enumerate(sample.stream_features(args.batch_size, cols_to_select)),
+        total=num_expected_batches,
+        desc='Demuxing transcripts',
+        position=0,
     ):
         feature_batch = feature_batch.with_columns(pl.col('TXUID').str.split('_').list.last().cast(int).alias('read'))
         redemuxed_feature_batch = []

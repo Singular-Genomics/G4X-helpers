@@ -44,7 +44,7 @@ def batched_dot_product_hamming_matrix(
     N = len(reads)
     hamming_matrix = np.empty((N, M), dtype=np.uint8)
 
-    for i in tqdm(range(0, N, batch_size)):
+    for i in tqdm(range(0, N, batch_size), total=(N // batch_size), desc='Demuxing batch', position=1, leave=False):
         batch_reads = reads[i : i + batch_size]
         batch_oh = one_hot_encode_str_array(batch_reads, seq_len)
         matches = batch_oh @ codebook_oh.T

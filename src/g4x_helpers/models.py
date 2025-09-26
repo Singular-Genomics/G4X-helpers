@@ -127,32 +127,50 @@ class G4Xoutput:
 
     # region properties
     @property
-    def machine(self) -> str:
-        return self.run_meta.get('machine', None)
-
-    @property
-    def run_id(self) -> str:
-        return self.run_meta.get('run_id', None)
-
-    @property
     def fc(self) -> str:
         return self.run_meta.get('fc', None)
+
+    @property
+    def feature_table_path(self) -> Path:
+        return self.run_base / 'diagnostics' / 'transcript_table.parquet'
+
+    @property
+    def includes_protein(self) -> bool:
+        return self.protein_panel != []
+
+    @property
+    def includes_transcript(self) -> bool:
+        return self.transcript_panel != []
 
     @property
     def lane(self) -> str:
         return self.run_meta.get('lane', None)
 
     @property
+    def logger(self) -> logging.Logger:
+        if not hasattr(self, '_logger') or self._logger is None:
+            self._logger = logging.getLogger(self.logger_name)
+        return self._logger
+
+    @property
+    def logger_name(self) -> str:
+        return f'{self.sample_id}_G4XOutput'
+
+    @property
+    def machine(self) -> str:
+        return self.run_meta.get('machine', None)
+
+    @property
     def platform(self) -> str:
         return self.run_meta.get('platform', None)
 
     @property
-    def transcript_panel(self) -> dict:
-        return self.run_meta.get('transcript_panel', None)
-
-    @property
     def protein_panel(self) -> dict:
         return self.run_meta.get('protein_panel', None)
+
+    @property
+    def run_id(self) -> str:
+        return self.run_meta.get('run_id', None)
 
     @property
     def software(self) -> str:
@@ -163,16 +181,12 @@ class G4Xoutput:
         return self.run_meta.get('software_version', None)
 
     @property
-    def logger(self) -> logging.Logger:
-        return logging.getLogger(f'{self.sample_id}_G4XOutput')
+    def transcript_panel(self) -> dict:
+        return self.run_meta.get('transcript_panel', None)
 
     @property
-    def includes_transcript(self) -> bool:
-        return self.transcript_panel != []
-
-    @property
-    def includes_protein(self) -> bool:
-        return self.protein_panel != []
+    def transcript_table_path(self) -> Path:
+        return self.run_base / 'rna' / 'transcript_table.csv.gz'
 
     # region methods
     def setup_logger(
@@ -277,10 +291,17 @@ class G4Xoutput:
     def _load_table(
         self, file_path: str | Path, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
     ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
+        file_path = Path(file_path)
         if lazy:
-            reads = pl.scan_csv(file_path)
+            if file_path.suffix == 'parquet':
+                reads = pl.scan_parquet(file_path)
+            else:
+                reads = pl.scan_csv(file_path)
         else:
-            reads = pl.read_csv(file_path)
+            if file_path.suffix == 'parquet':
+                reads = pl.read_parquet(file_path)
+            else:
+                reads = pl.read_csv(file_path)
         if columns:
             reads = reads.select(columns)
         if not return_polars:
@@ -290,18 +311,15 @@ class G4Xoutput:
     def load_feature_table(
         self, *, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
     ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
-        file_path = self.run_base / 'diagnostics' / 'transcript_table.parquet'
-        return self._load_table(file_path, return_polars, lazy, columns)
+        return self._load_table(self.feature_table_path, return_polars, lazy, columns)
 
     def load_transcript_table(
         self, *, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
     ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
-        file_path = self.run_base / 'rna' / 'transcript_table.csv.gz'
-        return self._load_table(file_path, return_polars, lazy, columns)
+        return self._load_table(self.transcript_table_path, return_polars, lazy, columns)
 
     def stream_features(self, batch_size: int, columns: str | list[str] | None = None) -> Iterator[pl.DataFrame]:
-        file_path = self.run_base / 'diagnostics' / 'transcript_table.parquet'
-        df = pl.scan_parquet(file_path)
+        df = pl.scan_parquet(self.feature_table_path)
         if columns:
             df = df.select(columns)
         offset = 0
