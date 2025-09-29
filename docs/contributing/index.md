@@ -246,10 +246,8 @@ stats : dict
 ## Releasing and versioning
 ---
 
-Versioning and release tagging in G4X-helpers is handled through `bump-my-version` and maintainers handle version bumps and publishing releases.  
-
-Please do not change the project version or the changelog. 
-
+Versioning and release tagging in G4X-helpers is handled by the maintainers.  
+Please do not change the project version or the changelog.  
 Just submit your code/docs and they will be incorporated into our release workflow.
 
 --8<-- "_core/_partials/end_cap.md"
