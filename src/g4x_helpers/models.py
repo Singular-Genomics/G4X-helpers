@@ -200,7 +200,7 @@ class G4Xoutput:
         clear_handlers: bool = True,
     ) -> None:
         if out_dir is None:
-            out_dir = self.run_base
+            out_dir = os.getcwd()
         _ = utils.setup_logger(
             f'{self.sample_id}_G4XOutput',
             stream_logger=stream_logger,
