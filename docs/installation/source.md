@@ -129,7 +129,7 @@ python -c "import glymur; print(glymur.version.openjpeg_version)"
     0.0.0
     ```
 
-If your OpenJPEG is installed and was detected successfully, you can now proceed to [use](../usage/usage.md) G4X-helpers.
+If your OpenJPEG is installed and was detected successfully, you can now proceed to [use](../usage/index.md) G4X-helpers.
 
 If Glymur does not detect a compatible OpenJPEG version, please follow the steps below. If this happens, we **strongly suggest** performing the G4X-helpers installation and the following steps in a `conda` environment.
 
@@ -189,7 +189,7 @@ If your installation of G4X-helpers was successful, you can call the following c
 
 
 !!!tip
-    You can see the expected output of the `--help` statements in the [CLI usage](../usage/usage.md/#cli-usage) section.
+    You can see the expected output of the `--help` statements in the [CLI usage](../usage/index.md/#cli-usage) section.
 
 
 --8<-- "_partials/end_cap.md"

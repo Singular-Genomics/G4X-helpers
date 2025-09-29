@@ -4,7 +4,7 @@
 
 These pages explain how you can obtain G4X-helpers and set up your system to use it. 
 Installation can be done either via source installation or utilizing a Docker image.  
-Which route to choose depends on your **use-case**:
+Which route to choose depends on your use-case.
 
 <br>
 

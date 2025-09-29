@@ -12,8 +12,8 @@ With [G4X-helpers](https://github.com/Singular-Genomics/G4X-helpers) we provide 
 #### In this section you can learn:
 
 + how to [install](./installation/index.md) G4X-helpers on your system
-+ get started with [using](./usage/usage.md) the command line interface (CLI)
 + find a description of [CLI features](./features/index.md) 
++ get started with [using](./usage/index.md) the command line interface (CLI)
 
 <br>
 

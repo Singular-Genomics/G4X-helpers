@@ -4,7 +4,7 @@
 
 If you prefer working with Docker or you don’t want to install G4X-helpers locally, you can run its CLI tools from the [Docker image](https://github.com/Singular-Genomics/G4X-helpers/pkgs/container/g4x-helpers) that is published along with the repository.
 
-If you have Docker already installed (or Apptainer, Podman ... ) and are familiar with using it, you can continue to the G4X-helpers [Docker usage](../usage/usage.md#docker-usage) section.  
+If you have Docker already installed (or Apptainer, Podman ... ) and are familiar with using it, you can continue to the G4X-helpers [Docker usage](../usage/index.md#docker-usage) section.  
 
 Otherwise, please read on to get started.
 
@@ -44,7 +44,7 @@ if the pull was successful, you can confirm that the image is available by calli
 docker image ls ghcr.io/singular-genomics/g4x-helpers
 ```
 
-You are now ready to use the G4X-helpers Docker image. Please refer to the [Docker usage](../usage/usage.md#docker-usage) section to learn how to run the tools.
+You are now ready to use the G4X-helpers Docker image. Please refer to the [Docker usage](../usage/index.md#docker-usage) section to learn how to run the tools.
 
 <br>
 

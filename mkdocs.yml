@@ -26,7 +26,7 @@ nav:
     - --tar_viewer: ./features/tar_viewer.md
 
   - usage:
-    - quick guide: ./usage/usage.md
+    - usage: usage/index.md
 
   - contributing:
       - contributing: contributing/index.md
