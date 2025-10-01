@@ -6,6 +6,8 @@
 [pandas]: https://pandas.pydata.org/pandas-docs/stable/development/index.html
 [MDAnalysis]: https://userguide.mdanalysis.org/stable/contributing.html
 
+<br>
+# Contributing
 
 <!-- excluding this header from toc -->
 <h3>Contributions to G4X-helpers are welcome!</h3>  

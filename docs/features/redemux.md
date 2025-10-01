@@ -1,7 +1,7 @@
 <br>
 
 # `--redemux`
-#### Reprocess G4X output with a new transcript manifest
+#### Reprocess G4X-output with a new transcript manifest
 
 Replaces or updates the transcript manifest in a G4X run, reassigns transcripts via demultiplexing, and regenerates all downstream single-cell data and `.tar` viewer files.
 

@@ -29,8 +29,5 @@ nav:
   - usage:
     - usage: usage/index.md
 
-  - contributing:
-      - contributing: contributing/index.md
-
-  - changelog:
-      - changelog/index.md
+  - contributing: contributing.md
+  - changelog: changelog.md

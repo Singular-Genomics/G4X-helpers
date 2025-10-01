@@ -46,7 +46,7 @@
 ## `v0.4.12` — [2025-07-25]
 
 #### Docs:
-- Added Documentation for G4X-helpers and G4X output
+- Added Documentation for G4X-helpers and G4X-output
 
 #### Package:
 - Implemented bump-my-version for handling version updates and tagging

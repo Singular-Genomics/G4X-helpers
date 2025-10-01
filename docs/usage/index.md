@@ -62,7 +62,7 @@ Every command follows standard CLI syntax:
 command_name --option_1 VALUE_OPTION_1 --option_2 VALUE_OPTION_2
 ```
 
-To use these functions, you will need the contents of a [G4X output folder](https://docs.singulargenomics.com/g4x_data/g4x_output/) (which is referred to as `run_base`) and in some cases some externally generated files.
+To use these functions, you will need the contents of a [G4X-output folder](https://docs.singulargenomics.com/g4x_data/g4x_output/) (which is referred to as `run_base`) and in some cases some externally generated files.
 
 
 ### Example: using `--resegment` from the CLI

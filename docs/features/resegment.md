@@ -1,7 +1,7 @@
 <br>
 
 # `--resegment`
-#### Reprocess G4X output with a new segmentation
+#### Reprocess G4X-output with a new segmentation
 
 Replaces or updates the segmentation mask in a G4X run and regenerates all downstream single-cell data and `.bin` files.
 
