@@ -87,7 +87,7 @@ cd G4X-helpers
     #### Install into your current python environment via `pip`
 
     !!!warning
-        `pip` does not create or manage virtual environments, so installing through `pip install .` will require that your local Python version is compatible with the package dependencites (`Python >= 3.10`).
+        `pip` does not create or manage virtual environments, so installing through `pip install .` will require that your local Python version is compatible with the package dependencies (`Python >= 3.10`).
     
     ```bash
     pip install .
@@ -192,4 +192,4 @@ If your installation of G4X-helpers was successful, you can call the following c
     You can see the expected output of the `--help` statements in the [CLI usage](../usage/index.md/#cli-usage) section.
 
 
---8<-- "_partials/end_cap.md"
+--8<-- "_core/_partials/end_cap.md"

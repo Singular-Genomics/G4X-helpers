@@ -201,7 +201,7 @@ We prefer the numpydoc style for writing docstrings.
 We'd primarily suggest looking at existing docstrings for examples, but the [napolean guide to numpy style docstrings][] is also a great source.
 If you're unfamiliar with the reStructuredText (rST) markup format, check out the [Sphinx rST primer][].
 
-Look at [`sc.tl.leiden`](https://github.com/scverse/scanpy/blob/350c3424d2f96c4a3a7bb3b7d0428d38d842ebe8/src/scanpy/tools/_leiden.py#L49-L120) as an example of a complete doctring.
+Look at [`sc.tl.leiden`](https://github.com/scverse/scanpy/blob/350c3424d2f96c4a3a7bb3b7d0428d38d842ebe8/src/scanpy/tools/_leiden.py#L49-L120) as an example of a complete docstring.
 
 [napolean guide to numpy style docstrings]: https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_numpy.html#example-numpy
 [sphinx rst primer]: https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html

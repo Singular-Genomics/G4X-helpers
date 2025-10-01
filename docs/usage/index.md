@@ -155,4 +155,4 @@ docker run --rm \
     --out_dir /data/outputs/resegmentation
 ```
 
---8<-- "_partials/end_cap.md"
+--8<-- "_core/_partials/end_cap.md"

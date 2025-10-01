@@ -1,6 +1,6 @@
 # Changelog
 
-## latest — [2025-09-29]
+## `latest` — [2025-09-29]
 
 - G4Xoutput out_dir now defaults to cwd instead of run_base
 - removed bump-my-version and replacing with uv-ship
@@ -18,19 +18,19 @@
 - Docs restructuring (#33)
 - Merge pull request #28 from Singular-Genomics/cellid_key_bugfix
 - actually pass cellid_key to seg_updater
-- relaxing glymur depencency
+- relaxing glymur dependency
 - relaxed protobuf requirement for internal alignment
 
-## v0.4.14 — [2025-08-12]
+## `v0.4.14` — [2025-08-12]
 
 #### Fixes:
 - `tar_viewer` will now exit leaving the source folder unchanged
 
 #### Improvements:
-- `tar_viwer` now requires an out_path
+- `tar_viewer` now requires an out_path
 
 
-## v0.4.13 – (2025-08-11)
+## `v0.4.13` – (2025-08-11)
 
 #### Docs:
 - changelog now included in docs
@@ -43,7 +43,7 @@
 - set required `uv` version
 
 
-## v0.4.12 — [2025-07-25]
+## `v0.4.12` — [2025-07-25]
 
 #### Docs:
 - Added Documentation for G4X-helpers and G4X output
@@ -66,28 +66,28 @@
 - Cleaned up README.md
 
 
-## v0.2.4 - v0.4.11 (unreleased)
+## `v0.2.4` - `v0.4.11` (unreleased)
 
 - Release preparation
 - Add Dockerfile
 - Update dependency information
 
 
-## v0.2.3 — [2025-06-25]
+## `v0.2.3` — [2025-06-25]
 
-- Add tar_viewer tool to tar up a G4X-Viewer folder for the single-file upload option.
+- Add tar_viewer tool to tar up a G4X-viewer folder for the single-file upload option.
 
 
-## v0.2.2 — [2025-06-24]
+## `v0.2.2` — [2025-06-24]
 
 - Add new_bin tool to more quickly generate a new bin file
 
 
-## v0.2.1 — [2025-06-02]
+## `v0.2.1` — [2025-06-02]
 
 - Bug fixes for MVP functionality
 
 
-## v0.2.0 — [2025-05-16]
+## `v0.2.0` — [2025-05-16]
 
-- Add CLI tools for resegmentation and updating bin files with clustering/embedding information
+- Add CLI tools for re-segmentation and updating bin files with clustering/embedding information

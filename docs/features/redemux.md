@@ -1,3 +1,5 @@
+<br>
+
 # `--redemux`
 #### Reprocess G4X output with a new transcript manifest
 
@@ -45,7 +47,7 @@ $ redemux
 
 #### `--out_dir`: (*type:* `str`  *default:* `None`)
 
-> Output directory where the redemuxed files will be written.  
+> Output directory where the re-demuxed files will be written.  
 > - If not provided, files in the `run_base` directory will be updated **in place**.  
 > - If provided, the directory will be created (if it does not exist) and symlinked to the original run files (excluding specific diagnostic files).
 

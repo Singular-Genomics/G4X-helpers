@@ -1,7 +1,7 @@
 <br>
 
 # `--update_bin`
-#### Update G4X-Viewer `.bin` file with new metadata
+#### Update G4X-viewer `.bin` file with new metadata
 
 Updates an existing `.bin` segmentation file with new clustering, embedding, or color metadata from a CSV file.
 

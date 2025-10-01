@@ -1,7 +1,7 @@
 <br>
 
 # :material-code-tags: G4X-helpers
-#### Helper models and post-processing tools for G4X data.  
+#### Helper models and post-processing tools for G4X-data.  
 
 With [G4X-helpers](https://github.com/Singular-Genomics/G4X-helpers) we provide an open-source toolkit for common downstream tasks — such as applying custom segmentations or adding your own labels to the G4X-viewer. You can access its core features from the command-line interface (CLI) and additionally import it as a standalone Python package to interact with your data.
 

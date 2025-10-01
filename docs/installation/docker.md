@@ -68,4 +68,4 @@ docker system prune -a
 
 For more general information on how to utilize the features of CLI Docker, please refer to the [Docker documentation](https://docs.docker.com/engine/reference/commandline/cli/).
 
---8<-- "_partials/end_cap.md"
+--8<-- "_core/_partials/end_cap.md"
