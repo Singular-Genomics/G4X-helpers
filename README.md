@@ -9,7 +9,7 @@ Please refer to [G4X-tutorials](https://docs.singulargenomics.com/G4X-helpers/) 
 <div align="left">
   <a target="_blank" href="https://www.singulargenomics.com" style="background:none">
     <img
-    src="docs/assets/sg_logo_text.svg" 
+    src="https://raw.githubusercontent.com/Singular-Genomics/G4X-helpers/refs/heads/gh-pages/_core/assets/sg_logo_text.svg" 
     alt="Made by Singular Genomics" 
     style="opacity:0.65;">
   </a>
