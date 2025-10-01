@@ -1,5 +1,9 @@
 # Changelog
 
+## `v0.5.2` — [2025-10-01]
+
+- fix: missing tests in publish workflow
+
 ## `v0.5.1` — [2025-10-01]
 
 - pkg: added PyPI publish workflow
