@@ -6,6 +6,8 @@
 [pandas]: https://pandas.pydata.org/pandas-docs/stable/development/index.html
 [MDAnalysis]: https://userguide.mdanalysis.org/stable/contributing.html
 
+<br>
+# Contributing
 
 <!-- excluding this header from toc -->
 <h3>Contributions to G4X-helpers are welcome!</h3>  
@@ -201,7 +203,7 @@ We prefer the numpydoc style for writing docstrings.
 We'd primarily suggest looking at existing docstrings for examples, but the [napolean guide to numpy style docstrings][] is also a great source.
 If you're unfamiliar with the reStructuredText (rST) markup format, check out the [Sphinx rST primer][].
 
-Look at [`sc.tl.leiden`](https://github.com/scverse/scanpy/blob/350c3424d2f96c4a3a7bb3b7d0428d38d842ebe8/src/scanpy/tools/_leiden.py#L49-L120) as an example of a complete doctring.
+Look at [`sc.tl.leiden`](https://github.com/scverse/scanpy/blob/350c3424d2f96c4a3a7bb3b7d0428d38d842ebe8/src/scanpy/tools/_leiden.py#L49-L120) as an example of a complete docstring.
 
 [napolean guide to numpy style docstrings]: https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_numpy.html#example-numpy
 [sphinx rst primer]: https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html
@@ -246,10 +248,8 @@ stats : dict
 ## Releasing and versioning
 ---
 
-Versioning and release tagging in G4X-helpers is handled through `bump-my-version` and maintainers handle version bumps and publishing releases.  
-
-Please do not change the project version or the changelog. 
-
+Versioning and release tagging in G4X-helpers is handled by the maintainers.  
+Please do not change the project version or the changelog.  
 Just submit your code/docs and they will be incorporated into our release workflow.
 
---8<-- "_partials/end_cap.md"
+--8<-- "_core/_partials/end_cap.md"

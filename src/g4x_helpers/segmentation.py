@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import anndata as ad
@@ -22,29 +21,25 @@ if TYPE_CHECKING:
 
 
 def _make_cell_metadata(segmentation_props: pl.DataFrame, cell_by_protein: pl.DataFrame) -> pl.DataFrame:
-    cell_metadata = segmentation_props.join(cell_by_protein, on='segmentation_cell_id', how='left')
+    cell_metadata = segmentation_props.join(cell_by_protein, on='cell_id', how='left')
     return cell_metadata
 
 
 def _make_cell_by_gene(segmentation_props: pl.DataFrame, reads_new_labels: pl.DataFrame) -> pl.DataFrame:
     cell_by_gene = (
         reads_new_labels.filter(pl.col('segmentation_label') != 0)
-        .group_by('segmentation_cell_id', 'gene_name')
+        .group_by('cell_id', 'gene_name')
         .agg(pl.len().alias('counts'))
         .sort('gene_name')
-        .pivot(on='gene_name', values='counts', index='segmentation_cell_id')
+        .pivot(on='gene_name', values='counts', index='cell_id')
     )
 
-    cell_by_gene = (
-        segmentation_props.select('segmentation_cell_id')
-        .join(cell_by_gene, on='segmentation_cell_id', how='left')
-        .fill_null(0)
-    )
+    cell_by_gene = segmentation_props.select('cell_id').join(cell_by_gene, on='cell_id', how='left').fill_null(0)
     return cell_by_gene
 
 
 def _make_adata(cell_by_gene: pl.DataFrame, cell_metadata: pl.DataFrame) -> ad.AnnData:
-    X = cell_by_gene.drop('segmentation_cell_id').to_numpy()
+    X = cell_by_gene.drop('cell_id').to_numpy()
 
     obs_df = cell_metadata.drop('segmentation_label').to_pandas()
     obs_df.index = obs_df.index.astype(str)
@@ -53,7 +48,7 @@ def _make_adata(cell_by_gene: pl.DataFrame, cell_metadata: pl.DataFrame) -> ad.A
 
     adata.var['gene_id'] = cell_by_gene.columns[1:]
     adata.var['modality'] = 'tx'
-    adata.obs_names = adata.obs['segmentation_cell_id']
+    adata.obs_names = adata.obs['cell_id']
     adata.var_names = adata.var['gene_id']
 
     sc.pp.calculate_qc_metrics(adata, inplace=True, percent_top=None)
@@ -77,7 +72,7 @@ def get_mask_properties(sample: 'G4Xoutput', mask: np.ndarray) -> pl.DataFrame:
         prop_dict.append(
             {
                 'segmentation_label': label,
-                'segmentation_cell_id': f'{sample.sample_id}-{label}',
+                'cell_id': f'{sample.sample_id}-{label}',
                 'area': area,
                 'cell_x': cell_x,
                 'cell_y': cell_y,
@@ -89,7 +84,7 @@ def get_mask_properties(sample: 'G4Xoutput', mask: np.ndarray) -> pl.DataFrame:
 
 
 def assign_tx_to_mask_labels(sample: 'G4Xoutput', mask: np.ndarray) -> pl.DataFrame:
-    reads = sample.load_transcript_table(return_polars=True)
+    reads = sample.load_transcript_table()
 
     # assuming coord order == 'yx':
     coord_order = ['y_pixel_coordinate', 'x_pixel_coordinate']
@@ -98,9 +93,7 @@ def assign_tx_to_mask_labels(sample: 'G4Xoutput', mask: np.ndarray) -> pl.DataFr
     cell_ids = mask[tx_coords[:, 0].astype(int), tx_coords[:, 1].astype(int)]
 
     reads = reads.with_columns(pl.lit(cell_ids).alias('segmentation_label'))
-    reads = reads.with_columns(
-        (f'{sample.sample_id}-' + pl.col('segmentation_label').cast(pl.String)).alias('segmentation_cell_id')
-    )
+    reads = reads.with_columns((f'{sample.sample_id}-' + pl.col('segmentation_label').cast(pl.String)).alias('cell_id'))
 
     return reads
 
@@ -232,30 +225,6 @@ def extract_image_signals(
         else:
             signal_df = join_frames(signal_df, prop_tab)
 
-    signal_df = signal_df.cast({'label': pl.String}).rename({'label': 'segmentation_cell_id'})
+    signal_df = signal_df.cast({'label': pl.String}).rename({'label': 'cell_id'})
 
     return signal_df
-
-
-def _create_custom_out(
-    sample: 'G4Xoutput',
-    out_dir: Path | str | None = None,
-    parent_folder: Path | str | None = None,
-    file_name: str | None = None,
-) -> Path:
-    if out_dir is None:
-        custom_out = sample.run_base / parent_folder / 'custom_segmentation'
-    else:
-        custom_out = Path(out_dir) / parent_folder
-
-    # Ensure the directory exists
-    custom_out.mkdir(parents=True, exist_ok=True)
-
-    # Prepare output file path
-    outfile = custom_out / file_name
-
-    # If the output file already exists, delete it
-    if outfile.exists():
-        outfile.unlink()
-
-    return outfile

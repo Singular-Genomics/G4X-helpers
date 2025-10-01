@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from collections.abc import Iterator
 from dataclasses import InitVar, dataclass  # , asdict, field
 from functools import lru_cache
 from pathlib import Path
@@ -126,32 +127,50 @@ class G4Xoutput:
 
     # region properties
     @property
-    def machine(self) -> str:
-        return self.run_meta.get('machine', None)
-
-    @property
-    def run_id(self) -> str:
-        return self.run_meta.get('run_id', None)
-
-    @property
     def fc(self) -> str:
         return self.run_meta.get('fc', None)
+
+    @property
+    def feature_table_path(self) -> Path:
+        return self.run_base / 'diagnostics' / 'transcript_table.parquet'
+
+    @property
+    def includes_protein(self) -> bool:
+        return self.protein_panel != []
+
+    @property
+    def includes_transcript(self) -> bool:
+        return self.transcript_panel != []
 
     @property
     def lane(self) -> str:
         return self.run_meta.get('lane', None)
 
     @property
+    def logger(self) -> logging.Logger:
+        if not hasattr(self, '_logger') or self._logger is None:
+            self._logger = logging.getLogger(self.logger_name)
+        return self._logger
+
+    @property
+    def logger_name(self) -> str:
+        return f'{self.sample_id}_G4XOutput'
+
+    @property
+    def machine(self) -> str:
+        return self.run_meta.get('machine', None)
+
+    @property
     def platform(self) -> str:
         return self.run_meta.get('platform', None)
 
     @property
-    def transcript_panel(self) -> dict:
-        return self.run_meta.get('transcript_panel', None)
-
-    @property
     def protein_panel(self) -> dict:
         return self.run_meta.get('protein_panel', None)
+
+    @property
+    def run_id(self) -> str:
+        return self.run_meta.get('run_id', None)
 
     @property
     def software(self) -> str:
@@ -162,16 +181,12 @@ class G4Xoutput:
         return self.run_meta.get('software_version', None)
 
     @property
-    def logger(self) -> logging.Logger:
-        return logging.getLogger(f'{self.sample_id}_G4XOutput')
+    def transcript_panel(self) -> dict:
+        return self.run_meta.get('transcript_panel', None)
 
     @property
-    def includes_transcript(self) -> bool:
-        return self.transcript_panel != []
-
-    @property
-    def includes_protein(self) -> bool:
-        return self.protein_panel != []
+    def transcript_table_path(self) -> Path:
+        return self.run_base / 'rna' / 'transcript_table.csv.gz'
 
     # region methods
     def setup_logger(
@@ -185,7 +200,7 @@ class G4Xoutput:
         clear_handlers: bool = True,
     ) -> None:
         if out_dir is None:
-            out_dir = self.run_base
+            out_dir = os.getcwd()
         _ = utils.setup_logger(
             f'{self.sample_id}_G4XOutput',
             stream_logger=stream_logger,
@@ -213,6 +228,11 @@ class G4Xoutput:
             adata.obs = adata.obs.merge(df, how='left', left_index=True, right_index=True)
             umap_key = '_'.join(sorted([x for x in adata.obs.columns if 'X_umap' in x])[0].split('_')[:-1])
             adata.obsm['X_umap'] = adata.obs[[f'{umap_key}_1', f'{umap_key}_2']].to_numpy(dtype=float)
+
+            # convert clustering columns to categorical
+            for col in adata.obs.columns:
+                if 'leiden' in col:
+                    adata.obs[col] = adata.obs[col].astype('category')
 
         adata.obs_names = f'{self.sample_id}-' + adata.obs['cell_id'].str.split('-').str[1]
         return adata
@@ -268,11 +288,47 @@ class G4Xoutput:
         else:
             return arr['nuclei']
 
-    def load_transcript_table(self, return_polars: bool = False) -> pd.DataFrame | pl.DataFrame:
-        reads = pl.read_csv(self.run_base / 'rna' / 'transcript_table.csv.gz')
+    def _load_table(
+        self, file_path: str | Path, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
+    ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
+        file_path = Path(file_path)
+        if lazy:
+            if file_path.suffix == 'parquet':
+                reads = pl.scan_parquet(file_path)
+            else:
+                reads = pl.scan_csv(file_path)
+        else:
+            if file_path.suffix == 'parquet':
+                reads = pl.read_parquet(file_path)
+            else:
+                reads = pl.read_csv(file_path)
+        if columns:
+            reads = reads.select(columns)
         if not return_polars:
-            reads = reads.to_pandas()
+            reads = reads.collect().to_pandas()
         return reads
+
+    def load_feature_table(
+        self, *, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
+    ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
+        return self._load_table(self.feature_table_path, return_polars, lazy, columns)
+
+    def load_transcript_table(
+        self, *, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
+    ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
+        return self._load_table(self.transcript_table_path, return_polars, lazy, columns)
+
+    def stream_features(self, batch_size: int, columns: str | list[str] | None = None) -> Iterator[pl.DataFrame]:
+        df = pl.scan_parquet(self.feature_table_path)
+        if columns:
+            df = df.select(columns)
+        offset = 0
+        while True:
+            batch = df.slice(offset, batch_size).collect()
+            if batch.is_empty():
+                break
+            yield batch
+            offset += batch_size
 
     def list_content(self, subdir=None):
         if subdir is None:
@@ -342,37 +398,37 @@ class G4Xoutput:
         else:
             self.logger.info(f'No output directory specified, saving to ["custom"] directories in {self.run_base}.')
 
-        outfile = reseg._create_custom_out(self, out_dir, 'segmentation', 'segmentation_mask_updated.npz')
+        outfile = self._create_custom_out(out_dir, 'segmentation', 'segmentation_mask_updated.npz')
         self.logger.debug(f'segmentation mask --> {outfile}')
         np.savez(outfile, cell_labels=mask)
 
-        outfile = reseg._create_custom_out(self, out_dir, 'rna', 'transcript_table.csv')
-        self.logger.debug(f'transcript table --> {outfile}')
+        outfile = self._create_custom_out(out_dir, 'rna', 'transcript_table.csv')
+        self.logger.debug(f'transcript table --> {outfile}.gz')
         reads_new_labels.write_csv(outfile)
         _ = utils.gzip_file(outfile, remove_original=True)
 
-        outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'cell_by_transcript.csv')
-        self.logger.debug(f'cell x transcript --> {outfile}')
+        outfile = self._create_custom_out(out_dir, 'single_cell_data', 'cell_by_transcript.csv')
+        self.logger.debug(f'cell x transcript --> {outfile}.gz')
         cell_by_gene.write_csv(outfile)
         _ = utils.gzip_file(outfile, remove_original=True)
 
-        outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'cell_by_protein.csv')
-        self.logger.debug(f'cell x protein --> {outfile}')
+        outfile = self._create_custom_out(out_dir, 'single_cell_data', 'cell_by_protein.csv')
+        self.logger.debug(f'cell x protein --> {outfile}.gz')
         cell_by_protein.write_csv(outfile)
         _ = utils.gzip_file(outfile, remove_original=True)
 
-        outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'feature_matrix.h5')
+        outfile = self._create_custom_out(out_dir, 'single_cell_data', 'feature_matrix.h5')
         self.logger.debug(f'single-cell h5 --> {outfile}')
         adata.write_h5ad(outfile)
 
-        outfile = reseg._create_custom_out(self, out_dir, 'single_cell_data', 'cell_metadata.csv.gz')
+        outfile = self._create_custom_out(out_dir, 'single_cell_data', 'cell_metadata.csv.gz')
         self.logger.debug(f'cell metadata --> {outfile}')
         adata.obs.to_csv(outfile, compression='gzip')
 
         protein_only_list = [p for p in signal_list if p not in ['nuclear', 'eosin']]
         if gen_bin_file:
             self.logger.info('Making G4X-Viewer bin file.')
-            outfile = reseg._create_custom_out(self, out_dir, 'g4x_viewer', f'{self.sample_id}.bin')
+            outfile = self._create_custom_out(out_dir, 'g4x_viewer', f'{self.sample_id}.bin')
             _ = bin_gen.seg_converter(
                 adata=adata,
                 seg_mask=mask,
@@ -424,3 +480,21 @@ class G4Xoutput:
             if not p.is_file():
                 self.logger.error(f'{p} does not exist.')
                 raise FileNotFoundError(f'{p} does not exist.')
+
+    def _create_custom_out(
+        self,
+        out_dir: Path | str,
+        parent_folder: Path | str | None = None,
+        file_name: str | None = None,
+    ) -> Path:
+        custom_out = Path(out_dir) / parent_folder
+
+        # Ensure the directory exists
+        custom_out.mkdir(parents=True, exist_ok=True)
+
+        # Prepare output file path
+        outfile = custom_out / file_name
+
+        utils.delete_existing(outfile)
+
+        return outfile

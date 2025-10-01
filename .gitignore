@@ -8,3 +8,6 @@ __pycache__/
 .vscode/**
 site/
 build/
+
+# OS generated files
+.DS_Store

@@ -1,9 +1,9 @@
 <br>
 
 # `--new_bin`
-#### Generate G4X-viewer `.bin` files from G4X Sample Output
+#### Generate G4X-viewer `.bin` files from G4X sample output
 
-This tool will create a new `.bin` segmentation file compatible with the G4X-Viewer using the processed output from a G4X run. This is typically only needed to update older outputs to newer versions of the `.bin` format.
+This tool will create a new `.bin` segmentation file compatible with the G4X-viewer using the processed output from a G4X run. This is typically only needed to update older outputs to newer versions of the `.bin` format.
 
 
 ## usage 
@@ -36,7 +36,7 @@ $ new_bin
 
 #### `--threads`: (*type:* `int`  *default:* `4`)
 
-> Number of threads to use for processing. Increase this value to speed up the `.bin` generation process on multicore machines.
+> Number of threads to use for processing. Increase this value to speed up the `.bin` generation process on multi-core machines.
 
 #### `--verbose`: (*type:* `int`  *default:* `1`)
 

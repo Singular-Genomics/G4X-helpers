@@ -5,15 +5,15 @@ import os
 import shutil
 import signal
 import sys
+import math
 import tarfile
 from pathlib import Path
-
+from datetime import datetime
 import geopandas
 import numpy as np
 
-from g4x_helpers.g4x_viewer.bin_generator import seg_converter, seg_updater
 from g4x_helpers.models import G4Xoutput
-from g4x_helpers.utils import verbose_to_log_level
+from g4x_helpers.utils import verbose_to_log_level, gzip_file, delete_existing
 
 SUPPORTED_MASK_FILETYPES = ['.npz', '.npy', '.geojson']
 
@@ -176,7 +176,7 @@ def launch_update_bin():
     )
     parser.add_argument(
         '--cluster_color_key',
-        help='Column name in metadata containing cluster colors. If provided, cluster_key must also be provided. If not provided, skips updating cluster colors.',
+        help='Column name in metadata containing cluster colors. Colors must be provided as hex codes. If provided, cluster_key must also be provided. If not provided, skips updating cluster colors.',
         action='store',
         type=str,
         required=False,
@@ -212,10 +212,13 @@ def launch_update_bin():
     os.makedirs(out_dir, exist_ok=True)
 
     ## run converter
+    from g4x_helpers.g4x_viewer.bin_generator import seg_updater
+
     _ = seg_updater(
         bin_file=bin_file,
         metadata_file=metadata,
         out_path=out_path,
+        cellid_key=args.cellid_key,
         cluster_key=args.cluster_key,
         cluster_color_key=args.cluster_color_key,
         emb_key=args.emb_key,
@@ -282,6 +285,8 @@ def launch_new_bin():
         outfile = run_base / 'g4x_viewer' / f'{sample.sample_id}.bin'
 
     ## make new bin file
+    from g4x_helpers.g4x_viewer.bin_generator import seg_converter
+
     sample.logger.info('Making G4X-Viewer bin file.')
     _ = seg_converter(
         adata=adata,
@@ -405,3 +410,194 @@ def launch_tar_viewer():
             atexit.unregister(restore_he)
         except Exception:
             pass
+
+
+def launch_redemux():
+    from g4x_helpers.demux import batched_dot_product_hamming_matrix, demux, load_manifest
+    from g4x_helpers.g4x_viewer.tx_generator import tx_converter
+    import polars as pl
+    from tqdm import tqdm
+
+    parser = argparse.ArgumentParser(allow_abbrev=False)
+
+    parser.add_argument('--run_base', help='Path to G4X sample output folder', action='store', type=str, required=True)
+    parser.add_argument(
+        '--manifest',
+        help='Path to manifest for demuxing. The manifest must be a 3-column csv with the following header: target,sequence,read.',
+        action='store',
+        type=str,
+        required=True,
+    )
+    parser.add_argument(
+        '--batch_size',
+        help='Number of transcripts to process per batch.',
+        action='store',
+        type=int,
+        required=False,
+        default=1_000_000,
+    )
+    parser.add_argument(
+        '--out_dir',
+        help='Output directory where new files will be saved. Will be created if it does not exist. If not provided, the files in run_base will be updated in-place.',
+        action='store',
+        type=str,
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        '--threads',
+        help='Number of threads to use for processing. [4]',
+        action='store',
+        type=int,
+        required=False,
+        default=4,
+    )
+    parser.add_argument(
+        '--verbose',
+        help='Set logging level WARNING (0), INFO (1), or DEBUG (2). [1]',
+        action='store',
+        type=int,
+        default=1,
+    )
+
+    args = parser.parse_args()
+
+    ## preflight checks
+    run_base = Path(args.run_base)
+    assert run_base.exists(), f'{run_base} does not appear to exist.'
+    manifest = Path(args.manifest)
+    assert manifest.exists(), f'{manifest} does not appear to exist.'
+    demux_batch_size = args.batch_size
+
+    ## make output directory with symlinked files from original
+    out_dir = Path(args.out_dir)
+    batch_dir = out_dir / 'diagnostics' / 'batches'
+    batch_dir.mkdir(parents=True, exist_ok=True)
+
+    ignore_file_list = ['clustering_umap.csv.gz', 'dgex.csv.gz', 'transcript_panel.csv']
+    for root, dirs, files in os.walk(run_base):
+        rel_root = Path(root).relative_to(run_base)
+        if str(rel_root) == 'metrics':
+            continue
+        dst_root = out_dir / rel_root
+        dst_root.mkdir(parents=True, exist_ok=True)
+        for f in files:
+            if f in ignore_file_list:
+                continue
+            src_file = Path(root) / f
+            dst_file = dst_root / f
+            if dst_file.exists():
+                dst_file.unlink()
+            dst_file.symlink_to(src_file)
+
+    ## initialize G4X sample
+    sample = G4Xoutput(run_base=run_base, out_dir=out_dir, log_level=verbose_to_log_level(args.verbose))
+    print(sample)
+
+    ## update metadata and transcript panel file
+    shutil.copy(manifest, out_dir / 'transcript_panel.csv')
+    with open(out_dir / 'run_meta.json', 'r') as f:
+        meta = json.load(f)
+    meta['transcript_panel'] = manifest.name
+    meta['redemuxed_timestamp'] = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
+    (out_dir / 'run_meta.json').unlink()
+    with open(out_dir / 'run_meta.json', 'w') as f:
+        _ = json.dump(meta, f)
+    meta = {'run_metadata': meta}
+    (out_dir / 'g4x_viewer' / f'{sample.sample_id}_run_metadata.json').unlink()
+    with open(out_dir / 'g4x_viewer' / f'{sample.sample_id}_run_metadata.json', 'w') as f:
+        _ = json.dump(meta, f)
+
+    ## load the new manifest file that we will demux against
+    sample.logger.info('Loading manifest file.')
+    manifest, probe_dict = load_manifest(manifest)
+    seq_reads = manifest['read'].unique().to_list()
+    seq_reads = [int(x.split('_')[-1]) if isinstance(x, str) else x for x in seq_reads]
+
+    ## do the re-demuxing
+    sample.logger.info('Performing re-demuxing.')
+    num_features = pl.scan_parquet(sample.feature_table_path).select(pl.len()).collect().item()
+    num_expected_batches = math.ceil(num_features / args.batch_size)
+    cols_to_select = [
+        'x_coord_shift',
+        'y_coord_shift',
+        'z',
+        'demuxed',
+        'transcript_condensed',
+        'meanQS',
+        'sequence_to_demux',
+        'transcript',
+        'TXUID',
+    ]
+    for i, feature_batch in tqdm(
+        enumerate(sample.stream_features(args.batch_size, cols_to_select)),
+        total=num_expected_batches,
+        desc='Demuxing transcripts',
+        position=0,
+    ):
+        feature_batch = feature_batch.with_columns(pl.col('TXUID').str.split('_').list.last().cast(int).alias('read'))
+        redemuxed_feature_batch = []
+        for seq_read in seq_reads:
+            feature_batch_read = feature_batch.filter(pl.col('read') == seq_read)
+            manifest_read = manifest.filter(pl.col('read') == seq_read)
+            if len(feature_batch_read) == 0 or len(manifest_read) == 0:
+                continue
+            seqs = feature_batch_read['sequence_to_demux'].to_list()
+            codes = manifest_read['sequence'].to_list()
+            codebook_target_ids = np.array(manifest_read['target'].to_list())
+            hammings = batched_dot_product_hamming_matrix(seqs, codes, batch_size=demux_batch_size)
+            feature_batch_read = demux(hammings, feature_batch_read, codebook_target_ids, probe_dict)
+            redemuxed_feature_batch.append(feature_batch_read)
+        pl.concat(redemuxed_feature_batch).write_parquet(batch_dir / f'batch_{i}.parquet')
+
+    ## set run_base to the redemux output folder
+    sample.run_base = out_dir
+
+    ## concatenate results into final csv and parquet
+    sample.logger.info('Writing updated transcript table.')
+    final_tx_table_path = out_dir / 'rna' / 'transcript_table.csv'
+    final_tx_pq_path = out_dir / 'diagnostics' / 'transcript_table.parquet'
+    delete_existing(final_tx_table_path)
+    delete_existing(final_tx_table_path.with_suffix('.csv.gz'))
+    delete_existing(final_tx_pq_path)
+    tx_table = pl.scan_parquet(list(batch_dir.glob('*.parquet')))
+    tx_table.sink_parquet(final_tx_pq_path)
+    _ = (
+        tx_table.filter(pl.col('demuxed_new'))
+        .drop(
+            'transcript',
+            'transcript_new',
+            'transcript_condensed',
+            'demuxed',
+            'demuxed_new',
+            'sequence_to_demux',
+            'TXUID',
+        )
+        .rename(
+            {
+                'transcript_condensed_new': 'gene_name',
+                'x_coord_shift': 'y_pixel_coordinate',
+                'y_coord_shift': 'x_pixel_coordinate',
+                'z': 'z_level',
+                'meanQS': 'confidence_score',
+            }
+        )
+        .sink_csv(final_tx_table_path)
+    )
+    _ = gzip_file(final_tx_table_path)
+    shutil.rmtree(batch_dir)
+
+    ## now regenerate the secondary files
+    sample.logger.info('Regenerating downstream files.')
+    labels = sample.load_segmentation()
+    sample.logger.info('Intersecting with existing segmentation.')
+    _ = sample.intersect_segmentation(labels=labels, out_dir=out_dir, n_threads=args.threads)
+    sample.logger.info('Generating viewer transcript file.')
+    _ = tx_converter(
+        sample,
+        out_path=out_dir / 'g4x_viewer' / f'{sample.sample_id}.tar',
+        n_threads=args.threads,
+        logger=sample.logger,
+    )
+
+    sample.logger.info('Completed redemux.')
