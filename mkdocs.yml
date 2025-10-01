@@ -21,6 +21,7 @@ nav:
   - CLI features:
     - CLI features: ./features/index.md
     - --resegment: ./features/resegment.md
+    - --redemux: ./features/redemux.md
     - --update_bin: ./features/update_bin.md
     - --new_bin: ./features/new_bin.md
     - --tar_viewer: ./features/tar_viewer.md
