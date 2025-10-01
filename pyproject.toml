@@ -58,4 +58,4 @@ default-groups = ["dev", "docs"]
 
 [tool.uv-ship]
 release-branch = "main"
-changelog-path = "CHANGELOG.md"
+changelog-path = "CHANGELOG"

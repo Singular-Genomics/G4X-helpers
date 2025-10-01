@@ -1,25 +1,29 @@
 # Changelog
 
-## `latest` — [2025-09-29]
+## `latest` — [2025-10-01]
 
-- G4Xoutput out_dir now defaults to cwd instead of run_base
-- removed bump-my-version and replacing with uv-ship
-- change all segmentation_cell_id to cell_id (#34)
-- here it is
-- try to fix the progress bar
-- remove temporary folder
-- Merge branch 'dev' of github.com:Singular-Genomics/G4X-helpers into dev
-- break up re-demux by read. there may still be some issues with symlinks getting overwritten.
-- updated _core
-- conversion of leiden clusters when load_clustering=true
-- updated ruff
-- Redemux tool (#30)
-- enforce cluster color as hex-codes
-- Docs restructuring (#33)
-- Merge pull request #28 from Singular-Genomics/cellid_key_bugfix
-- actually pass cellid_key to seg_updater
-- relaxing glymur dependency
-- relaxed protobuf requirement for internal alignment
+- docs: formatting
+- docs: spell check
+- docs: integrate redemux docs
+- docs: Docs restructuring (#33)
+- docs: updated _core docs
+
+- feat: Redemux tool (#30)
+- feat: progress bar
+
+- fix: G4Xoutput out_dir now defaults to cwd instead of run_base
+- fix: enforce cluster color as hex-codes
+- fix: auto-conversion of clusters to 'categorical' when load_clustering=true
+- fix: change all segmentation_cell_id to cell_id (#34)
+- fix: cellid_key - bugfix
+
+- pkg: updated ruff
+- pkg: relaxing glymur dependency
+- pkg: relaxed protobuf requirement for internal alignment
+- pkg: opening python requirements to include 3.11
+- pkg: removed bump-my-version and replacing with uv-ship
+
+
 
 ## `v0.4.14` — [2025-08-12]
 
