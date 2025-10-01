@@ -2,7 +2,7 @@
 INHERIT: docs/_core/core.mkdocs.yml
 
 # region Site
-site_name: G4X-tutorials
+site_name: G4X-helpers
 site_url: https://docs.singulargenomics.com/G4X-helpers/
 site_description: Singular Genomics G4X data documentation site
 
@@ -11,28 +11,22 @@ repo_url: https://github.com/Singular-Genomics/G4X-helpers
 
 # region Nav
 nav:
-  - Introduction: index.md
+  - G4X-helpers: index.md
 
-  - G4X-helpers:
-      - G4X-helpers: g4x_helpers/index.md
-      - installation:
-        - installation: g4x_helpers/installation/index.md
-        - source install: g4x_helpers/installation/source.md
-        - Docker setup: g4x_helpers/installation/docker.md
+  - installation:
+    - installation: ./installation/index.md
+    - source install: ./installation/source.md
+    - Docker setup: ./installation/docker.md
 
-      - CLI features:
-        - CLI features: g4x_helpers/features/index.md
-        - --resegment: g4x_helpers/features/resegment.md
-        - --update_bin: g4x_helpers/features/update_bin.md
-        - --new_bin: g4x_helpers/features/new_bin.md
-        - --tar_viewer: g4x_helpers/features/tar_viewer.md
+  - CLI features:
+    - CLI features: ./features/index.md
+    - --resegment: ./features/resegment.md
+    - --update_bin: ./features/update_bin.md
+    - --new_bin: ./features/new_bin.md
+    - --tar_viewer: ./features/tar_viewer.md
 
-      - usage: g4x_helpers/usage.md
-
-  - G4X data:
-      - g4x_data/index.md
-      - G4X output: g4x_data/g4x_output.md
-      - data import: g4x_data/data_import.md
+  - usage:
+    - usage: usage/index.md
 
   - contributing:
       - contributing: contributing/index.md
