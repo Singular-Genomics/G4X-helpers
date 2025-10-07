@@ -1,8 +1,19 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+# This import is only for type checkers (mypy, PyCharm, etc.), not at runtime
 from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    import logging
+
+    from geopandas.geodataframe import GeoDataFrame
+
+    from g4x_helpers.models import G4Xoutput
+
 import anndata as ad
+import geopandas
 import numpy as np
 import polars as pl
 import scanpy as sc
@@ -15,9 +26,167 @@ from shapely.geometry import Polygon
 from skimage.measure._regionprops import RegionProperties
 from tqdm import tqdm
 
-if TYPE_CHECKING:
-    # This import is only for type checkers (mypy, PyCharm, etc.), not at runtime
-    from g4x_helpers.models import G4Xoutput
+import g4x_helpers.g4x_viewer.bin_generator as bin_gen
+
+from . import utils
+
+SUPPORTED_MASK_FILETYPES = {'.npy', '.npz', '.geojson'}
+
+
+def intersect_segmentation(
+    g4x_out: 'G4Xoutput',
+    labels: GeoDataFrame | np.ndarray,
+    *,
+    out_dir: str | Path | None = None,
+    exclude_channels: list[str] | None = None,
+    gen_bin_file: bool = True,
+    n_threads: int = 4,
+    logger: logging.Logger | None = None,
+) -> None:
+    mask = labels
+
+    signal_list = ['nuclear', 'eosin'] + g4x_out.proteins
+
+    if exclude_channels is not None:
+        logger.info(f'Not processing channels: {", ".join(exclude_channels)}')
+        if isinstance(exclude_channels, str):
+            exclude_channels = [exclude_channels]
+
+        signal_list = [item for item in signal_list if item not in exclude_channels]
+    else:
+        logger.info('Processing all channels.')
+
+    if out_dir is None:
+        logger.warning('out_dir was not specified, so files will be updated in-place.')
+        out_dir = g4x_out.run_base
+    else:
+        logger.info(f'Using provided output directory: {out_dir}')
+        out_dir = Path(out_dir)
+
+    if isinstance(mask, GeoDataFrame):
+        logger.info('Rasterizing provided GeoDataFrame.')
+        mask = rasterize_polygons(gdf=mask, target_shape=g4x_out.shape)
+
+    logger.info('Extracting mask properties.')
+    segmentation_props = get_mask_properties(g4x_out, mask)
+
+    logger.info('Assigning transcripts to mask labels.')
+    reads_new_labels = assign_tx_to_mask_labels(g4x_out, mask)
+
+    logger.info('Extracting protein signal.')
+    cell_by_protein = extract_image_signals(g4x_out, mask, signal_list=signal_list)
+
+    logger.info('Building output data structures.')
+    cell_metadata = _make_cell_metadata(segmentation_props, cell_by_protein)
+    cell_by_gene = _make_cell_by_gene(segmentation_props, reads_new_labels)
+    adata = _make_adata(cell_by_gene, cell_metadata)
+
+    if out_dir:
+        logger.info(f'Saving output files to {out_dir}')
+    else:
+        logger.info(f'No output directory specified, saving to ["custom"] directories in {g4x_out.run_base}.')
+
+    outfile = utils.create_custom_out(out_dir, 'segmentation', 'segmentation_mask_updated.npz')
+    logger.debug(f'segmentation mask --> {outfile}')
+    np.savez(outfile, cell_labels=mask)
+
+    outfile = utils.create_custom_out(out_dir, 'rna', 'transcript_table.csv')
+    logger.debug(f'transcript table --> {outfile}.gz')
+    reads_new_labels.write_csv(outfile)
+    _ = utils.gzip_file(outfile, remove_original=True)
+
+    outfile = utils.create_custom_out(out_dir, 'single_cell_data', 'cell_by_transcript.csv')
+    logger.debug(f'cell x transcript --> {outfile}.gz')
+    cell_by_gene.write_csv(outfile)
+    _ = utils.gzip_file(outfile, remove_original=True)
+
+    outfile = utils.create_custom_out(out_dir, 'single_cell_data', 'cell_by_protein.csv')
+    logger.debug(f'cell x protein --> {outfile}.gz')
+    cell_by_protein.write_csv(outfile)
+    _ = utils.gzip_file(outfile, remove_original=True)
+
+    outfile = utils.create_custom_out(out_dir, 'single_cell_data', 'feature_matrix.h5')
+    logger.debug(f'single-cell h5 --> {outfile}')
+    adata.write_h5ad(outfile)
+
+    outfile = utils.create_custom_out(out_dir, 'single_cell_data', 'cell_metadata.csv.gz')
+    logger.debug(f'cell metadata --> {outfile}')
+    adata.obs.to_csv(outfile, compression='gzip')
+
+    protein_only_list = [p for p in signal_list if p not in ['nuclear', 'eosin']]
+    if gen_bin_file:
+        logger.info('Making G4X-Viewer bin file.')
+        outfile = utils.create_custom_out(out_dir, 'g4x_viewer', f'{g4x_out.sample_id}.bin')
+        _ = bin_gen.seg_converter(
+            adata=adata,
+            seg_mask=mask,
+            out_path=outfile,
+            protein_list=[f'{x}_intensity_mean' for x in protein_only_list],
+            n_threads=n_threads,
+            logger=g4x_out.logger,
+        )
+        logger.debug(f'G4X-Viewer bin --> {outfile}')
+
+
+def try_load_segmentation(
+    segmentation_mask: Path, expected_shape: tuple[int], segmentation_mask_key: str | None = None
+) -> np.ndarray | geopandas.GeoDataFrame:
+    ## load new segmentation
+    suffix = segmentation_mask.suffix.lower()
+
+    if segmentation_mask.suffix not in SUPPORTED_MASK_FILETYPES:
+        raise ValueError(f'{segmentation_mask.suffix} is not a supported file type.')
+
+    if suffix == '.npz':
+        with np.load(segmentation_mask) as labels:
+            available_keys = list(labels.keys())
+
+            if segmentation_mask_key:  # if a key is specified
+                if segmentation_mask_key not in labels:
+                    raise KeyError(f"Key '{segmentation_mask_key}' not found in .npz; available keys: {available_keys}")
+                seg = labels[segmentation_mask_key]
+
+            else:  # if no key specified,
+                if len(labels) == 1:  # and only one key is available, use that key
+                    seg = labels[available_keys[0]]
+                else:  # and multiple keys are available, raise an error
+                    if len(labels) > 1:
+                        raise ValueError(
+                            f'Multiple keys found in .npz: {available_keys}. Please specify a key using segmentation_mask_key.'
+                        )
+                seg = labels
+
+    elif suffix == '.npy':
+        # .npy: directly returns the array, no context manager available
+        if segmentation_mask_key is not None:
+            print('file is .npy, ignoring provided segmentation_mask_key.')
+        seg = np.load(segmentation_mask)
+
+    elif suffix == '.geojson':
+        seg = geopandas.read_file(segmentation_mask)
+
+        if segmentation_mask_key is not None:
+            if segmentation_mask_key not in seg.columns:
+                raise KeyError(
+                    f"Column '{segmentation_mask_key}' not found in GeoJSON; available columns: {seg.columns.tolist()}"
+                )
+
+            # ensure that a coliumn named 'label' exists
+            seg['label'] = seg[segmentation_mask_key]
+
+        else:
+            if 'label' not in seg.columns:
+                raise ValueError(
+                    "No column named 'label' found in GeoJSON. Please specify which column to use for labels via segmentation_mask_key."
+                )
+
+    # only validate shape for numpy arrays
+    if isinstance(seg, np.ndarray):
+        assert seg.shape == expected_shape, (
+            f'provided mask shape {seg.shape} does not match G4X sample shape {expected_shape}'
+        )
+
+    return seg
 
 
 def _make_cell_metadata(segmentation_props: pl.DataFrame, cell_by_protein: pl.DataFrame) -> pl.DataFrame:

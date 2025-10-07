@@ -15,10 +15,7 @@ import pandas as pd
 import polars as pl
 import scanpy as sc
 import tifffile
-from geopandas.geodataframe import GeoDataFrame
 
-import g4x_helpers.g4x_viewer.bin_generator as bin_gen
-import g4x_helpers.segmentation as reseg
 import g4x_helpers.utils as utils
 
 glymur.set_option('lib.num_threads', 8)
@@ -40,10 +37,6 @@ class G4Xoutput:
         segmentation masks, panels, and feature matrices.
     sample_id : str, optional
         The sample ID to associate with the run. If not provided, it will be inferred from the `run_base` path.
-    out_dir : str or Path, optional
-        The output directory to use for writing logs and intermediate files. Defaults to `run_base` if not provided.
-    log_level : int, optional
-        The logging level for the stream logger (default is `logging.INFO`).
 
     Attributes
     ----------
@@ -71,23 +64,12 @@ class G4Xoutput:
 
     run_base: Path | str
     sample_id: str | None = None
-    out_dir: InitVar[Path | str | None] = None
-    log_level: InitVar[int] = logging.INFO
 
-    def __post_init__(self, out_dir: Path | str | None, log_level: int):
+    def __post_init__(self):
         self.run_base = Path(self.run_base)
 
         if self.sample_id is None:
             self.sample_id = self.run_base.name
-
-        _ = self.setup_logger(
-            stream_logger=True,
-            stream_level=log_level,
-            file_logger=True,
-            file_level=logging.DEBUG,
-            out_dir=out_dir,
-            clear_handlers=True,
-        )
 
         _ = self._validate_run_base()
 
@@ -147,16 +129,6 @@ class G4Xoutput:
         return self.run_meta.get('lane', None)
 
     @property
-    def logger(self) -> logging.Logger:
-        if not hasattr(self, '_logger') or self._logger is None:
-            self._logger = logging.getLogger(self.logger_name)
-        return self._logger
-
-    @property
-    def logger_name(self) -> str:
-        return f'{self.sample_id}_G4XOutput'
-
-    @property
     def machine(self) -> str:
         return self.run_meta.get('machine', None)
 
@@ -189,28 +161,6 @@ class G4Xoutput:
         return self.run_base / 'rna' / 'transcript_table.csv.gz'
 
     # region methods
-    def setup_logger(
-        self,
-        *,
-        stream_logger: bool = True,
-        stream_level: int = logging.INFO,
-        file_logger: bool = False,
-        file_level: int = logging.INFO,
-        out_dir: Path | str | None = None,
-        clear_handlers: bool = True,
-    ) -> None:
-        if out_dir is None:
-            out_dir = os.getcwd()
-        _ = utils.setup_logger(
-            f'{self.sample_id}_G4XOutput',
-            stream_logger=stream_logger,
-            stream_level=stream_level,
-            file_logger=file_logger,
-            file_level=file_level,
-            out_dir=out_dir,
-            clear_handlers=clear_handlers,
-        )
-
     def load_adata(self, *, remove_nontargeting: bool = True, load_clustering: bool = True) -> ad.AnnData:
         adata = sc.read_h5ad(self.run_base / 'single_cell_data' / 'feature_matrix.h5')
 
@@ -247,10 +197,10 @@ class G4Xoutput:
     ) -> np.ndarray:
         if image_type == 'protein':
             if not self.protein_panel:
-                self.logger.error('No protein results.')
+                print('No protein results.')
                 return None
             if protein is None or protein not in self.proteins:
-                self.logger.error(f'{protein} not in protein panel.')
+                print(f'{protein} not in protein panel.')
                 return None
             pattern = f'{protein}_thumbnail.*' if thumbnail else f'{protein}.*'
             directory = 'protein'
@@ -258,7 +208,7 @@ class G4Xoutput:
             pattern_base = {'h_and_e': 'h_and_e', 'nuclear': 'nuclear', 'eosin': 'eosin'}.get(image_type)
 
             if not pattern_base:
-                self.logger.error(f'Unknown image type: {image_type}')
+                print(f'Unknown image type: {image_type}')
                 return None
 
             pattern = f'{pattern_base}_thumbnail.*' if thumbnail else f'{pattern_base}.*'
@@ -346,99 +296,6 @@ class G4Xoutput:
 
         return contents
 
-    def intersect_segmentation(
-        self,
-        labels: GeoDataFrame | np.ndarray,
-        *,
-        out_dir: str | Path | None = None,
-        exclude_channels: list[str] | None = None,
-        gen_bin_file: bool = True,
-        n_threads: int = 4,
-    ) -> None:
-        mask = labels
-
-        signal_list = ['nuclear', 'eosin'] + self.proteins
-
-        if exclude_channels is not None:
-            self.logger.info(f'Not processing channels: {", ".join(exclude_channels)}')
-            if isinstance(exclude_channels, str):
-                exclude_channels = [exclude_channels]
-
-            signal_list = [item for item in signal_list if item not in exclude_channels]
-        else:
-            self.logger.info('Processing all channels.')
-
-        if out_dir is None:
-            self.logger.warning('out_dir was not specified, so files will be updated in-place.')
-            out_dir = self.run_base
-        else:
-            self.logger.info(f'Using provided output directory: {out_dir}')
-            out_dir = Path(out_dir)
-
-        if isinstance(mask, GeoDataFrame):
-            self.logger.info('Rasterizing provided GeoDataFrame.')
-            mask = reseg.rasterize_polygons(gdf=mask, target_shape=self.shape)
-
-        self.logger.info('Extracting mask properties.')
-        segmentation_props = reseg.get_mask_properties(self, mask)
-
-        self.logger.info('Assigning transcripts to mask labels.')
-        reads_new_labels = reseg.assign_tx_to_mask_labels(self, mask)
-
-        self.logger.info('Extracting protein signal.')
-        cell_by_protein = reseg.extract_image_signals(self, mask, signal_list=signal_list)
-
-        self.logger.info('Building output data structures.')
-        cell_metadata = reseg._make_cell_metadata(segmentation_props, cell_by_protein)
-        cell_by_gene = reseg._make_cell_by_gene(segmentation_props, reads_new_labels)
-        adata = reseg._make_adata(cell_by_gene, cell_metadata)
-
-        if out_dir:
-            self.logger.info(f'Saving output files to {out_dir}')
-        else:
-            self.logger.info(f'No output directory specified, saving to ["custom"] directories in {self.run_base}.')
-
-        outfile = self._create_custom_out(out_dir, 'segmentation', 'segmentation_mask_updated.npz')
-        self.logger.debug(f'segmentation mask --> {outfile}')
-        np.savez(outfile, cell_labels=mask)
-
-        outfile = self._create_custom_out(out_dir, 'rna', 'transcript_table.csv')
-        self.logger.debug(f'transcript table --> {outfile}.gz')
-        reads_new_labels.write_csv(outfile)
-        _ = utils.gzip_file(outfile, remove_original=True)
-
-        outfile = self._create_custom_out(out_dir, 'single_cell_data', 'cell_by_transcript.csv')
-        self.logger.debug(f'cell x transcript --> {outfile}.gz')
-        cell_by_gene.write_csv(outfile)
-        _ = utils.gzip_file(outfile, remove_original=True)
-
-        outfile = self._create_custom_out(out_dir, 'single_cell_data', 'cell_by_protein.csv')
-        self.logger.debug(f'cell x protein --> {outfile}.gz')
-        cell_by_protein.write_csv(outfile)
-        _ = utils.gzip_file(outfile, remove_original=True)
-
-        outfile = self._create_custom_out(out_dir, 'single_cell_data', 'feature_matrix.h5')
-        self.logger.debug(f'single-cell h5 --> {outfile}')
-        adata.write_h5ad(outfile)
-
-        outfile = self._create_custom_out(out_dir, 'single_cell_data', 'cell_metadata.csv.gz')
-        self.logger.debug(f'cell metadata --> {outfile}')
-        adata.obs.to_csv(outfile, compression='gzip')
-
-        protein_only_list = [p for p in signal_list if p not in ['nuclear', 'eosin']]
-        if gen_bin_file:
-            self.logger.info('Making G4X-Viewer bin file.')
-            outfile = self._create_custom_out(out_dir, 'g4x_viewer', f'{self.sample_id}.bin')
-            _ = bin_gen.seg_converter(
-                adata=adata,
-                seg_mask=mask,
-                out_path=outfile,
-                protein_list=[f'{x}_intensity_mean' for x in protein_only_list],
-                n_threads=n_threads,
-                logger=self.logger,
-            )
-            self.logger.debug(f'G4X-Viewer bin --> {outfile}')
-
     # region internal
     @staticmethod
     def _load_image_base(run_base: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
@@ -472,29 +329,11 @@ class G4Xoutput:
 
     def _validate_run_base(self):
         """check that all expected outputs are present."""
-        self.logger.debug('Validating run_base.')
+        print('Validating run_base.')
 
         required_paths = [self.run_base / 'run_meta.json', self.run_base / 'single_cell_data' / 'feature_matrix.h5']
 
         for p in required_paths:
             if not p.is_file():
-                self.logger.error(f'{p} does not exist.')
+                print(f'{p} does not exist.')
                 raise FileNotFoundError(f'{p} does not exist.')
-
-    def _create_custom_out(
-        self,
-        out_dir: Path | str,
-        parent_folder: Path | str | None = None,
-        file_name: str | None = None,
-    ) -> Path:
-        custom_out = Path(out_dir) / parent_folder
-
-        # Ensure the directory exists
-        custom_out.mkdir(parents=True, exist_ok=True)
-
-        # Prepare output file path
-        outfile = custom_out / file_name
-
-        utils.delete_existing(outfile)
-
-        return outfile
