@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import gzip
 import logging
 import os
-import gzip
 import shutil
 import zipfile
 from pathlib import Path
@@ -13,13 +13,9 @@ import numpy as np
 def verbose_to_log_level(verbose: int) -> int:
     """
     returns a logging level based on verbose integer:
-
     0 == WARNING
-
     1 == REPORT
-
     2 == INFO
-
     any other integer == DEBUG
     """
 
@@ -142,3 +138,21 @@ def gzip_file(outfile: str | Path, remove_original: bool = False) -> None:
             shutil.copyfileobj(f_in, f_out)
     if remove_original:
         os.remove(outfile)
+
+
+def create_custom_out(
+    out_dir: Path | str,
+    parent_folder: Path | str | None = None,
+    file_name: str | None = None,
+) -> Path:
+    custom_out = Path(out_dir) / parent_folder
+
+    # Ensure the directory exists
+    custom_out.mkdir(parents=True, exist_ok=True)
+
+    # Prepare output file path
+    outfile = custom_out / file_name
+
+    delete_existing(outfile)
+
+    return outfile
