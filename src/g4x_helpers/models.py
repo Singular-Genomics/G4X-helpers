@@ -97,7 +97,8 @@ class G4Xoutput:
         repr_string += f'Sample: \033[1m{self.sample_id}\033[0m of {mac_run_id}, {self.fc}\n'
 
         shp = (np.array(self.shape) * 0.3125) / 1000
-        repr_string += f'imaged area: ({shp[1]:.2f} x {shp[0]:.2f}) mm\n\n'
+        repr_string += f'imaged area: ({shp[1]:.2f} x {shp[0]:.2f}) mm\n'
+        repr_string += f'software version: {self.software_version}\n\n'
 
         if self.includes_transcript:
             repr_string += f'Transcript panel with {len(self.genes)} genes\t[{", ".join(self.genes[0:5])} ... ]\n'
@@ -329,7 +330,7 @@ class G4Xoutput:
 
     def _validate_run_base(self):
         """check that all expected outputs are present."""
-        print('Validating run_base.')
+        # print('Validating run_base.')
 
         required_paths = [self.run_base / 'run_meta.json', self.run_base / 'single_cell_data' / 'feature_matrix.h5']
 
