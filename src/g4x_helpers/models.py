@@ -336,5 +336,5 @@ class G4Xoutput:
 
         for p in required_paths:
             if not p.is_file():
-                print(f'{p} does not exist.')
+                # print(f'{p} does not exist.')
                 raise FileNotFoundError(f'{p} does not exist.')
