@@ -1,5 +1,6 @@
 import atexit
 import json
+import logging
 import shutil
 import signal
 import sys
@@ -7,8 +8,8 @@ import tarfile
 from pathlib import Path
 
 
-def tar_viewer(viewer_dir, out_path):
-    print('Checking files.')
+def tar_viewer(viewer_dir, out_path, logger=logging.Logger):
+    logger.info('Checking files.')
     viewer_dir = Path(viewer_dir)
     assert viewer_dir.exists(), f'{viewer_dir} does not appear to exist.'
 
@@ -50,20 +51,20 @@ def tar_viewer(viewer_dir, out_path):
                 if orig_he.exists():
                     orig_he.unlink()
                 shutil.move(str(moved_he), str(orig_he))
-                print('Restored H&E file to original location.')
+                logger.info('Restored H&E file to original location.')
 
             # NEW: remove the h_and_e folder if we created it and it’s empty
             try:
                 if created_he_dir and h_and_e_path.exists() and not any(h_and_e_path.iterdir()):
                     h_and_e_path.rmdir()
-                    print('Removed empty h_and_e directory.')
+                    logger.info('Removed empty h_and_e directory.')
             except Exception as e:
-                print(f'WARNING: failed to remove h_and_e directory: {e}', file=sys.stderr)
+                logger.warning(f'failed to remove h_and_e directory: {e}')
 
             restored = True
             moved = False
         except Exception as e:
-            print(f'WARNING: failed to restore H&E file: {e}', file=sys.stderr)
+            logger.warning(f'failed to restore H&E file: {e}')
 
     atexit.register(restore_he)
 
@@ -71,7 +72,7 @@ def tar_viewer(viewer_dir, out_path):
         import signal as _signal
 
         sig_name = _signal.Signals(sig).name
-        print(f'Received {sig_name}; cleaning up…', file=sys.stderr)
+        logger.warning(f'Received {sig_name}; cleaning up…')
         restore_he()
         sys.exit(128 + sig)
 
@@ -83,7 +84,7 @@ def tar_viewer(viewer_dir, out_path):
     moved = True
 
     try:
-        print('Making metadata.')
+        logger.info('Making metadata.')
         metadata = {
             'protein_image_src': ome_tiff_path.name,
             'protein_image_data_src': run_meta_path.name,
@@ -94,7 +95,7 @@ def tar_viewer(viewer_dir, out_path):
         with open(viewer_dir / 'dataset.config.json', 'w') as f:
             json.dump(metadata, f)
 
-        print('Tarring folder.')
+        logger.info('Tarring folder.')
         out_tar = Path(out_path)
         if not out_tar.exists():
             out_tar.mkdir(parents=True, exist_ok=True)

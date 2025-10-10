@@ -1,11 +1,10 @@
-import logging
-from importlib.metadata import version as ver
 from pathlib import Path
 
 import rich_click as click
 
-from .models import G4Xoutput
-from .utils import setup_logger, verbose_to_log_level
+from . import __version__
+from . import cli_utils as cu
+from . import main_features as main
 
 # rich_click.rich_click.THEME = 'modern'
 click.rich_click.MAX_WIDTH = 100
@@ -54,8 +53,9 @@ TARVW_HELP = 'Package G4X-viewer folder for distribution'
 )
 @click.argument(
     'sample-dir',
-    required=True,
+    required=False,
     type=click.Path(exists=True, file_okay=False, path_type=Path),
+    # default='.',
     help='Path to G4X sample output folder passed to commands.',
     # panel='input/output',
 )
@@ -74,6 +74,7 @@ TARVW_HELP = 'Package G4X-viewer folder for distribution'
     help='Sample ID (optional).',
 )
 @click.option(
+    '-t',
     '--threads',
     required=False,
     type=int,
@@ -82,6 +83,7 @@ TARVW_HELP = 'Package G4X-viewer folder for distribution'
     help='Number of threads to use for processing.',
 )
 @click.option(
+    '-v',
     '--verbose',
     required=False,
     type=int,
@@ -96,10 +98,10 @@ TARVW_HELP = 'Package G4X-viewer folder for distribution'
     help='Display g4x-helpers version.',
 )
 @click.pass_context
+# @click.option('-v', '--verbose', count=True, help="Increase verbosity")
 def cli(ctx, sample_dir, out_dir, sample_id, threads, verbose, version):
     if version:
-        v = ver('g4x_helpers')
-        click.echo(f'g4x-helpers version: {v}')
+        click.echo(f'g4x-helpers version: {__version__}')
 
     else:
         ctx.ensure_object(dict)
@@ -110,20 +112,16 @@ def cli(ctx, sample_dir, out_dir, sample_id, threads, verbose, version):
         ctx.obj['out_dir'] = out_dir
         ctx.obj['threads'] = threads
         ctx.obj['verbose'] = verbose
+        ctx.obj['version'] = __version__
 
-        try:
-            sample = G4Xoutput(run_base=ctx.obj['sample_dir'], sample_id=sample_id)
-        except Exception as e:
-            click.echo('')
-            click.secho('Failed to load G4Xoutput:', fg='red', err=True, bold=True)
-            raise click.ClickException(f'{type(e).__name__}: {e}')
-
-        click.echo(sample)
+        if sample_dir:
+            sample = cu.initialize_sample(sample_dir=sample_dir, sample_id=sample_id)
+            ctx.obj['sample'] = sample
+            click.echo(sample)
 
         # No subcommand given → show help
         if ctx.invoked_subcommand is None:
             click.echo(ctx.get_help())
-            # print('')
             ctx.exit()
 
 
@@ -138,13 +136,6 @@ def cli(ctx, sample_dir, out_dir, sample_id, threads, verbose, version):
     help='Path to new segmentation mask. Supported file types: .npy, .npz, .geojson.',
 )
 @click.option(
-    '--sample-id',  #
-    required=False,
-    type=str,
-    default=None,
-    help='Sample ID (optional).',
-)
-@click.option(
     '--segmentation-mask-key',
     required=False,
     type=str,
@@ -152,38 +143,15 @@ def cli(ctx, sample_dir, out_dir, sample_id, threads, verbose, version):
     help='Key in npz/geojson where mask/labels should be taken from (optional).',
 )
 @click.pass_context
-def resegment(ctx, segmentation_mask, sample_id, segmentation_mask_key):
-    from . import segmentation as seg
-
-    click.echo('')
-    click.echo(f'Resegmentation (threads={ctx.obj["threads"]})')
-
-    out_dir = ctx.obj['out_dir']
-
-    logger = setup_logger(
-        logger_name='g4x_helpers',
-        stream_logger=True,
-        stream_level=verbose_to_log_level(ctx.obj['verbose']),
-        file_logger=True,
-        file_level=logging.DEBUG,
-        out_dir=out_dir,
-        clear_handlers=True,
+def resegment(ctx, segmentation_mask, segmentation_mask_key):
+    main.resegment(
+        g4x_out=ctx.obj['sample'],
+        segmentation_mask=segmentation_mask,
+        out_dir=ctx.obj['out_dir'],
+        segmentation_mask_key=segmentation_mask_key,
+        n_threads=ctx.obj['threads'],
+        verbose=ctx.obj['verbose'],
     )
-
-    # initialize G4X sample
-    logger.info(f'Initializing G4X sample with run_base: {ctx.obj["sample_dir"]}, sample_id: {sample_id}')
-    sample = G4Xoutput(run_base=ctx.obj['sample_dir'], sample_id=sample_id)
-    click.echo(sample)
-
-    # load new segmentation
-    labels = seg.try_load_segmentation(segmentation_mask, sample.shape, segmentation_mask_key)
-    logger.info(f'Loaded new segmentation with shape: {labels.shape}, n_labels: {len(set(labels.flatten()))}')
-
-    # run intersection with new segmentation
-    seg.intersect_segmentation(
-        g4x_out=sample, labels=labels, out_dir=out_dir, n_threads=ctx.obj['threads'], logger=logger
-    )
-    click.echo('Resegmentation complete.')
 
 
 ############################################################
@@ -205,42 +173,14 @@ def resegment(ctx, segmentation_mask, sample_id, segmentation_mask_key):
 )
 @click.pass_context
 def redemux(ctx, manifest, batch_size):
-    from . import demux as dmx
-
-    click.echo('')
-    click.echo(f'Redemuxing (threads={ctx.obj["threads"]})')
-
-    click.echo(f'g4x-helpers sample_dir: {ctx.obj["sample_dir"]}')
-    click.echo(f'g4x-helpers out_dir: {ctx.obj["out_dir"]}')
-
-    # out_dir = ctx.obj['out_dir']
-
-    # logger = setup_logger(
-    #     logger_name='redemux',
-    #     stream_logger=True,
-    #     stream_level=verbose_to_log_level(ctx.obj['verbose']),
-    #     file_logger=True,
-    #     file_level=logging.DEBUG,
-    #     out_dir=out_dir,
-    #     clear_handlers=True,
-    # )
-
-    # # initialize G4X sample
-    # logger.info(f'Initializing G4X sample with run_base: {ctx.obj["sample_dir"]}')
-    # sample = G4Xoutput(run_base=ctx.obj['sample_dir'])
-    # click.echo(sample)
-
-    # # load new segmentation
-    # dmx.redemux(
-    #     g4x_out=sample,
-    #     manifest=manifest,
-    #     batch_size=batch_size,
-    #     out_dir=out_dir,
-    #     threads=ctx.obj['threads'],
-    #     logger=logger,
-    # )
-
-    click.echo('Redemuxing complete.')
+    main.redemux(
+        g4x_out=ctx.obj['sample'],
+        manifest=manifest,
+        out_dir=ctx.obj['out_dir'],
+        batch_size=batch_size,
+        n_threads=ctx.obj['threads'],
+        verbose=ctx.obj['verbose'],
+    )
 
 
 ############################################################
@@ -281,21 +221,15 @@ def redemux(ctx, manifest, batch_size):
 )
 @click.pass_context
 def update_bin(ctx, bin_file, metadata, cellid_key, cluster_key, cluster_color_key, emb_key):
-    from .g4x_viewer.bin_generator import seg_updater
-
-    out_dir = ctx.obj['out_dir']
-    out_dir = out_dir.parent
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    _ = seg_updater(
+    main.update_bin(
         bin_file=bin_file,
-        metadata_file=metadata,
-        out_path=out_dir,
+        out_dir=ctx.obj['out_dir'],
+        metadata=metadata,
         cellid_key=cellid_key,
         cluster_key=cluster_key,
         cluster_color_key=cluster_color_key,
         emb_key=emb_key,
-        log_level=verbose_to_log_level(ctx.obj['verbose']),
+        verbose=ctx.obj['verbose'],
     )
 
 
@@ -304,47 +238,12 @@ def update_bin(ctx, bin_file, metadata, cellid_key, cluster_key, cluster_color_k
 @cli.command(name='new-bin', help=NWBIN_HELP)
 @click.pass_context
 def new_bin(ctx):
-    from g4x_helpers.g4x_viewer.bin_generator import seg_converter
-
-    run_base = ctx.obj['sample_dir']
-    out_dir = ctx.obj['out_dir']
-
-    ## initialize G4X sample
-    sample = G4Xoutput(run_base=run_base)
-    print(sample)
-
-    ## set up the data
-    try:
-        adata = sample.load_adata()
-        emb_key = '_'.join(sorted([x for x in adata.obs.columns if 'X_umap' in x])[0].split('_')[:-1])
-        cluster_key = sorted([x for x in adata.obs.columns if 'leiden' in x])[0]
-        sample.logger.info('Successfully loaded adata with clustering information.')
-    except Exception:
-        adata = sample.load_adata(load_clustering=False)
-        emb_key = None
-        cluster_key = None
-        sample.logger.info('Clustering information was not found, cell coloring will be random.')
-
-    mask = sample.load_segmentation()
-
-    if out_dir is not None:
-        out_dir.mkdir(parents=True, exist_ok=True)
-        outfile = Path(out_dir) / f'{sample.sample_id}.bin'
-    else:
-        outfile = run_base / 'g4x_viewer' / f'{sample.sample_id}.bin'
-
-    sample.logger.info('Making G4X-Viewer bin file.')
-    _ = seg_converter(
-        adata=adata,
-        seg_mask=mask,
-        out_path=outfile,
-        cluster_key=cluster_key,
-        emb_key=emb_key,
-        protein_list=[f'{x}_intensity_mean' for x in sample.proteins],
-        n_threads=ctx.obj['n_threads'],
-        logger=sample.logger,
+    main.new_bin(
+        g4x_out=ctx.obj['sample'],  #
+        out_dir=ctx.obj['out_dir'],
+        n_threads=ctx.obj['threads'],
+        verbose=ctx.obj['verbose'],
     )
-    sample.logger.debug(f'G4X-Viewer bin --> {outfile}')
 
 
 ############################################################
@@ -358,11 +257,11 @@ def new_bin(ctx):
 )
 @click.pass_context
 def tar_viewer(ctx, viewer_dir):
-    from . import tar_viewer as tv
-
-    out_dir = ctx.obj['out_dir']
-
-    tv.tar_viewer(out_path=out_dir, viewer_dir=viewer_dir)
+    main.tar_viewer(
+        viewer_dir=viewer_dir,
+        out_dir=ctx.obj['out_dir'],
+        verbose=ctx.obj['verbose'],
+    )
 
 
 if __name__ == '__main__':
