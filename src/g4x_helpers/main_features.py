@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .models import G4Xoutput
 
-from . import cli_utils as cu
 from . import demux as dmx
 from . import segmentation as seg
 from . import tar_viewer as tv
@@ -21,7 +20,7 @@ def redemux(
     verbose: int = 1,
 ):
     print('Starting redemux')
-    logger = cu.setup_logger(logger_name='redemux', out_dir=out_dir, stream_level=verbose)
+    logger = utils.setup_logger(logger_name='redemux', out_dir=out_dir, stream_level=verbose)
 
     ## preflight checks
     manifest = utils.validate_path(manifest, must_exist=True, is_dir_ok=False, is_file_ok=True)
@@ -81,7 +80,7 @@ def resegment(
     verbose: int = 1,
 ) -> None:
     print('Starting resegmentation')
-    logger = cu.setup_logger(logger_name='resegment', out_dir=out_dir, stream_level=verbose)
+    logger = utils.setup_logger(logger_name='resegment', out_dir=out_dir, stream_level=verbose)
 
     # load new segmentation
     labels = seg.try_load_segmentation(segmentation_mask, g4x_out.shape, segmentation_mask_key)
@@ -104,7 +103,7 @@ def update_bin(
     verbose: int = 1,
 ):
     print('Starting update_bin')
-    logger = cu.setup_logger(logger_name='update_bin', out_dir=out_dir, stream_level=verbose)
+    logger = utils.setup_logger(logger_name='update_bin', out_dir=out_dir, stream_level=verbose)
 
     bin_file = utils.validate_path(bin_file, must_exist=True, is_dir_ok=False, is_file_ok=True)
     out_dir = utils.validate_path(out_dir, must_exist=False, is_dir_ok=True, is_file_ok=False)
@@ -127,7 +126,7 @@ def update_bin(
 
 def new_bin(g4x_out: 'G4Xoutput', out_dir: str, n_threads: int = 4, verbose: int = 1) -> None:
     print('Starting new_bin')
-    logger = cu.setup_logger(logger_name='new_bin', out_dir=out_dir, stream_level=verbose)
+    logger = utils.setup_logger(logger_name='new_bin', out_dir=out_dir, stream_level=verbose)
 
     out_dir = utils.validate_path(out_dir, must_exist=False, is_dir_ok=True, is_file_ok=False)
 
@@ -166,11 +165,14 @@ def new_bin(g4x_out: 'G4Xoutput', out_dir: str, n_threads: int = 4, verbose: int
     logger.debug(f'G4X-Viewer bin --> {outfile}')
 
 
-def tar_viewer(viewer_dir: str, out_dir: str, verbose: int = 1):
+def tar_viewer(g4x_out: 'G4Xoutput', out_dir: str, viewer_dir: str | None = None, verbose: int = 1):
     print('Starting tar_viewer')
-    logger = cu.setup_logger(logger_name='tar_viewer', out_dir=out_dir, stream_level=verbose)
+    logger = utils.setup_logger(logger_name='tar_viewer', out_dir=out_dir, stream_level=verbose)
 
     out_dir = utils.validate_path(out_dir, must_exist=False, is_dir_ok=True, is_file_ok=False)
-    viewer_dir = utils.validate_path(viewer_dir, must_exist=True, is_dir_ok=True, is_file_ok=False)
+    if viewer_dir is None:
+        viewer_dir = g4x_out.run_base / 'g4x_viewer'
+    else:
+        viewer_dir = utils.validate_path(viewer_dir, must_exist=True, is_dir_ok=True, is_file_ok=False)
 
     tv.tar_viewer(out_path=out_dir, viewer_dir=viewer_dir, logger=logger)

@@ -1,8 +1,7 @@
 import json
-import logging
 import os
 from collections.abc import Iterator
-from dataclasses import InitVar, dataclass  # , asdict, field
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -16,9 +15,7 @@ import polars as pl
 import scanpy as sc
 import tifffile
 
-import g4x_helpers.utils as utils
-
-glymur.set_option('lib.num_threads', 8)
+from . import utils
 
 
 @dataclass()
@@ -26,9 +23,8 @@ class G4Xoutput:
     """
     Container for managing and processing data from a G4X run.
 
-    This class initializes and loads metadata, image dimensions, transcript and protein panels,
-    and sets up logging for downstream analysis of G4X output data. It provides methods to load
-    images, segmentations, transcript data, and interact with single-cell and spatial analysis pipelines.
+    This class initializes and loads metadata, image dimensions, transcript and protein panels for downstream analysis of G4X output data.
+    It provides methods to load images, segmentations, transcript data, and interact with single-cell and spatial analysis pipelines.
 
     Parameters
     ----------
@@ -56,7 +52,6 @@ class G4Xoutput:
     Notes
     -----
     On instantiation, this class performs the following:
-      - Sets up logging with optional stream and file loggers.
       - Loads metadata from `run_meta.json`.
       - Loads the shape of the segmentation mask.
       - Parses transcript and protein panel files (if present).

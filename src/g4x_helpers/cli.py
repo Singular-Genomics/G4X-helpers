@@ -1,9 +1,6 @@
-from pathlib import Path
-
 import rich_click as click
 
-from . import __version__
-from . import cli_utils as cu
+from . import __version__, utils
 from . import main_features as main
 
 # rich_click.rich_click.THEME = 'modern'
@@ -54,7 +51,7 @@ TARVW_HELP = 'Package G4X-viewer folder for distribution'
 @click.argument(
     'sample-dir',
     required=False,
-    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    type=click.Path(exists=True, file_okay=False),
     # default='.',
     help='Path to G4X sample output folder passed to commands.',
     # panel='input/output',
@@ -62,7 +59,7 @@ TARVW_HELP = 'Package G4X-viewer folder for distribution'
 @click.argument(
     'out-dir',
     required=False,
-    type=click.Path(exists=False, file_okay=False, dir_okay=True, writable=True, path_type=Path),
+    type=click.Path(exists=False, file_okay=False, dir_okay=True, writable=True),
     default='./g4x_helpers',
     help='Output directory used by downstream commands.',
     # panel='input/output',
@@ -78,7 +75,7 @@ TARVW_HELP = 'Package G4X-viewer folder for distribution'
     '--threads',
     required=False,
     type=int,
-    default=4,
+    default=utils.DEFAULT_THREADS,
     show_default=True,
     help='Number of threads to use for processing.',
 )
@@ -106,7 +103,7 @@ def cli(ctx, sample_dir, out_dir, sample_id, threads, verbose, version):
     else:
         ctx.ensure_object(dict)
 
-        out_dir.mkdir(parents=True, exist_ok=True)
+        # out_dir.mkdir(parents=True, exist_ok=True)
 
         ctx.obj['sample_dir'] = sample_dir
         ctx.obj['out_dir'] = out_dir
@@ -115,7 +112,7 @@ def cli(ctx, sample_dir, out_dir, sample_id, threads, verbose, version):
         ctx.obj['version'] = __version__
 
         if sample_dir:
-            sample = cu.initialize_sample(sample_dir=sample_dir, sample_id=sample_id)
+            sample = utils.initialize_sample(sample_dir=sample_dir, sample_id=sample_id, n_threads=threads)
             ctx.obj['sample'] = sample
             click.echo(sample)
 
@@ -132,7 +129,7 @@ def cli(ctx, sample_dir, out_dir, sample_id, threads, verbose, version):
     'segmentation-mask',
     panel='commands',
     required=True,
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    type=click.Path(exists=True, dir_okay=False),
     help='Path to new segmentation mask. Supported file types: .npy, .npz, .geojson.',
 )
 @click.option(
@@ -258,6 +255,7 @@ def new_bin(ctx):
 @click.pass_context
 def tar_viewer(ctx, viewer_dir):
     main.tar_viewer(
+        g4x_out=ctx.obj['sample'],
         viewer_dir=viewer_dir,
         out_dir=ctx.obj['out_dir'],
         verbose=ctx.obj['verbose'],
