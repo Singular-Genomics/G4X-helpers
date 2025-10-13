@@ -26,8 +26,6 @@ from shapely.geometry import Polygon
 from skimage.measure._regionprops import RegionProperties
 from tqdm import tqdm
 
-import g4x_helpers.g4x_viewer.bin_generator as bin_gen
-
 from . import utils
 
 SUPPORTED_MASK_FILETYPES = {'.npy', '.npz', '.geojson'}
@@ -39,7 +37,6 @@ def intersect_segmentation(
     *,
     out_dir: str | Path | None = None,
     exclude_channels: list[str] | None = None,
-    gen_bin_file: bool = True,
     n_threads: int = 4,
     logger: logging.Logger | None = None,
 ) -> None:
@@ -113,19 +110,7 @@ def intersect_segmentation(
     logger.debug(f'cell metadata --> {outfile}')
     adata.obs.to_csv(outfile, compression='gzip')
 
-    protein_only_list = [p for p in signal_list if p not in ['nuclear', 'eosin']]
-    if gen_bin_file:
-        logger.info('Making G4X-Viewer bin file.')
-        outfile = utils.create_custom_out(out_dir, 'g4x_viewer', f'{g4x_out.sample_id}.bin')
-        _ = bin_gen.seg_converter(
-            adata=adata,
-            seg_mask=mask,
-            out_path=outfile,
-            protein_list=[f'{x}_intensity_mean' for x in protein_only_list],
-            n_threads=n_threads,
-            logger=g4x_out.logger,
-        )
-        logger.debug(f'G4X-Viewer bin --> {outfile}')
+    return adata, mask
 
 
 def try_load_segmentation(
@@ -368,7 +353,7 @@ def extract_image_signals(
     channel_name_map['nuclear'] = 'nuclearstain'
     channel_name_map['eosin'] = 'cytoplasmicstain'
 
-    for i, signal_name in enumerate(signal_list):
+    for signal_name in tqdm(signal_list, desc='Extracting protein signal'):
         if signal_name not in ['nuclear', 'eosin']:
             image_type = 'protein'
             protein = signal_name
@@ -389,7 +374,7 @@ def extract_image_signals(
             lazy=lazy,
         )
 
-        if i == 0:
+        if signal_name == signal_list[0]:
             signal_df = prop_tab
         else:
             signal_df = join_frames(signal_df, prop_tab)

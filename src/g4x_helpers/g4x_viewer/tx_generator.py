@@ -13,8 +13,6 @@ from typing import TYPE_CHECKING
 import matplotlib.pyplot as plt
 import polars as pl
 
-from .. import utils
-
 mp.set_start_method('spawn', force=True)
 
 if TYPE_CHECKING:
@@ -28,19 +26,9 @@ def tx_converter(
     aggregation_level: str = 'gene',
     n_threads: int = 4,
     sampling_fraction: float = 0.2,
-    logger: logging.Logger | None = None,
-    log_level: int = logging.DEBUG,
+    logger: logging.Logger,
 ) -> None:
-    if logger is None:
-        logger = utils.setup_logger(
-            'tx_converter',
-            stream_logger=True,
-            stream_level=log_level,
-            file_logger=True,
-            file_level=logging.DEBUG,
-            out_dir=out_path.parent,
-            clear_handlers=True,
-        )
+    logger.info('Generating viewer transcript file.')
 
     ## prelims
     IMAGE_RESOLUTION = sample.shape

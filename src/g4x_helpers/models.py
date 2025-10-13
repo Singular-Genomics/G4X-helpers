@@ -61,17 +61,15 @@ class G4Xoutput:
     sample_id: str | None = None
 
     def __post_init__(self):
-        self.run_base = Path(self.run_base)
+        self.run_base = utils.validate_run_base(self.run_base)
 
         if self.sample_id is None:
             self.sample_id = self.run_base.name
 
-        _ = self._validate_run_base()
-
         with open(self.run_base / 'run_meta.json', 'r') as f:
             self.run_meta = json.load(f)
 
-        self.shape = utils.npzGetShape(self.run_base / 'segmentation' / 'segmentation_mask.npz', 'nuclei')
+        self.shape = utils.npzGetShape(self.segmentation_path, 'nuclei')
 
         if self.transcript_panel:
             transcript_panel = pd.read_csv(self.run_base / 'transcript_panel.csv', index_col=0, header=0)
@@ -88,7 +86,7 @@ class G4Xoutput:
         machine_num = self.machine.removeprefix('g4-').lstrip('0')
         mac_run_id = f'G{machine_num.zfill(2)}-{self.run_id}'
 
-        repr_string = f'G4X_output @ {self.run_base}\n'
+        repr_string = f'G4X-output @ {self.run_base}\n'
         repr_string += f'Sample: \033[1m{self.sample_id}\033[0m of {mac_run_id}, {self.fc}\n'
 
         shp = (np.array(self.shape) * 0.3125) / 1000
@@ -105,40 +103,24 @@ class G4Xoutput:
 
     # region properties
     @property
-    def fc(self) -> str:
-        return self.run_meta.get('fc', None)
-
-    @property
-    def feature_table_path(self) -> Path:
-        return self.run_base / 'diagnostics' / 'transcript_table.parquet'
-
-    @property
-    def includes_protein(self) -> bool:
-        return self.protein_panel != []
-
-    @property
-    def includes_transcript(self) -> bool:
-        return self.transcript_panel != []
-
-    @property
-    def lane(self) -> str:
-        return self.run_meta.get('lane', None)
+    def platform(self) -> str:
+        return self.run_meta.get('platform', None)
 
     @property
     def machine(self) -> str:
         return self.run_meta.get('machine', None)
 
     @property
-    def platform(self) -> str:
-        return self.run_meta.get('platform', None)
-
-    @property
-    def protein_panel(self) -> dict:
-        return self.run_meta.get('protein_panel', None)
-
-    @property
     def run_id(self) -> str:
         return self.run_meta.get('run_id', None)
+
+    @property
+    def fc(self) -> str:
+        return self.run_meta.get('fc', None)
+
+    @property
+    def lane(self) -> str:
+        return self.run_meta.get('lane', None)
 
     @property
     def software(self) -> str:
@@ -153,8 +135,28 @@ class G4Xoutput:
         return self.run_meta.get('transcript_panel', None)
 
     @property
+    def protein_panel(self) -> dict:
+        return self.run_meta.get('protein_panel', None)
+
+    @property
+    def includes_protein(self) -> bool:
+        return self.protein_panel != []
+
+    @property
+    def includes_transcript(self) -> bool:
+        return self.transcript_panel != []
+
+    @property
     def transcript_table_path(self) -> Path:
         return self.run_base / 'rna' / 'transcript_table.csv.gz'
+
+    @property
+    def feature_table_path(self) -> Path:
+        return self.run_base / 'diagnostics' / 'transcript_table.parquet'
+
+    @property
+    def segmentation_path(self) -> Path:
+        return self.run_base / 'segmentation' / 'segmentation_mask.npz'
 
     # region methods
     def load_adata(self, *, remove_nontargeting: bool = True, load_clustering: bool = True) -> ad.AnnData:
@@ -315,21 +317,10 @@ class G4Xoutput:
     def _load_image(run_base: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
         return G4Xoutput._load_image_base(run_base, parent_directory, pattern)
 
-    def _get_shape(self):
-        img = self.load_he_image()
-        return img.shape
+    # def _get_shape(self):
+    #     img = self.load_he_image()
+    #     return img.shape
 
     def _clear_image_cache(self):
         """Evict all cached images so subsequent calls re-read from disk."""
         self._load_image.cache_clear()
-
-    def _validate_run_base(self):
-        """check that all expected outputs are present."""
-        # print('Validating run_base.')
-
-        required_paths = [self.run_base / 'run_meta.json', self.run_base / 'single_cell_data' / 'feature_matrix.h5']
-
-        for p in required_paths:
-            if not p.is_file():
-                # print(f'{p} does not exist.')
-                raise FileNotFoundError(f'{p} does not exist.')
