@@ -275,15 +275,19 @@ def load_manifest(file_path: str | Path) -> tuple[pl.DataFrame, dict]:
 def update_metadata_and_tx_file(g4x_out: 'G4Xoutput', manifest, out_dir):
     ## update metadata and transcript panel file
     shutil.copy(manifest, out_dir / 'transcript_panel.csv')
+
     with open(out_dir / 'run_meta.json', 'r') as f:
         meta = json.load(f)
+
     meta['transcript_panel'] = manifest.name
     meta['redemuxed_timestamp'] = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
     (out_dir / 'run_meta.json').unlink()
+
     with open(out_dir / 'run_meta.json', 'w') as f:
         _ = json.dump(meta, f)
     meta = {'run_metadata': meta}
     (out_dir / 'g4x_viewer' / f'{g4x_out.sample_id}_run_metadata.json').unlink()
+
     with open(out_dir / 'g4x_viewer' / f'{g4x_out.sample_id}_run_metadata.json', 'w') as f:
         _ = json.dump(meta, f)
 
@@ -359,21 +363,3 @@ def concatenate_and_cleanup(batch_dir, out_dir):
     )
     _ = utils.gzip_file(final_tx_table_path)
     shutil.rmtree(batch_dir)
-
-def symlink_original_files(g4x_out: 'G4Xoutput', out_dir: Path | str) -> None:
-    ignore_file_list = ['clustering_umap.csv.gz', 'dgex.csv.gz', 'transcript_panel.csv']
-    run_base = g4x_out.run_base
-    for root, dirs, files in os.walk(run_base):
-        rel_root = Path(root).relative_to(run_base)
-        if str(rel_root) == 'metrics':
-            continue
-        dst_root = out_dir / rel_root
-        dst_root.mkdir(parents=True, exist_ok=True)
-        for f in files:
-            if f in ignore_file_list:
-                continue
-            src_file = Path(root) / f
-            dst_file = dst_root / f
-            if dst_file.exists():
-                dst_file.unlink()
-            dst_file.symlink_to(src_file)
