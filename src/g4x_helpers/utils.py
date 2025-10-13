@@ -1,19 +1,38 @@
 from __future__ import annotations
 
 import gzip
+
+# import inspect
 import logging
 import os
 import shutil
+import traceback
 import zipfile
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import glymur
 import numpy as np
 import rich_click as click
 
-from .models import G4Xoutput
+if TYPE_CHECKING:
+    from .models import G4Xoutput
 
 DEFAULT_THREADS = max(1, (os.cpu_count() // 2 or 4))
+
+
+def validate_run_base(run_base):
+    """check that all expected outputs are present."""
+
+    run_base = validate_path(path_str=run_base, must_exist=True, is_file_ok=False)
+
+    # TDOD: add more required files to check for
+    required_paths = ['run_meta.json', 'single_cell_data/feature_matrix.h5', 'segmentation/segmentation_mask.npz']
+
+    for p in required_paths:
+        validate_path(run_base / p, must_exist=True, is_dir_ok=False, is_file_ok=True)
+
+    return run_base
 
 
 def validate_path(path_str, must_exist=True, is_dir_ok=True, is_file_ok=True):
@@ -31,17 +50,27 @@ def validate_path(path_str, must_exist=True, is_dir_ok=True, is_file_ok=True):
     return path
 
 
+def _fail_message(func_name, e, trace_back=False):
+    click.echo('')
+    click.secho(f'Failed {func_name}:', fg='red', err=True, bold=True)
+    if trace_back:
+        traceback.print_exc()
+    raise click.ClickException(f'{type(e).__name__}: {e}')
+
+
 def initialize_sample(sample_dir: Path | str, sample_id: str | None, n_threads: int = DEFAULT_THREADS) -> None:
+    from .models import G4Xoutput
+
     glymur.set_option('lib.num_threads', n_threads)
     try:
-        sample_dir = validate_path(sample_dir, must_exist=True, is_dir_ok=True, is_file_ok=False)
-        sample = G4Xoutput(run_base=sample_dir, sample_id=sample_id, n_threads=n_threads)
+        # sample_dir = validate_path(sample_dir, must_exist=True, is_dir_ok=True, is_file_ok=False)
+        sample = G4Xoutput(run_base=sample_dir, sample_id=sample_id)
     except Exception as e:
         click.echo('')
         click.secho('Failed to load G4Xoutput:', fg='red', err=True, bold=True)
         raise click.ClickException(f'{type(e).__name__}: {e}')
 
-    click.echo(sample)
+    return sample
 
 
 # region file operations
@@ -170,7 +199,7 @@ def setup_logger(
     logger = logging.getLogger(logger_name)
     logger.setLevel(logging.DEBUG)
     if format is None:
-        format = '[%(asctime)s | %(levelname)s | %(name)s] %(message)s'
+        format = '[%(asctime)s | %(name)s | %(levelname)s] %(message)s'
     formatter = logging.Formatter(format, datefmt='%Y-%m-%d %H:%M:%S')
 
     ## optionally clear existing handlers
@@ -192,3 +221,31 @@ def setup_logger(
         logger.addHandler(fh)
 
     return logger
+
+
+def print_k_v(item, value, gap=2):
+    value = '<undefined>' if not value else value
+    click.secho(f'{item:<{gap}}', dim=True, nl=False)
+    click.secho('- ', dim=True, nl=False)
+    click.secho(f'{value}', fg='blue', bold=True)
+
+
+def symlink_original_files(g4x_out: 'G4Xoutput', out_dir: Path | str) -> None:
+    ignore_file_list = ['clustering_umap.csv.gz', 'dgex.csv.gz', 'transcript_panel.csv']
+    run_base = Path(g4x_out.run_base).resolve()
+
+    for root, dirs, files in os.walk(run_base):
+        rel_root = Path(root).relative_to(run_base)
+        if str(rel_root) == 'metrics':
+            continue
+        dst_root = out_dir / rel_root
+        dst_root.mkdir(parents=True, exist_ok=True)
+
+        for f in files:
+            if f in ignore_file_list:
+                continue
+            # src_file = Path(root) / f
+            dst_file = dst_root / f
+            if dst_file.exists():
+                dst_file.unlink()
+            dst_file.symlink_to((Path(root) / f).resolve())

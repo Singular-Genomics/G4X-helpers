@@ -1,3 +1,6 @@
+import inspect
+import textwrap
+
 import rich_click as click
 
 from . import __version__, utils
@@ -28,7 +31,7 @@ click.rich_click.ARGUMENTS_PANEL_TITLE = 'input/output'
 
 click.rich_click.COMMAND_GROUPS = {
     'g4x-helpers': [
-        {'name': 'commands', 'commands': ['redemux', 'resegment', 'update-bin', 'new-bin', 'tar-viewer']},
+        {'name': 'commands', 'commands': ['redemux', 'resegment', 'update_bin', 'new_bin', 'tar_viewer']},
         # {"name": "utilities", "commands": ["log"]},
     ],
 }
@@ -114,12 +117,17 @@ def cli(ctx, sample_dir, out_dir, sample_id, threads, verbose, version):
         if sample_dir:
             sample = utils.initialize_sample(sample_dir=sample_dir, sample_id=sample_id, n_threads=threads)
             ctx.obj['sample'] = sample
-            click.echo(sample)
 
         # No subcommand given → show help
-        if ctx.invoked_subcommand is None:
-            click.echo(ctx.get_help())
-            ctx.exit()
+        if ctx.invoked_subcommand is None and sample_dir:
+            click.secho('\nG4X-helpers successfully initialized with:\n', bold=True, dim=True)
+            click.echo(textwrap.indent(repr(sample), prefix='    '))
+            click.secho('please provide a subcommand, use -h for help\n', fg='blue')
+
+        elif ctx.invoked_subcommand is None and not sample_dir:
+            if ctx.invoked_subcommand is None:
+                click.echo(ctx.get_help())
+                ctx.exit()
 
 
 ############################################################
@@ -141,14 +149,18 @@ def cli(ctx, sample_dir, out_dir, sample_id, threads, verbose, version):
 )
 @click.pass_context
 def resegment(ctx, segmentation_mask, segmentation_mask_key):
-    main.resegment(
-        g4x_out=ctx.obj['sample'],
-        segmentation_mask=segmentation_mask,
-        out_dir=ctx.obj['out_dir'],
-        segmentation_mask_key=segmentation_mask_key,
-        n_threads=ctx.obj['threads'],
-        verbose=ctx.obj['verbose'],
-    )
+    try:
+        main.resegment(
+            g4x_out=ctx.obj['sample'],
+            segmentation_mask=segmentation_mask,
+            out_dir=ctx.obj['out_dir'],
+            segmentation_mask_key=segmentation_mask_key,
+            n_threads=ctx.obj['threads'],
+            verbose=ctx.obj['verbose'],
+        )
+    except Exception as e:
+        func_name = inspect.currentframe().f_code.co_name
+        utils._fail_message(func_name, e)
 
 
 ############################################################
@@ -170,27 +182,34 @@ def resegment(ctx, segmentation_mask, segmentation_mask_key):
 )
 @click.pass_context
 def redemux(ctx, manifest, batch_size):
-    main.redemux(
-        g4x_out=ctx.obj['sample'],
-        manifest=manifest,
-        out_dir=ctx.obj['out_dir'],
-        batch_size=batch_size,
-        n_threads=ctx.obj['threads'],
-        verbose=ctx.obj['verbose'],
-    )
+    try:
+        main.redemux(
+            g4x_out=ctx.obj['sample'],
+            manifest=manifest,
+            out_dir=ctx.obj['out_dir'],
+            batch_size=batch_size,
+            n_threads=ctx.obj['threads'],
+            verbose=ctx.obj['verbose'],
+        )
+    except Exception as e:
+        func_name = inspect.currentframe().f_code.co_name
+        utils._fail_message(func_name, e)
 
 
 ############################################################
 # region update_bin
-@cli.command(name='update-bin', help=UDBIN_HELP)
-@click.option(
-    '--bin-file', required=True, type=click.Path(exists=True), help='Path to G4X-Viewer segmentation bin file.'
-)
+@cli.command(name='update_bin', help=UDBIN_HELP)
 @click.option(
     '--metadata',
     required=True,
-    type=click.Path(exists=True),
+    type=click.Path(exists=True, dir_okay=False),
     help='Path to metadata table where clustering and/or embedding information will be extracted. Table must contain a header.',
+)
+@click.option(
+    '--bin-file',
+    required=False,
+    type=click.Path(exists=True, dir_okay=False),
+    help='Path to G4X-Viewer segmentation bin file.',
 )
 @click.option(
     '--cellid-key',
@@ -218,48 +237,61 @@ def redemux(ctx, manifest, batch_size):
 )
 @click.pass_context
 def update_bin(ctx, bin_file, metadata, cellid_key, cluster_key, cluster_color_key, emb_key):
-    main.update_bin(
-        bin_file=bin_file,
-        out_dir=ctx.obj['out_dir'],
-        metadata=metadata,
-        cellid_key=cellid_key,
-        cluster_key=cluster_key,
-        cluster_color_key=cluster_color_key,
-        emb_key=emb_key,
-        verbose=ctx.obj['verbose'],
-    )
+    try:
+        main.update_bin(
+            g4x_out=ctx.obj['sample'],
+            bin_file=bin_file,
+            out_dir=ctx.obj['out_dir'],
+            metadata=metadata,
+            cellid_key=cellid_key,
+            cluster_key=cluster_key,
+            cluster_color_key=cluster_color_key,
+            emb_key=emb_key,
+            verbose=ctx.obj['verbose'],
+        )
+    except Exception as e:
+        func_name = inspect.currentframe().f_code.co_name
+        utils._fail_message(func_name, e)
 
 
 ############################################################
 # region new_bin
-@cli.command(name='new-bin', help=NWBIN_HELP)
+@cli.command(name='new_bin', help=NWBIN_HELP)
 @click.pass_context
 def new_bin(ctx):
-    main.new_bin(
-        g4x_out=ctx.obj['sample'],  #
-        out_dir=ctx.obj['out_dir'],
-        n_threads=ctx.obj['threads'],
-        verbose=ctx.obj['verbose'],
-    )
+    try:
+        main.new_bin(
+            g4x_out=ctx.obj['sample'],  #
+            out_dir=ctx.obj['out_dir'],
+            n_threads=ctx.obj['threads'],
+            verbose=ctx.obj['verbose'],
+        )
+    except Exception as e:
+        func_name = inspect.currentframe().f_code.co_name
+        utils._fail_message(func_name, e)
 
 
 ############################################################
 # region tar_viewer
-@cli.command(name='tar-viewer', help=TARVW_HELP)
+@cli.command(name='tar_viewer', help=TARVW_HELP)
 @click.option(
     '--viewer-dir',
-    required=True,
+    required=False,
     type=click.Path(exists=True, file_okay=False),
     help='Path to G4X-viewer folder to tar.',
 )
 @click.pass_context
 def tar_viewer(ctx, viewer_dir):
-    main.tar_viewer(
-        g4x_out=ctx.obj['sample'],
-        viewer_dir=viewer_dir,
-        out_dir=ctx.obj['out_dir'],
-        verbose=ctx.obj['verbose'],
-    )
+    try:
+        main.tar_viewer(
+            g4x_out=ctx.obj['sample'],  #
+            viewer_dir=viewer_dir,
+            out_dir=ctx.obj['out_dir'],
+            verbose=ctx.obj['verbose'],
+        )
+    except Exception as e:
+        func_name = inspect.currentframe().f_code.co_name
+        utils._fail_message(func_name, e)
 
 
 if __name__ == '__main__':
