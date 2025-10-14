@@ -236,26 +236,7 @@ class G4Xoutput:
         else:
             return arr['nuclei']
 
-    def _load_table(
-        self, file_path: str | Path, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
-    ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
-        file_path = Path(file_path)
-        if lazy:
-            if file_path.suffix == 'parquet':
-                reads = pl.scan_parquet(file_path)
-            else:
-                reads = pl.scan_csv(file_path)
-        else:
-            if file_path.suffix == 'parquet':
-                reads = pl.read_parquet(file_path)
-            else:
-                reads = pl.read_csv(file_path)
-        if columns:
-            reads = reads.select(columns)
-        if not return_polars:
-            reads = reads.collect().to_pandas()
-        return reads
-
+    # TODO: this is not used anywhere, consider removing. it's also broken
     def load_feature_table(
         self, *, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
     ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
@@ -317,9 +298,25 @@ class G4Xoutput:
     def _load_image(run_base: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
         return G4Xoutput._load_image_base(run_base, parent_directory, pattern)
 
-    # def _get_shape(self):
-    #     img = self.load_he_image()
-    #     return img.shape
+    def _load_table(
+        self, file_path: str | Path, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
+    ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
+        file_path = Path(file_path)
+        if lazy:
+            if file_path.suffix == 'parquet':
+                reads = pl.scan_parquet(file_path)
+            else:
+                reads = pl.scan_csv(file_path)
+        else:
+            if file_path.suffix == 'parquet':
+                reads = pl.read_parquet(file_path)
+            else:
+                reads = pl.read_csv(file_path)
+        if columns:
+            reads = reads.select(columns)
+        if not return_polars:
+            reads = reads.collect().to_pandas()
+        return reads
 
     def _clear_image_cache(self):
         """Evict all cached images so subsequent calls re-read from disk."""
