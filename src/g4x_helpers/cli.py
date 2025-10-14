@@ -30,7 +30,7 @@ click.rich_click.STYLE_OPTIONS_PANEL_BORDER = 'dim'
 click.rich_click.STYLE_COMMANDS_PANEL_BORDER = 'dim'
 # click.rich_click.COMMANDS_BEFORE_OPTIONS = True
 
-click.rich_click.ARGUMENTS_PANEL_TITLE = 'input'
+click.rich_click.ARGUMENTS_PANEL_TITLE = 'in/out'
 
 click.rich_click.COMMAND_GROUPS = {
     'g4x-helpers': [
@@ -87,14 +87,14 @@ TARVW_HELP = (
     'out-dir',
     required=True,
     type=click.Path(exists=True, file_okay=False, dir_okay=True, writable=True),
-    help='Command output directory (update/override G4X_DIR if not provided)',
+    help='Output directory used by subcommands',
     # panel='options [input/output]',
 )
 @click.option(
     '--sample-id',  #
     required=False,
     type=str,
-    help='Sample ID (optional, used for naming outputs)',
+    help='Sample ID (used for naming outputs)',
 )
 @click.option(
     '-t',

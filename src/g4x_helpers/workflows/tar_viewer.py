@@ -7,8 +7,16 @@ import sys
 import tarfile
 from pathlib import Path
 
+from .decorator import workflow
 
-def tar_viewer(viewer_dir, out_path, logger=logging.Logger):
+
+@workflow
+def tar_viewer(
+    viewer_dir: Path,
+    out_dir: Path,
+    *,
+    logger: logging.Logger,
+):
     logger.info('Checking files.')
     viewer_dir = Path(viewer_dir)
     assert viewer_dir.exists(), f'{viewer_dir} does not appear to exist.'
@@ -96,14 +104,19 @@ def tar_viewer(viewer_dir, out_path, logger=logging.Logger):
             json.dump(metadata, f)
 
         logger.info('Tarring folder.')
-        out_tar = Path(out_path)
+        out_tar = Path(out_dir)
         if not out_tar.exists():
             out_tar.mkdir(parents=True, exist_ok=True)
         out_tar = out_tar / f'{sample_id}_g4x_viewer.tar'
         with tarfile.open(out_tar, 'w') as tar:
             tar.add(viewer_dir, arcname=viewer_dir.name)
 
+    except Exception as e:
+        logger.error(f'Workflow failed: {e}')
+        raise
+
     finally:
+        logger.info('Restoring moved files...')
         restore_he()
         try:
             atexit.unregister(restore_he)

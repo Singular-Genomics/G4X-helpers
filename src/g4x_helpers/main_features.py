@@ -235,4 +235,4 @@ def tar_viewer(
 
     viewer_dir = utils.validate_path(viewer_dir, must_exist=True, is_dir_ok=True, is_file_ok=False)
 
-    wflw.tar_viewer(out_path=out_dir, viewer_dir=viewer_dir, logger=logger)
+    wflw.tar_viewer(out_dir=out_dir, viewer_dir=viewer_dir, logger=logger)

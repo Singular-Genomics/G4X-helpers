@@ -6,8 +6,10 @@ from tqdm import tqdm
 
 from ..modules import bin_generation as bg
 from ..modules.g4x_viewer import CellMasksSchema_pb2 as CellMasksSchema
+from .decorator import workflow
 
 
+@workflow
 def seg_updater(
     bin_file: str | Path,
     metadata_file: str | Path,

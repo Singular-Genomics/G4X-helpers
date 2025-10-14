@@ -7,19 +7,23 @@ from geopandas import GeoDataFrame
 
 from .. import utils
 from ..modules import segmentation as seg
+from .decorator import workflow
 
 if TYPE_CHECKING:
     from ..models import G4Xoutput
 
 
+@workflow
 def intersect_segmentation(
     g4x_out: 'G4Xoutput',
-    labels: Path | str,
+    labels: np.ndarray | GeoDataFrame,
+    out_dir: Path,
     *,
-    out_dir: str | Path | None = None,
     exclude_channels: list[str] | None = None,
     logger: logging.Logger,
 ) -> None:
+    logger.info(f'Using provided output directory: {out_dir}')
+
     signal_list = ['nuclear', 'eosin'] + g4x_out.proteins
 
     if exclude_channels is not None:
@@ -30,13 +34,6 @@ def intersect_segmentation(
         signal_list = [item for item in signal_list if item not in exclude_channels]
     else:
         logger.info('Processing all channels.')
-
-    if out_dir is None:
-        logger.warning('out_dir was not specified, so files will be updated in-place.')
-        out_dir = g4x_out.run_base
-    else:
-        logger.info(f'Using provided output directory: {out_dir}')
-        out_dir = Path(out_dir)
 
     if isinstance(labels, GeoDataFrame):
         logger.info('Rasterizing provided GeoDataFrame.')
@@ -58,10 +55,7 @@ def intersect_segmentation(
     cell_by_gene = seg._make_cell_by_gene(segmentation_props, reads_new_labels)
     adata = seg._make_adata(cell_by_gene, cell_metadata)
 
-    if out_dir:
-        logger.info(f'Saving output files to {out_dir}')
-    else:
-        logger.info(f'No output directory specified, saving to ["custom"] directories in {g4x_out.run_base}.')
+    logger.info(f'Saving output files to {out_dir}')
 
     outfile = utils.create_custom_out(out_dir, 'segmentation', 'segmentation_mask_updated.npz')
     logger.debug(f'segmentation mask --> {outfile}')

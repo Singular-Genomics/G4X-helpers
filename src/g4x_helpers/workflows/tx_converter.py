@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import polars as pl
 
 from ..modules import tx_generation as tg
+from .decorator import workflow
 
 if TYPE_CHECKING:
     from ..models import G4Xoutput
@@ -19,9 +20,10 @@ if TYPE_CHECKING:
 mp.set_start_method('spawn', force=True)
 
 
+@workflow
 def tx_converter(
     g4x_out: 'G4Xoutput',
-    out_path: str | Path,
+    out_path: Path,
     *,
     aggregation_level: str = 'gene',
     n_threads: int = 4,
