@@ -5,10 +5,7 @@ from typing import TYPE_CHECKING
 import rich_click as click
 
 from . import __version__, utils
-from . import demux as dmx
-from . import segmentation as seg
-from . import tar_viewer as tv
-from .g4x_viewer import bin_generator as bg
+from . import workflows as wflw
 
 if TYPE_CHECKING:
     from .models import G4Xoutput
@@ -26,20 +23,22 @@ def _base_command(func):
         **kwargs,
     ):
         out_dir = utils.validate_path(out_dir, must_exist=False, is_dir_ok=True, is_file_ok=False)
-        func_out = out_dir / func.__name__
+        func_name = func.__name__
+        func_out = out_dir / func_name
         func_out.mkdir(parents=True, exist_ok=True)
         out_dir = func_out
 
-        logger = utils.setup_logger(logger_name=func.__name__, out_dir=out_dir, stream_level=verbose)
-
         gap = 11
-        click.secho(f'\nStarting: {func.__name__}', bold=True)
+        click.secho(f'\nStarting: {func_name}', bold=True)
         utils.print_k_v('sample_dir', f'{g4x_out.run_base}', gap)
         utils.print_k_v('out_dir', f'{out_dir}', gap)
         utils.print_k_v('n_threads', f'{n_threads}', gap)
         utils.print_k_v('verbosity', f'{verbose}', gap)
         utils.print_k_v('version', f'{__version__}', gap)
+        click.echo('')
 
+        logger = utils.setup_logger(logger_name=func_name, out_dir=out_dir, stream_level=verbose)
+        logger.info(f'Running {func_name} with G4X-helpers v{__version__}')
         # Pass the initialized logger and parameters to the wrapped function
         result = func(
             g4x_out=g4x_out,
@@ -59,35 +58,38 @@ def _base_command(func):
 @_base_command
 def resegment(
     g4x_out: 'G4Xoutput',
-    segmentation_mask: str,
+    cell_labels: str,
     out_dir: str,
     *,
-    segmentation_mask_key: str | None = None,
+    labels_key: str | None = None,
     n_threads: int = 4,
     verbose: int = 1,
     **kwargs,
 ) -> None:
+    from .modules import segmentation as seg
+    from .modules.bin_generation import bin_file_path
+
     logger = kwargs['logger']
-    segmentation_mask = utils.validate_path(segmentation_mask, must_exist=True, is_dir_ok=False, is_file_ok=True)
+
+    cell_labels = utils.validate_path(cell_labels, must_exist=True, is_dir_ok=False, is_file_ok=True)
 
     labels = seg.try_load_segmentation(
-        segmentation_mask=segmentation_mask,
+        segmentation_mask=cell_labels,
         expected_shape=g4x_out.shape,
-        segmentation_mask_key=segmentation_mask_key,
+        segmentation_mask_key=labels_key,
     )
 
-    adata, mask = seg.intersect_segmentation(
+    adata, mask = wflw.intersect_segmentation(
         g4x_out=g4x_out,
         labels=labels,
         out_dir=out_dir,
-        n_threads=n_threads,
         logger=logger,
     )
 
-    bg.seg_converter(
+    wflw.seg_converter(
         adata=adata,
         seg_mask=mask,
-        out_path=bg.bin_file_path(g4x_out, out_dir=out_dir),
+        out_path=bin_file_path(g4x_out, out_dir),
         protein_list=[f'{x}_intensity_mean' for x in g4x_out.proteins],
         n_threads=n_threads,
         logger=logger,
@@ -104,55 +106,41 @@ def redemux(
     verbose: int = 1,
     **kwargs,
 ) -> None:
+    from .modules.bin_generation import bin_file_path
+
     logger = kwargs['logger']
 
-    ## preflight checks
-    manifest = utils.validate_path(manifest, must_exist=True, is_dir_ok=False, is_file_ok=True)
-    # out_dir = utils.validate_path(out_dir, must_exist=False, is_dir_ok=True, is_file_ok=False)
-
-    batch_dir = out_dir / 'diagnostics' / 'batches'
-    batch_dir.mkdir(parents=True, exist_ok=True)
-
-    ## make output directory with symlinked files from original
-    utils.symlink_original_files(g4x_out, out_dir)
-
-    ## update metadata and transcript panel file
-    dmx.update_metadata_and_tx_file(g4x_out, manifest, out_dir)
-
-    ## load the new manifest file that we will demux against
-    logger.info('Loading manifest file.')
-    manifest, probe_dict = dmx.load_manifest(manifest)
-
-    logger.info('Performing re-demuxing.')
-    dmx.batched_demuxing(g4x_out, manifest, probe_dict, batch_dir, batch_size)
-
-    ## concatenate results into final csv and parquet
-    logger.info('Writing updated transcript table.')
-    dmx.concatenate_and_cleanup(batch_dir, out_dir)
+    wflw.redemux(
+        g4x_out=g4x_out,
+        manifest=manifest,
+        out_dir=out_dir,
+        batch_size=batch_size,
+        logger=logger,
+    )
 
     ## now regenerate the secondary files
     logger.info('Regenerating downstream files.')
-    ## set run_base to the redemux output folder for downstream steps
-    g4x_out.run_base = out_dir
+    g4x_out.run_base = out_dir  ## set run_base to the redemux output folder for downstream steps
 
     # resegment with existing segmentation
-    logger.info('Intersecting with existing segmentation.')
-
-    labels = g4x_out.load_segmentation()
-    adata, mask = seg.intersect_segmentation(
-        g4x_out, labels=labels, out_dir=out_dir, n_threads=n_threads, logger=logger
+    logger.info('Intersecting with existing cell segmentation.')
+    adata, mask = wflw.intersect_segmentation(
+        g4x_out=g4x_out,
+        labels=g4x_out.load_segmentation(),
+        out_dir=out_dir,
+        logger=logger,
     )
 
-    bg.seg_converter(
+    wflw.seg_converter(
         adata=adata,
         seg_mask=mask,
-        out_path=out_dir / 'g4x_viewer' / f'{g4x_out.sample_id}.bin',
+        out_path=bin_file_path(g4x_out, out_dir),
         protein_list=[f'{x}_intensity_mean' for x in g4x_out.proteins],
         n_threads=n_threads,
         logger=logger,
     )
 
-    dmx.tx_converter(
+    wflw.tx_converter(
         g4x_out,
         out_path=out_dir / 'g4x_viewer' / f'{g4x_out.sample_id}.tar',
         n_threads=n_threads,
@@ -177,7 +165,7 @@ def update_bin(
     logger = kwargs['logger']
 
     metadata = utils.validate_path(metadata, must_exist=True, is_dir_ok=False, is_file_ok=True)
-    
+
     if bin_file:
         bin_file = utils.validate_path(bin_file, must_exist=True, is_dir_ok=False, is_file_ok=True)
     else:
@@ -185,7 +173,7 @@ def update_bin(
 
     out_path = out_dir / f'{g4x_out.sample_id}.bin'
 
-    bg.seg_updater(
+    wflw.seg_updater(
         bin_file=bin_file,
         metadata_file=metadata,
         out_path=out_path,
@@ -205,6 +193,8 @@ def new_bin(
     verbose: int = 1,
     **kwargs,
 ) -> None:
+    from .modules.bin_generation import bin_file_path
+
     logger = kwargs['logger']
 
     ## set up the data
@@ -219,12 +209,10 @@ def new_bin(
         cluster_key = None
         logger.info('Clustering information was not found, cell coloring will be random.')
 
-    mask = g4x_out.load_segmentation()
-
-    _ = bg.seg_converter(
+    wflw.seg_converter(
         adata=adata,
-        seg_mask=mask,
-        out_path=bg.bin_file_path(g4x_out, out_dir=out_dir),
+        seg_mask=g4x_out.load_segmentation(),
+        out_path=bin_file_path(g4x_out, out_dir),
         cluster_key=cluster_key,
         emb_key=emb_key,
         protein_list=[f'{x}_intensity_mean' for x in g4x_out.proteins],
@@ -247,4 +235,4 @@ def tar_viewer(
 
     viewer_dir = utils.validate_path(viewer_dir, must_exist=True, is_dir_ok=True, is_file_ok=False)
 
-    tv.tar_viewer(out_path=out_dir, viewer_dir=viewer_dir, logger=logger)
+    wflw.tar_viewer(out_path=out_dir, viewer_dir=viewer_dir, logger=logger)
