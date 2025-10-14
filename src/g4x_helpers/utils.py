@@ -58,13 +58,12 @@ def _fail_message(func_name, e, trace_back=False):
     raise click.ClickException(f'{type(e).__name__}: {e}')
 
 
-def initialize_sample(sample_dir: Path | str, sample_id: str | None, n_threads: int = DEFAULT_THREADS) -> None:
+def initialize_sample(g4x_dir: Path | str, sample_id: str | None, n_threads: int = DEFAULT_THREADS) -> None:
     from .models import G4Xoutput
 
     glymur.set_option('lib.num_threads', n_threads)
     try:
-        # sample_dir = validate_path(sample_dir, must_exist=True, is_dir_ok=True, is_file_ok=False)
-        sample = G4Xoutput(run_base=sample_dir, sample_id=sample_id)
+        sample = G4Xoutput(run_base=g4x_dir, sample_id=sample_id)
     except Exception as e:
         click.echo('')
         click.secho('Failed to load G4Xoutput:', fg='red', err=True, bold=True)
@@ -198,8 +197,10 @@ def setup_logger(
 
     logger = logging.getLogger(logger_name)
     logger.setLevel(logging.DEBUG)
+    
     if format is None:
         format = '[%(asctime)s | %(name)s | %(levelname)s] %(message)s'
+    
     formatter = logging.Formatter(format, datefmt='%Y-%m-%d %H:%M:%S')
 
     ## optionally clear existing handlers
@@ -214,11 +215,24 @@ def setup_logger(
 
     if file_logger:
         assert out_dir is not None, 'out_dir must be provided if file_logger is True'
-        os.makedirs(out_dir, exist_ok=True)
-        fh = logging.FileHandler(f'{out_dir}/{logger_name}.log', mode=file_mode)
+        out_dir = Path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        log_path = out_dir / f'{logger_name}.log'
+
+        prior_size = log_path.stat().st_size if log_path.exists() else 0
+        if file_mode == 'w':
+            prior_size = 0
+
+        fh = logging.FileHandler(log_path, mode=file_mode, encoding='utf-8')
         fh.setLevel(file_level)
         fh.setFormatter(formatter)
         logger.addHandler(fh)
+
+        session_lines = ['log session created']
+        if prior_size > 0:
+            session_lines.insert(0, '')
+        fh.stream.write('\n'.join(session_lines) + '\n')
+        fh.flush()
 
     return logger
 
