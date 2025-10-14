@@ -1,4 +1,5 @@
 from collections import deque
+from pathlib import Path
 
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
@@ -9,6 +10,20 @@ from scipy.sparse.csgraph import minimum_spanning_tree
 from scipy.spatial import distance_matrix
 from skimage.measure import approximate_polygon
 from skimage.morphology import dilation, disk
+
+from .. import utils
+
+
+def bin_file_path(g4x_out, out_dir: str | Path | None = None) -> Path:
+    file_name = f'{g4x_out.sample_id}.bin'
+
+    if out_dir:
+        out_dir = utils.validate_path(out_dir, must_exist=True, is_dir_ok=True, is_file_ok=False)
+        outfile = Path(out_dir) / file_name
+    else:
+        outfile = utils.create_custom_out(out_dir, 'g4x_viewer', file_name)
+
+    return outfile
 
 
 def generate_cluster_palette(clusters: list, max_colors: int = 256) -> dict:

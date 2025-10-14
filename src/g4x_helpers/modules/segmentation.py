@@ -1,16 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-
-# This import is only for type checkers (mypy, PyCharm, etc.), not at runtime
 from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    import logging
-
-    from geopandas.geodataframe import GeoDataFrame
-
-    from g4x_helpers.models import G4Xoutput
 
 import anndata as ad
 import geopandas
@@ -26,91 +17,12 @@ from shapely.geometry import Polygon
 from skimage.measure._regionprops import RegionProperties
 from tqdm import tqdm
 
-from . import utils
+if TYPE_CHECKING:
+    from geopandas.geodataframe import GeoDataFrame
+
+    from g4x_helpers.models import G4Xoutput
 
 SUPPORTED_MASK_FILETYPES = {'.npy', '.npz', '.geojson'}
-
-
-def intersect_segmentation(
-    g4x_out: 'G4Xoutput',
-    labels: GeoDataFrame | np.ndarray,
-    *,
-    out_dir: str | Path | None = None,
-    exclude_channels: list[str] | None = None,
-    n_threads: int = 4,
-    logger: logging.Logger | None = None,
-) -> None:
-    mask = labels
-
-    signal_list = ['nuclear', 'eosin'] + g4x_out.proteins
-
-    if exclude_channels is not None:
-        logger.info(f'Not processing channels: {", ".join(exclude_channels)}')
-        if isinstance(exclude_channels, str):
-            exclude_channels = [exclude_channels]
-
-        signal_list = [item for item in signal_list if item not in exclude_channels]
-    else:
-        logger.info('Processing all channels.')
-
-    if out_dir is None:
-        logger.warning('out_dir was not specified, so files will be updated in-place.')
-        out_dir = g4x_out.run_base
-    else:
-        logger.info(f'Using provided output directory: {out_dir}')
-        out_dir = Path(out_dir)
-
-    if isinstance(mask, GeoDataFrame):
-        logger.info('Rasterizing provided GeoDataFrame.')
-        mask = rasterize_polygons(gdf=mask, target_shape=g4x_out.shape)
-
-    logger.info('Extracting mask properties.')
-    segmentation_props = get_mask_properties(g4x_out, mask)
-
-    logger.info('Assigning transcripts to mask labels.')
-    reads_new_labels = assign_tx_to_mask_labels(g4x_out, mask)
-
-    logger.info('Extracting protein signal.')
-    cell_by_protein = extract_image_signals(g4x_out, mask, signal_list=signal_list)
-
-    logger.info('Building output data structures.')
-    cell_metadata = _make_cell_metadata(segmentation_props, cell_by_protein)
-    cell_by_gene = _make_cell_by_gene(segmentation_props, reads_new_labels)
-    adata = _make_adata(cell_by_gene, cell_metadata)
-
-    if out_dir:
-        logger.info(f'Saving output files to {out_dir}')
-    else:
-        logger.info(f'No output directory specified, saving to ["custom"] directories in {g4x_out.run_base}.')
-
-    outfile = utils.create_custom_out(out_dir, 'segmentation', 'segmentation_mask_updated.npz')
-    logger.debug(f'segmentation mask --> {outfile}')
-    np.savez(outfile, cell_labels=mask)
-
-    outfile = utils.create_custom_out(out_dir, 'rna', 'transcript_table.csv')
-    logger.debug(f'transcript table --> {outfile}.gz')
-    reads_new_labels.write_csv(outfile)
-    _ = utils.gzip_file(outfile, remove_original=True)
-
-    outfile = utils.create_custom_out(out_dir, 'single_cell_data', 'cell_by_transcript.csv')
-    logger.debug(f'cell x transcript --> {outfile}.gz')
-    cell_by_gene.write_csv(outfile)
-    _ = utils.gzip_file(outfile, remove_original=True)
-
-    outfile = utils.create_custom_out(out_dir, 'single_cell_data', 'cell_by_protein.csv')
-    logger.debug(f'cell x protein --> {outfile}.gz')
-    cell_by_protein.write_csv(outfile)
-    _ = utils.gzip_file(outfile, remove_original=True)
-
-    outfile = utils.create_custom_out(out_dir, 'single_cell_data', 'feature_matrix.h5')
-    logger.debug(f'single-cell h5 --> {outfile}')
-    adata.write_h5ad(outfile)
-
-    outfile = utils.create_custom_out(out_dir, 'single_cell_data', 'cell_metadata.csv.gz')
-    logger.debug(f'cell metadata --> {outfile}')
-    adata.obs.to_csv(outfile, compression='gzip')
-
-    return adata, mask
 
 
 def try_load_segmentation(
