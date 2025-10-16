@@ -17,6 +17,7 @@ def tar_viewer(
     *,
     logger: logging.Logger,
 ):
+
     logger.info('Checking files.')
     viewer_dir = Path(viewer_dir)
     assert viewer_dir.exists(), f'{viewer_dir} does not appear to exist.'
@@ -34,7 +35,7 @@ def tar_viewer(
     assert run_meta_path.is_file(), 'run_metadata.json file does not exist.'
 
     tx_path = viewer_dir / f'{sample_id}.tar'
-    assert tx_path.is_file(), 'transcript tar file does not exist.'
+    # assert tx_path.is_file(), 'transcript tar file does not exist.'
 
     # --- H&E paths
     h_and_e_path = viewer_dir / 'h_and_e'
@@ -100,14 +101,19 @@ def tar_viewer(
             'cell_segmentation_src': bin_path.name,
             'transcript_src': tx_path.name,
         }
+
+        # TODO unclear what this is used for
         with open(viewer_dir / 'dataset.config.json', 'w') as f:
             json.dump(metadata, f)
 
         logger.info('Tarring folder.')
-        out_tar = Path(out_dir)
+        out_tar = Path(out_dir) / 'g4x_viewer'
+
         if not out_tar.exists():
             out_tar.mkdir(parents=True, exist_ok=True)
-        out_tar = out_tar / f'{sample_id}_g4x_viewer.tar'
+
+        out_tar = out_tar / f'{sample_id}.tar'
+
         with tarfile.open(out_tar, 'w') as tar:
             tar.add(viewer_dir, arcname=viewer_dir.name)
 
