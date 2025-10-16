@@ -20,25 +20,32 @@ def _base_command(func):
         out_dir: Path | str,
         n_threads: int = 4,
         verbose: int = 1,
+        file_logger: bool = True,
         **kwargs,
     ):
-        out_dir = utils.validate_path(out_dir, must_exist=False, is_dir_ok=True, is_file_ok=False)
         func_name = func.__name__
-        func_out = out_dir / func_name
-        func_out.mkdir(parents=True, exist_ok=True)
-        out_dir = func_out
 
-        gap = 11
-        click.secho(f'\nStarting: {func_name}', bold=True)
+        out_dir = utils.validate_path(out_dir, must_exist=False, is_dir_ok=True, is_file_ok=False)
+
+        if out_dir != g4x_out.run_base:
+            func_out = out_dir / func_name
+            func_out.mkdir(parents=True, exist_ok=True)
+            out_dir = func_out
+
+        gap = 12
+        click.secho(f'\nStarting: {func_name}\n', bold=True)
         utils.print_k_v('sample_dir', f'{g4x_out.run_base}', gap)
         utils.print_k_v('out_dir', f'{out_dir}', gap)
         utils.print_k_v('n_threads', f'{n_threads}', gap)
         utils.print_k_v('verbosity', f'{verbose}', gap)
-        utils.print_k_v('version', f'{__version__}', gap)
+        utils.print_k_v('g4x-helpers', f'v{__version__}', gap)
         click.echo('')
 
-        logger = utils.setup_logger(logger_name=func_name, out_dir=out_dir, stream_level=verbose)
+        logger = utils.setup_logger(
+            logger_name=func_name, out_dir=out_dir / 'logs', stream_level=verbose, file_logger=file_logger
+        )
         logger.info(f'Running {func_name} with G4X-helpers v{__version__}')
+
         # Pass the initialized logger and parameters to the wrapped function
         result = func(
             g4x_out=g4x_out,
@@ -49,7 +56,7 @@ def _base_command(func):
             **kwargs,
         )
 
-        click.secho(f'Completed: {func.__name__}\n', bold=True, fg='green')
+        click.secho(f'\nCompleted: {func.__name__}', bold=True, fg='green')
         return result
 
     return wrapper
@@ -67,16 +74,15 @@ def resegment(
     **kwargs,
 ) -> None:
     from .modules import segmentation as seg
-    from .modules.bin_generation import bin_file_path
 
     logger = kwargs['logger']
 
     cell_labels = utils.validate_path(cell_labels, must_exist=True, is_dir_ok=False, is_file_ok=True)
 
     labels = seg.try_load_segmentation(
-        segmentation_mask=cell_labels,
+        cell_labels=cell_labels,
         expected_shape=g4x_out.shape,
-        segmentation_mask_key=labels_key,
+        labels_key=labels_key,
     )
 
     adata, mask = wflw.intersect_segmentation(
@@ -86,10 +92,13 @@ def resegment(
         logger=logger,
     )
 
+    view_dir = out_dir / 'g4x_viewer'
+    view_dir.mkdir(parents=True, exist_ok=True)
+
     wflw.seg_converter(
         adata=adata,
         seg_mask=mask,
-        out_path=bin_file_path(g4x_out, out_dir),
+        out_path=view_dir / f'{g4x_out.sample_id}.bin',
         protein_list=[f'{x}_intensity_mean' for x in g4x_out.proteins],
         n_threads=n_threads,
         logger=logger,
@@ -106,8 +115,6 @@ def redemux(
     verbose: int = 1,
     **kwargs,
 ) -> None:
-    from .modules.bin_generation import bin_file_path
-
     logger = kwargs['logger']
 
     wflw.redemux(
@@ -131,10 +138,13 @@ def redemux(
         logger=logger,
     )
 
+    view_dir = out_dir / 'g4x_viewer'
+    view_dir.mkdir(parents=True, exist_ok=True)
+
     wflw.seg_converter(
         adata=adata,
         seg_mask=mask,
-        out_path=bin_file_path(g4x_out, out_dir),
+        out_path=view_dir / f'{g4x_out.sample_id}.bin',
         protein_list=[f'{x}_intensity_mean' for x in g4x_out.proteins],
         n_threads=n_threads,
         logger=logger,
@@ -142,7 +152,7 @@ def redemux(
 
     wflw.tx_converter(
         g4x_out,
-        out_path=out_dir / 'g4x_viewer' / f'{g4x_out.sample_id}.tar',
+        out_path=view_dir / f'{g4x_out.sample_id}.tar',
         n_threads=n_threads,
         logger=logger,
     )
@@ -154,7 +164,6 @@ def update_bin(
     metadata: str,
     out_dir: str,
     *,
-    bin_file: str | None = None,
     cellid_key: str | None = None,
     cluster_key: str | None = None,
     cluster_color_key: str | None = None,
@@ -166,17 +175,13 @@ def update_bin(
 
     metadata = utils.validate_path(metadata, must_exist=True, is_dir_ok=False, is_file_ok=True)
 
-    if bin_file:
-        bin_file = utils.validate_path(bin_file, must_exist=True, is_dir_ok=False, is_file_ok=True)
-    else:
-        g4x_out.run_base / 'g4x_viewer' / f'{g4x_out.sample_id}.bin'
-
-    out_path = out_dir / f'{g4x_out.sample_id}.bin'
+    view_dir = out_dir / 'g4x_viewer'
+    view_dir.mkdir(parents=True, exist_ok=True)
 
     wflw.seg_updater(
-        bin_file=bin_file,
+        bin_file=g4x_out.run_base / 'g4x_viewer' / f'{g4x_out.sample_id}.bin',
         metadata_file=metadata,
-        out_path=out_path,
+        out_path=view_dir / f'{g4x_out.sample_id}.bin',
         cellid_key=cellid_key,
         cluster_key=cluster_key,
         cluster_color_key=cluster_color_key,
@@ -193,8 +198,6 @@ def new_bin(
     verbose: int = 1,
     **kwargs,
 ) -> None:
-    from .modules.bin_generation import bin_file_path
-
     logger = kwargs['logger']
 
     ## set up the data
@@ -209,10 +212,13 @@ def new_bin(
         cluster_key = None
         logger.info('Clustering information was not found, cell coloring will be random.')
 
+    view_dir = out_dir / 'g4x_viewer'
+    view_dir.mkdir(parents=True, exist_ok=True)
+
     wflw.seg_converter(
         adata=adata,
         seg_mask=g4x_out.load_segmentation(),
-        out_path=bin_file_path(g4x_out, out_dir),
+        out_path=view_dir / f'{g4x_out.sample_id}.bin',
         cluster_key=cluster_key,
         emb_key=emb_key,
         protein_list=[f'{x}_intensity_mean' for x in g4x_out.proteins],
@@ -224,15 +230,14 @@ def new_bin(
 @_base_command
 def tar_viewer(
     g4x_out: 'G4Xoutput',  #
-    viewer_dir: str | None = None,
+    # viewer_dir: str | None = None,
     out_dir: str | None = None,
     **kwargs,
 ) -> None:
     logger = kwargs['logger']
 
-    if viewer_dir is None:
-        viewer_dir = g4x_out.run_base / 'g4x_viewer'
+    # if viewer_dir is None:
+    # viewer_dir = utils.validate_path(viewer_dir, must_exist=True, is_dir_ok=True, is_file_ok=False)
 
-    viewer_dir = utils.validate_path(viewer_dir, must_exist=True, is_dir_ok=True, is_file_ok=False)
-
-    wflw.tar_viewer(out_dir=out_dir, viewer_dir=viewer_dir, logger=logger)
+    viewer_dir = g4x_out.run_base / 'g4x_viewer'
+    wflw.tar_viewer(viewer_dir=viewer_dir, out_dir=out_dir, logger=logger)
