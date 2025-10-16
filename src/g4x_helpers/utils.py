@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import gzip
-
 # import inspect
+import gzip
 import logging
 import os
 import shutil
 import traceback
 import zipfile
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -197,10 +197,10 @@ def setup_logger(
 
     logger = logging.getLogger(logger_name)
     logger.setLevel(logging.DEBUG)
-    
+
     if format is None:
-        format = '[%(asctime)s | %(name)s | %(levelname)s] %(message)s'
-    
+        format = '[%(asctime)s | %(name)s | %(levelname)s: %(message)s'
+
     formatter = logging.Formatter(format, datefmt='%Y-%m-%d %H:%M:%S')
 
     ## optionally clear existing handlers
@@ -217,7 +217,9 @@ def setup_logger(
         assert out_dir is not None, 'out_dir must be provided if file_logger is True'
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-        log_path = out_dir / f'{logger_name}.log'
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        log_path = out_dir / f'{logger_name}_{timestamp}.log'
 
         prior_size = log_path.stat().st_size if log_path.exists() else 0
         if file_mode == 'w':
