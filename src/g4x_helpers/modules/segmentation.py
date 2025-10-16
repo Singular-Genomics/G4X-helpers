@@ -26,22 +26,22 @@ SUPPORTED_MASK_FILETYPES = {'.npy', '.npz', '.geojson'}
 
 
 def try_load_segmentation(
-    segmentation_mask: Path, expected_shape: tuple[int], segmentation_mask_key: str | None = None
+    cell_labels: Path, expected_shape: tuple[int], labels_key: str | None = None
 ) -> np.ndarray | geopandas.GeoDataFrame:
     ## load new segmentation
-    suffix = segmentation_mask.suffix.lower()
+    suffix = cell_labels.suffix.lower()
 
-    if segmentation_mask.suffix not in SUPPORTED_MASK_FILETYPES:
-        raise ValueError(f'{segmentation_mask.suffix} is not a supported file type.')
+    if cell_labels.suffix not in SUPPORTED_MASK_FILETYPES:
+        raise ValueError(f'{cell_labels.suffix} is not a supported file type.')
 
     if suffix == '.npz':
-        with np.load(segmentation_mask) as labels:
+        with np.load(cell_labels) as labels:
             available_keys = list(labels.keys())
 
-            if segmentation_mask_key:  # if a key is specified
-                if segmentation_mask_key not in labels:
-                    raise KeyError(f"Key '{segmentation_mask_key}' not found in .npz; available keys: {available_keys}")
-                seg = labels[segmentation_mask_key]
+            if labels_key:  # if a key is specified
+                if labels_key not in labels:
+                    raise KeyError(f"Key '{labels_key}' not found in .npz; available keys: {available_keys}")
+                seg = labels[labels_key]
 
             else:  # if no key specified,
                 if len(labels) == 1:  # and only one key is available, use that key
@@ -49,32 +49,32 @@ def try_load_segmentation(
                 else:  # and multiple keys are available, raise an error
                     if len(labels) > 1:
                         raise ValueError(
-                            f'Multiple keys found in .npz: {available_keys}. Please specify a key using segmentation_mask_key.'
+                            f"Multiple keys found in .npz: {available_keys}.\nPlease specify a key using 'labels_key'"
                         )
                 seg = labels
 
     elif suffix == '.npy':
         # .npy: directly returns the array, no context manager available
-        if segmentation_mask_key is not None:
-            print('file is .npy, ignoring provided segmentation_mask_key.')
-        seg = np.load(segmentation_mask)
+        if labels_key is not None:
+            print('file is .npy, ignoring provided labels_key.')
+        seg = np.load(cell_labels)
 
     elif suffix == '.geojson':
-        seg = geopandas.read_file(segmentation_mask)
+        seg = geopandas.read_file(cell_labels)
 
-        if segmentation_mask_key is not None:
-            if segmentation_mask_key not in seg.columns:
+        if labels_key is not None:
+            if labels_key not in seg.columns:
                 raise KeyError(
-                    f"Column '{segmentation_mask_key}' not found in GeoJSON; available columns: {seg.columns.tolist()}"
+                    f"Column '{labels_key}' not found in GeoJSON; available columns: {seg.columns.tolist()}"
                 )
 
             # ensure that a coliumn named 'label' exists
-            seg['label'] = seg[segmentation_mask_key]
+            seg['label'] = seg[labels_key]
 
         else:
             if 'label' not in seg.columns:
                 raise ValueError(
-                    "No column named 'label' found in GeoJSON. Please specify which column to use for labels via segmentation_mask_key."
+                    "No column named 'label' found in GeoJSON. Please specify which column to use for labels via labels_key."
                 )
 
     # only validate shape for numpy arrays
@@ -173,6 +173,7 @@ def image_mask_intensity_extraction(
     channel_label: str = 'intensity_mean',
     lazy: bool = True,
 ) -> pl.DataFrame | pl.LazyFrame:
+    
     mask_flat = mask.ravel()
     img_flat = img.ravel()
 
@@ -182,7 +183,12 @@ def image_mask_intensity_extraction(
         mask_flat = mask_flat[bead_mask_flat]
         img_flat = img_flat[bead_mask_flat]
 
-    intensity_means = np.bincount(mask_flat, weights=img_flat)[1:] / np.bincount(mask_flat)[1:]
+    # intensity_means = np.bincount(mask_flat, weights=img_flat)[1:] / np.bincount(mask_flat)[1:]
+    counts = np.bincount(mask_flat)[1:]
+    sums = np.bincount(mask_flat, weights=img_flat)[1:]
+
+    # Avoid division by zero:
+    intensity_means = np.divide(sums, counts, out=np.zeros_like(sums), where=counts != 0)
 
     if lazy:
         prop_tab = pl.LazyFrame(
