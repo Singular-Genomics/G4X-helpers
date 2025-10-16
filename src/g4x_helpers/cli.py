@@ -194,7 +194,7 @@ def resegment(ctx, cell_labels, labels_key):
         )
     except Exception as e:
         func_name = inspect.currentframe().f_code.co_name
-        utils._fail_message(func_name, e, trace_back=True)
+        utils._fail_message(func_name, e, trace_back=False)
 
 
 ############################################################
@@ -239,12 +239,12 @@ def redemux(ctx, manifest, batch_size):
     type=click.Path(exists=True, dir_okay=False),
     help='Path to metadata table where clustering and/or embedding information will be extracted. Table must contain a header.',
 )
-@click.option(
-    '--bin-file',
-    required=False,
-    type=click.Path(exists=True, dir_okay=False),
-    help='Path to G4X-Viewer segmentation bin file.',
-)
+# @click.option(
+#     '--bin-file',
+#     required=False,
+#     type=click.Path(exists=True, dir_okay=False),
+#     help='Path to G4X-Viewer segmentation bin file.',
+# )
 @click.option(
     '--cellid-key',
     default=None,
@@ -274,7 +274,7 @@ def update_bin(ctx, bin_file, metadata, cellid_key, cluster_key, cluster_color_k
     try:
         main.update_bin(
             g4x_out=ctx.obj['sample'],
-            bin_file=bin_file,
+            # bin_file=bin_file,
             out_dir=ctx.obj['out_dir'],
             metadata=metadata,
             cellid_key=cellid_key,
