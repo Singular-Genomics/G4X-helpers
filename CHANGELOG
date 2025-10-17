@@ -1,5 +1,14 @@
 # Changelog
 
+## `v0.5.2` — [2025-10-01]
+
+- fix: missing tests in publish workflow
+
+## `v0.5.1` — [2025-10-01]
+
+- pkg: added PyPI publish workflow
+- fix: README logo link
+
 ## `v0.5.0` — [2025-10-01]
 
 - docs: formatting
@@ -22,8 +31,6 @@
 - pkg: relaxed protobuf requirement for internal alignment
 - pkg: opening python requirements to include 3.11
 - pkg: removed bump-my-version and replacing with uv-ship
-
-
 
 ## `v0.4.14` — [2025-08-12]
 

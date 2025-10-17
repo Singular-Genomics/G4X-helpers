@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "g4x_helpers"
-version = "0.5.0"
+version = "0.5.2"
 
 description = "Python helpers for G4X."
 urls = { repository = "https://github.com/Singular-Genomics/G4X-helpers" }
