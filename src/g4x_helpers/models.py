@@ -285,12 +285,12 @@ class G4Xoutput:
     ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
         file_path = Path(file_path)
         if lazy:
-            if file_path.suffix == 'parquet':
+            if file_path.suffix == '.parquet':
                 reads = pl.scan_parquet(file_path)
             else:
                 reads = pl.scan_csv(file_path)
         else:
-            if file_path.suffix == 'parquet':
+            if file_path.suffix == '.parquet':
                 reads = pl.read_parquet(file_path)
             else:
                 reads = pl.read_csv(file_path)
