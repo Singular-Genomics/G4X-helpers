@@ -67,6 +67,8 @@ theme:
         name: Switch to dark mode
 
 
+  
+
 # region Extensions
 markdown_extensions:
   - meta
@@ -107,6 +109,7 @@ markdown_extensions:
 
 # region Extras
 extra:
+  homepage: https://docs.singulargenomics.com
   social:
     - icon: /fontawesome/regular/envelope
       name: support
