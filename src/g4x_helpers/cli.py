@@ -270,11 +270,10 @@ def redemux(ctx, manifest, batch_size):
     help='Column name in metadata containing embedding. Parser will look for {emb_key}_1 and {emb_key}_2. If not provided, skips updating embedding.',
 )
 @click.pass_context
-def update_bin(ctx, bin_file, metadata, cellid_key, cluster_key, cluster_color_key, emb_key):
+def update_bin(ctx, metadata, cellid_key, cluster_key, cluster_color_key, emb_key):
     try:
         main.update_bin(
             g4x_out=ctx.obj['sample'],
-            # bin_file=bin_file,
             out_dir=ctx.obj['out_dir'],
             metadata=metadata,
             cellid_key=cellid_key,

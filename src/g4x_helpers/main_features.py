@@ -151,7 +151,7 @@ def redemux(
     )
 
     wflw.tx_converter(
-        g4x_out,
+        g4x_out=g4x_out,
         out_path=view_dir / f'{g4x_out.sample_id}.tar',
         n_threads=n_threads,
         logger=logger,

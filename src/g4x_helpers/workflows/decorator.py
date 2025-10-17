@@ -1,31 +1,22 @@
 import functools
-import logging
 
 from ..utils import setup_logger
 
 
 def workflow(func):
-    """Decorator to apply workflow initialization logic."""
-
     @functools.wraps(func)
-    def wrapper(
-        logger: logging.Logger | None = None,
-        **kwargs,
-    ):
-        func_name = func.__name__
+    def wrapper(*args, **kwargs):
+        logger = kwargs.pop('logger', None)
         if logger is None:
-            logger = setup_logger(logger_name=func_name, file_logger=False)
+            logger = setup_logger(logger_name=func.__name__, file_logger=False)
             logger.info('No logger provided, using default logger (stream only).')
 
-        logger.info(f'{"-" * 10}')
-        logger.info(f'Initializing {func_name} workflow.')
+        logger.info('-' * 10)
+        logger.info(f'Initializing {func.__name__} workflow.')
 
-        result = func(
-            logger=logger,
-            **kwargs,
-        )
+        result = func(*args, logger=logger, **kwargs)
 
-        logger.info(f'Completed {func_name} workflow.')
+        logger.info(f'Completed {func.__name__} workflow.')
         return result
 
     return wrapper
