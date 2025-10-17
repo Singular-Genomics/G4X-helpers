@@ -75,6 +75,7 @@ def demux(
     min_delta: int = 2,
 ) -> pl.DataFrame:
     demuxed = np.zeros(hammings.shape[0], dtype=bool)
+
     for i in range(max_ham_dist + 1):
         hits = hammings == i
         close_hits = hammings <= (i + min_delta)
@@ -82,6 +83,7 @@ def demux(
         close_hit = close_hits.sum(axis=1) > 1
         pass_filter = uniquely_hit & ~close_hit
         demuxed[pass_filter] = 1
+
         # logger.info(f"""
         # ... ... {fq.stem}
         # hamming == {i}, min_delta == {min_delta}
@@ -93,6 +95,7 @@ def demux(
     # --- Get best hits ---
     hit_ids = hammings.argmin(axis=1)
     hit_targets = codebook_target_ids[hit_ids]
+
     transcripts = np.where(demuxed, hit_targets, 'UNDETERMINED')
     transcript_condensed = [probe_dict.get(t, 'UNDETERMINED') for t in transcripts]
 
@@ -173,25 +176,32 @@ def batched_demuxing(g4x_out: 'G4Xoutput', manifest, probe_dict, batch_dir, batc
         for seq_read in seq_reads:
             feature_batch_read = feature_batch.filter(pl.col('read') == seq_read)
             manifest_read = manifest.filter(pl.col('read') == seq_read)
+
             if len(feature_batch_read) == 0 or len(manifest_read) == 0:
                 continue
+
             seqs = feature_batch_read['sequence_to_demux'].to_list()
             codes = manifest_read['sequence'].to_list()
             codebook_target_ids = np.array(manifest_read['target'].to_list())
+
             hammings = batched_dot_product_hamming_matrix(seqs, codes, batch_size=batch_size)
             feature_batch_read = demux(hammings, feature_batch_read, codebook_target_ids, probe_dict)
             redemuxed_feature_batch.append(feature_batch_read)
+
         pl.concat(redemuxed_feature_batch).write_parquet(batch_dir / f'batch_{i}.parquet')
 
 
 def concatenate_and_cleanup(batch_dir, out_dir):
     final_tx_table_path = out_dir / 'rna' / 'transcript_table.csv'
     final_tx_pq_path = out_dir / 'diagnostics' / 'transcript_table.parquet'
+
     utils.delete_existing(final_tx_table_path)
     utils.delete_existing(final_tx_table_path.with_suffix('.csv.gz'))
     utils.delete_existing(final_tx_pq_path)
+
     tx_table = pl.scan_parquet(list(batch_dir.glob('*.parquet')))
     tx_table.sink_parquet(final_tx_pq_path)
+
     _ = (
         tx_table.filter(pl.col('demuxed_new'))
         .drop(
@@ -214,5 +224,6 @@ def concatenate_and_cleanup(batch_dir, out_dir):
         )
         .sink_csv(final_tx_table_path)
     )
+
     _ = utils.gzip_file(final_tx_table_path)
     shutil.rmtree(batch_dir)
