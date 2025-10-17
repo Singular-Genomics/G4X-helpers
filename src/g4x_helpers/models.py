@@ -69,7 +69,7 @@ class G4Xoutput:
         with open(self.run_base / 'run_meta.json', 'r') as f:
             self.run_meta = json.load(f)
 
-        self.shape = utils.npzGetShape(self.segmentation_path, 'nuclei')
+        self.set_meta_attrs()
 
         if self.transcript_panel:
             transcript_panel = pd.read_csv(self.run_base / 'transcript_panel.csv', index_col=0, header=0)
@@ -103,42 +103,6 @@ class G4Xoutput:
 
     # region properties
     @property
-    def platform(self) -> str:
-        return self.run_meta.get('platform', None)
-
-    @property
-    def machine(self) -> str:
-        return self.run_meta.get('machine', None)
-
-    @property
-    def run_id(self) -> str:
-        return self.run_meta.get('run_id', None)
-
-    @property
-    def fc(self) -> str:
-        return self.run_meta.get('fc', None)
-
-    @property
-    def lane(self) -> str:
-        return self.run_meta.get('lane', None)
-
-    @property
-    def software(self) -> str:
-        return self.run_meta.get('software', None)
-
-    @property
-    def software_version(self) -> str:
-        return self.run_meta.get('software_version', None)
-
-    @property
-    def transcript_panel(self) -> dict:
-        return self.run_meta.get('transcript_panel', None)
-
-    @property
-    def protein_panel(self) -> dict:
-        return self.run_meta.get('protein_panel', None)
-
-    @property
     def includes_protein(self) -> bool:
         return self.protein_panel != []
 
@@ -157,6 +121,24 @@ class G4Xoutput:
     @property
     def segmentation_path(self) -> Path:
         return self.run_base / 'segmentation' / 'segmentation_mask.npz'
+
+    def set_meta_attrs(self):
+        static_attrs = [
+            'platform',
+            'machine',
+            'run_id',
+            'fc',
+            'lane',
+            'software',
+            'software_version',
+            'transcript_panel',
+            'protein_panel',
+        ]
+
+        for k in static_attrs:
+            setattr(self, k, self.run_meta.get(k, None))
+
+        self.shape = utils.npzGetShape(self.segmentation_path, 'nuclei')
 
     # region methods
     def load_adata(self, *, remove_nontargeting: bool = True, load_clustering: bool = True) -> ad.AnnData:
