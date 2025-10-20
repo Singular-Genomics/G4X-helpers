@@ -1,5 +1,39 @@
 # Changelog
 
+## `latest` — [2025-10-20]
+
+- rename run_base -> data_dir, logger explicit in main feats
+- formatting
+- added pytest core structure
+- cleaned up argument problems in CLI and main features
+- removed some boilerplate code for setting static attrs in G4Xout
+- tar_viewer now always writes to g4x_viewer dir
+- argument name change from segmentation-mask to cell-lables also now handling NaN during reseg properly
+- logger filename timestamped
+- features edit in place when input_dir ==  out_dir
+- removed bin-file from CLI option as its inferred from input
+- workflow decorator to handle common kick-off tasks
+- reordered G4Xoutput
+- main features now fully modular with workflows
+- logger now creates a header for a new session
+- help messages and output clarification
+- created workflows module for re-usable methods with log-output
+- refactor into core modules
+- re-factoring and cleaning
+- introduced base_command wrapper for main_features
+- ensured that demux resolves relative paths
+- cli error reporting and setup printing
+- default thread settings
+- further re-factoring of main features
+- cli structuring
+- commands fully ported to cli structure. needs testing
+- feat: added software version to repr
+- re-factoring entrypoint
+- refactored create_custom_out()
+- pkg: added rich-click and cli structure
+- removed logger and segmentaion from main module
+- setting upper python limit to <3.13
+
 ## `v0.5.2` — [2025-10-01]
 
 - fix: missing tests in publish workflow

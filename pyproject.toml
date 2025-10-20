@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build"]
+build-backend = "uv_build"
 
 [project]
 name = "g4x_helpers"
@@ -14,7 +14,7 @@ authors = [
     { name = "Kenneth Gouin III", email = "kennethg@singulargenomics.com" },
     { name = "Florian Raths", email = "flo.raths@singulargenomics.com" },
 ]
-requires-python = ">=3.10, <3.12"
+requires-python = ">=3.10, <3.13"
 
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -36,21 +36,22 @@ dependencies = [
     "scikit-image ~= 0.25",
     "shapely ~= 2.1",
     "pyarrow ~= 16.1",
+    "rich-click ~= 1.9",
+
 ]
 
 [dependency-groups]
 dev = [
+    "ipykernel >= 6.30.1",
+    "ipywidgets >= 8.1.7",
     "pre-commit ~= 4.2",
-    "ruff == 0.13.1",         # pinned to match pre-commit version
+    "pytest ~= 8.4",
+    "ruff == 0.13.1",    # pinned to match pre-commit version
 ]
 docs = ["mkdocs ~= 1.6", "mkdocs-material ~= 9.6"]
 
 [project.scripts]
-new_bin = "g4x_helpers.entrypoint:launch_new_bin"
-resegment = "g4x_helpers.entrypoint:launch_resegment"
-tar_viewer = "g4x_helpers.entrypoint:launch_tar_viewer"
-update_bin = "g4x_helpers.entrypoint:launch_update_bin"
-redemux = "g4x_helpers.entrypoint:launch_redemux"
+g4x-helpers = "g4x_helpers.cli:cli"
 
 [tool.uv]
 required-version = ">=0.8.8"     # also update in Dockerfile
@@ -59,3 +60,5 @@ default-groups = ["dev", "docs"]
 [tool.uv-ship]
 release-branch = "main"
 changelog-path = "CHANGELOG"
+changelog-format = "markdown"
+changelog-template = "- {message}"
