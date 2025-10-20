@@ -60,3 +60,5 @@ default-groups = ["dev", "docs"]
 [tool.uv-ship]
 release-branch = "main"
 changelog-path = "CHANGELOG"
+changelog-format = "markdown"
+changelog-template = "- {message}"
