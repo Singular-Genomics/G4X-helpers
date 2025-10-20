@@ -63,9 +63,9 @@ NWBIN_HELP = 'Create new G4X-viewer .bin file from sample directory'
 
 TARVW_HELP = (
     'Package G4X-viewer folder for distribution\n\n'
-    'Creates a .tar archive of the G4X_DATA/g4x_viewer folder for easy upload and sharing.\n\n'
+    'Creates a .tar archive of the data_dir/g4x_viewer folder for easy upload and sharing.\n\n'
     'Archive file name: {SAMPLE_ID}_g4x_viewer.tar\n\n'
-    'If no OUT_DIR is specified via g4x-helpers top-level command, the archive will be created in the G4X_DATA directory.'
+    'If no OUT_DIR is specified via g4x-helpers top-level command, the archive will be created in the data_dir directory.'
 )
 
 
@@ -132,20 +132,20 @@ def cli(ctx, g4x_data, out_dir, sample_id, threads, verbose, version):
     else:
         ctx.ensure_object(dict)
 
-        ctx.obj['g4x_data'] = g4x_data
+        ctx.obj['data_dir'] = g4x_data
         ctx.obj['out_dir'] = out_dir
         ctx.obj['threads'] = threads
         ctx.obj['verbose'] = verbose
         ctx.obj['version'] = __version__
 
         if g4x_data:
-            sample = utils.initialize_sample(g4x_dir=g4x_data, sample_id=sample_id, n_threads=threads)
-            ctx.obj['sample'] = sample
+            g4x_obj = utils.initialize_sample(data_dir=g4x_data, sample_id=sample_id, n_threads=threads)
+            ctx.obj['g4x_obj'] = g4x_obj
 
-        # No subcommand given but G4X_DATA is set → show sample info
+        # No subcommand given but data_dir is set → show sample info
         if ctx.invoked_subcommand is None and g4x_data:
             click.secho('\nG4X-helpers successfully initialized with:\n', bold=True, dim=True)
-            click.echo(textwrap.indent(repr(sample), prefix='    '))
+            click.echo(textwrap.indent(repr(g4x_obj), prefix='    '))
             click.secho('please provide a subcommand, use -h for help\n', fg='blue')
 
         # No subcommand and no options given → show help
@@ -185,9 +185,9 @@ def cli(ctx, g4x_data, out_dir, sample_id, threads, verbose, version):
 def resegment(ctx, cell_labels, labels_key):
     try:
         main.resegment(
-            g4x_out=ctx.obj['sample'],
-            cell_labels=cell_labels,
+            g4x_obj=ctx.obj['g4x_obj'],
             out_dir=ctx.obj['out_dir'],
+            cell_labels=cell_labels,
             labels_key=labels_key,
             n_threads=ctx.obj['threads'],
             verbose=ctx.obj['verbose'],
@@ -218,9 +218,9 @@ def resegment(ctx, cell_labels, labels_key):
 def redemux(ctx, manifest, batch_size):
     try:
         main.redemux(
-            g4x_out=ctx.obj['sample'],
-            manifest=manifest,
+            g4x_obj=ctx.obj['g4x_obj'],
             out_dir=ctx.obj['out_dir'],
+            manifest=manifest,
             batch_size=batch_size,
             n_threads=ctx.obj['threads'],
             verbose=ctx.obj['verbose'],
@@ -239,12 +239,6 @@ def redemux(ctx, manifest, batch_size):
     type=click.Path(exists=True, dir_okay=False),
     help='Path to metadata table where clustering and/or embedding information will be extracted. Table must contain a header.',
 )
-# @click.option(
-#     '--bin-file',
-#     required=False,
-#     type=click.Path(exists=True, dir_okay=False),
-#     help='Path to G4X-Viewer segmentation bin file.',
-# )
 @click.option(
     '--cellid-key',
     default=None,
@@ -273,7 +267,7 @@ def redemux(ctx, manifest, batch_size):
 def update_bin(ctx, metadata, cellid_key, cluster_key, cluster_color_key, emb_key):
     try:
         main.update_bin(
-            g4x_out=ctx.obj['sample'],
+            g4x_obj=ctx.obj['g4x_obj'],
             out_dir=ctx.obj['out_dir'],
             metadata=metadata,
             cellid_key=cellid_key,
@@ -294,7 +288,7 @@ def update_bin(ctx, metadata, cellid_key, cluster_key, cluster_color_key, emb_ke
 def new_bin(ctx):
     try:
         main.new_bin(
-            g4x_out=ctx.obj['sample'],  #
+            g4x_obj=ctx.obj['g4x_obj'],  #
             out_dir=ctx.obj['out_dir'],
             n_threads=ctx.obj['threads'],
             verbose=ctx.obj['verbose'],
@@ -317,9 +311,9 @@ def new_bin(ctx):
 def tar_viewer(ctx, viewer_dir):
     try:
         main.tar_viewer(
-            g4x_out=ctx.obj['sample'],  #
-            viewer_dir=viewer_dir,
+            g4x_obj=ctx.obj['g4x_obj'],  #
             out_dir=ctx.obj['out_dir'],
+            viewer_dir=viewer_dir,
             verbose=ctx.obj['verbose'],
         )
     except Exception as e:

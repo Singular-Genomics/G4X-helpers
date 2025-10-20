@@ -14,8 +14,8 @@ from skimage.morphology import dilation, disk
 from .. import utils
 
 
-def bin_file_path(g4x_out, out_dir: str | Path | None = None) -> Path:
-    file_name = f'{g4x_out.sample_id}.bin'
+def bin_file_path(g4x_obj, out_dir: str | Path | None = None) -> Path:
+    file_name = f'{g4x_obj.sample_id}.bin'
 
     if out_dir:
         out_dir = utils.validate_path(out_dir, must_exist=True, is_dir_ok=True, is_file_ok=False)

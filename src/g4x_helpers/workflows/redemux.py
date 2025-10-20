@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 @workflow
 def redemux(
-    g4x_out: 'G4Xoutput',
+    g4x_obj: 'G4Xoutput',
     manifest: Path,
     out_dir: Path,
     *,
@@ -29,18 +29,18 @@ def redemux(
 
     ## make output directory with symlinked files from original
     logger.info('Creating output directory and symlinking original files.')
-    utils.symlink_original_files(g4x_out, out_dir)
+    utils.symlink_original_files(g4x_obj, out_dir)
 
     ## update metadata and transcript panel file
     logger.info('Updating metadata and transcript panel file.')
-    dmx.update_metadata_and_tx_file(g4x_out, manifest, out_dir)
+    dmx.update_metadata_and_tx_file(g4x_obj, manifest, out_dir)
 
     ## load the new manifest file that we will demux against
     logger.info('Loading manifest file.')
     manifest, probe_dict = dmx.load_manifest(manifest)
 
     logger.info('Performing re-demuxing.')
-    dmx.batched_demuxing(g4x_out, manifest, probe_dict, batch_dir, batch_size)
+    dmx.batched_demuxing(g4x_obj, manifest, probe_dict, batch_dir, batch_size)
 
     ## concatenate results into final csv and parquet
     logger.info('Writing updated transcript table.')

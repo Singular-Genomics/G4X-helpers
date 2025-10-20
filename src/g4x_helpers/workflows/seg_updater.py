@@ -11,8 +11,8 @@ from .decorator import workflow
 
 @workflow
 def seg_updater(
-    bin_file: str | Path,
-    metadata_file: str | Path,
+    bin_file: Path,
+    metadata_file: Path,
     out_path: Path,
     *,
     cellid_key: str | None = None,

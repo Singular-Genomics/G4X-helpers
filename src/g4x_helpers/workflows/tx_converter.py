@@ -22,7 +22,7 @@ mp.set_start_method('spawn', force=True)
 
 @workflow
 def tx_converter(
-    g4x_out: 'G4Xoutput',
+    g4x_obj: 'G4Xoutput',
     out_path: Path,
     *,
     aggregation_level: str = 'gene',
@@ -33,12 +33,12 @@ def tx_converter(
     logger.info('Generating viewer transcript file.')
 
     ## prelims
-    IMAGE_RESOLUTION = g4x_out.shape
-    if g4x_out.platform == 'g4x-2lane':
+    IMAGE_RESOLUTION = g4x_obj.shape
+    if g4x_obj.platform == 'g4x-2lane':
         MIN_TILE_SIZE = 1028
     else:
         MIN_TILE_SIZE = 512
-    out_dir = g4x_out.run_base / 'g4x_viewer_temp'
+    out_dir = g4x_obj.data_dir / 'g4x_viewer_temp'
     os.makedirs(out_dir, exist_ok=True)
 
     ## get transcript table
@@ -47,7 +47,7 @@ def tx_converter(
     else:
         tx_column = 'gene_name'
     keep_cols = ['x_pixel_coordinate', 'y_pixel_coordinate', 'cell_id', tx_column]
-    df = g4x_out.load_transcript_table(lazy=True, columns=keep_cols)
+    df = g4x_obj.load_transcript_table(lazy=True, columns=keep_cols)
 
     ## make colormap
     unique_genes = df.select(tx_column).collect().unique().to_series().to_list()

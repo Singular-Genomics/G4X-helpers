@@ -21,18 +21,23 @@ if TYPE_CHECKING:
 DEFAULT_THREADS = max(1, (os.cpu_count() // 2 or 4))
 
 
-def validate_run_base(run_base):
-    """check that all expected outputs are present."""
+def validate_data_dir(data_dir):
+    """check that expected outputs are present."""
 
-    run_base = validate_path(path_str=run_base, must_exist=True, is_file_ok=False)
+    data_dir = validate_path(path_str=data_dir, must_exist=True, is_file_ok=False)
 
-    # TDOD: add more required files to check for
-    required_paths = ['run_meta.json', 'single_cell_data/feature_matrix.h5', 'segmentation/segmentation_mask.npz']
+    # TODO: add more required files to check for
+    required_paths = [
+        'run_meta.json',
+        'single_cell_data/feature_matrix.h5',
+        'segmentation/segmentation_mask.npz',
+        'rna/transcript_table.csv.gz',
+    ]
 
     for p in required_paths:
-        validate_path(run_base / p, must_exist=True, is_dir_ok=False, is_file_ok=True)
+        validate_path(data_dir / p, must_exist=True, is_dir_ok=False, is_file_ok=True)
 
-    return run_base
+    return data_dir
 
 
 def validate_path(path_str, must_exist=True, is_dir_ok=True, is_file_ok=True):
@@ -58,12 +63,12 @@ def _fail_message(func_name, e, trace_back=False):
     raise click.ClickException(f'{type(e).__name__}: {e}')
 
 
-def initialize_sample(g4x_dir: Path | str, sample_id: str | None, n_threads: int = DEFAULT_THREADS) -> None:
+def initialize_sample(data_dir: str, sample_id: str | None, n_threads: int = DEFAULT_THREADS) -> None:
     from .models import G4Xoutput
 
     glymur.set_option('lib.num_threads', n_threads)
     try:
-        sample = G4Xoutput(run_base=g4x_dir, sample_id=sample_id)
+        sample = G4Xoutput(data_dir=data_dir, sample_id=sample_id)
     except Exception as e:
         click.echo('')
         click.secho('Failed to load G4Xoutput:', fg='red', err=True, bold=True)
@@ -246,12 +251,12 @@ def print_k_v(item, value, gap=2):
     click.secho(f'{value}', fg='blue', bold=True)
 
 
-def symlink_original_files(g4x_out: 'G4Xoutput', out_dir: Path | str) -> None:
+def symlink_original_files(g4x_obj: 'G4Xoutput', out_dir: Path | str) -> None:
     ignore_file_list = ['clustering_umap.csv.gz', 'dgex.csv.gz', 'transcript_panel.csv']
-    run_base = Path(g4x_out.run_base).resolve()
+    data_dir = Path(g4x_obj.data_dir).resolve()
 
-    for root, dirs, files in os.walk(run_base):
-        rel_root = Path(root).relative_to(run_base)
+    for root, dirs, files in os.walk(data_dir):
+        rel_root = Path(root).relative_to(data_dir)
         if str(rel_root) == 'metrics':
             continue
         dst_root = out_dir / rel_root

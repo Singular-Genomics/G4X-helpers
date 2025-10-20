@@ -28,11 +28,11 @@ class G4Xoutput:
 
     Parameters
     ----------
-    run_base : str or Path
-        The base directory path of the G4X run. This should contain all run-related files including metadata,
+    data_dir : str
+        Path pointing to a G4X sample output directory. This should contain all run-related files including metadata,
         segmentation masks, panels, and feature matrices.
     sample_id : str, optional
-        The sample ID to associate with the run. If not provided, it will be inferred from the `run_base` path.
+        The sample ID to associate with the run. If not provided, it will be inferred from the `data_dir` path.
 
     Attributes
     ----------
@@ -57,27 +57,27 @@ class G4Xoutput:
       - Parses transcript and protein panel files (if present).
     """
 
-    run_base: Path | str
+    data_dir: str
     sample_id: str | None = None
 
     def __post_init__(self):
-        self.run_base = utils.validate_run_base(self.run_base)
+        self.data_dir = utils.validate_data_dir(self.data_dir)
 
         if self.sample_id is None:
-            self.sample_id = self.run_base.name
+            self.sample_id = self.data_dir.name
 
-        with open(self.run_base / 'run_meta.json', 'r') as f:
+        with open(self.data_dir / 'run_meta.json', 'r') as f:
             self.run_meta = json.load(f)
 
         self.set_meta_attrs()
 
         if self.transcript_panel:
-            transcript_panel = pd.read_csv(self.run_base / 'transcript_panel.csv', index_col=0, header=0)
+            transcript_panel = pd.read_csv(self.data_dir / 'transcript_panel.csv', index_col=0, header=0)
             self.transcript_panel_dict = transcript_panel.to_dict()['panel_type']
             self.genes = list(self.transcript_panel_dict.keys())
 
         if self.protein_panel:
-            protein_panel = pd.read_csv(self.run_base / 'protein_panel.csv', index_col=0, header=0)
+            protein_panel = pd.read_csv(self.data_dir / 'protein_panel.csv', index_col=0, header=0)
             self.protein_panel_dict = protein_panel.to_dict()['panel_type']
             self.proteins = list(self.protein_panel_dict.keys())
 
@@ -86,7 +86,7 @@ class G4Xoutput:
         machine_num = self.machine.removeprefix('g4-').lstrip('0')
         mac_run_id = f'G{machine_num.zfill(2)}-{self.run_id}'
 
-        repr_string = f'G4X-output @ {self.run_base}\n'
+        repr_string = f'G4X-output @ {self.data_dir}\n'
         repr_string += f'Sample: \033[1m{self.sample_id}\033[0m of {mac_run_id}, {self.fc}\n'
 
         shp = (np.array(self.shape) * 0.3125) / 1000
@@ -112,15 +112,15 @@ class G4Xoutput:
 
     @property
     def transcript_table_path(self) -> Path:
-        return self.run_base / 'rna' / 'transcript_table.csv.gz'
+        return self.data_dir / 'rna' / 'transcript_table.csv.gz'
 
     @property
     def feature_table_path(self) -> Path:
-        return self.run_base / 'diagnostics' / 'transcript_table.parquet'
+        return self.data_dir / 'diagnostics' / 'transcript_table.parquet'
 
     @property
     def segmentation_path(self) -> Path:
-        return self.run_base / 'segmentation' / 'segmentation_mask.npz'
+        return self.data_dir / 'segmentation' / 'segmentation_mask.npz'
 
     def set_meta_attrs(self):
         static_attrs = [
@@ -142,7 +142,7 @@ class G4Xoutput:
 
     # region methods
     def load_adata(self, *, remove_nontargeting: bool = True, load_clustering: bool = True) -> ad.AnnData:
-        adata = sc.read_h5ad(self.run_base / 'single_cell_data' / 'feature_matrix.h5')
+        adata = sc.read_h5ad(self.data_dir / 'single_cell_data' / 'feature_matrix.h5')
 
         adata.obs_names = adata.obs['cell_id']
         adata.var_names = adata.var['gene_id']
@@ -154,7 +154,7 @@ class G4Xoutput:
             adata = adata[:, adata.var.query(" probe_type == 'targeting' ").index].copy()
 
         if load_clustering:
-            df = pd.read_csv(self.run_base / 'single_cell_data' / 'clustering_umap.csv.gz', index_col=0, header=0)
+            df = pd.read_csv(self.data_dir / 'single_cell_data' / 'clustering_umap.csv.gz', index_col=0, header=0)
             adata.obs = adata.obs.merge(df, how='left', left_index=True, right_index=True)
             umap_key = '_'.join(sorted([x for x in adata.obs.columns if 'X_umap' in x])[0].split('_')[:-1])
             adata.obsm['X_umap'] = adata.obs[[f'{umap_key}_1', f'{umap_key}_2']].to_numpy(dtype=float)
@@ -195,9 +195,9 @@ class G4Xoutput:
             directory = 'h_and_e'
 
         if cached:
-            return self._load_image_cached(self.run_base, directory, pattern)
+            return self._load_image_cached(self.data_dir, directory, pattern)
         else:
-            return self._load_image(self.run_base, directory, pattern)
+            return self._load_image(self.data_dir, directory, pattern)
 
     def load_protein_image(self, protein: str, thumbnail: bool = False, cached: bool = False) -> np.ndarray:
         return self.load_image_by_type('protein', thumbnail=thumbnail, protein=protein, cached=cached)
@@ -212,7 +212,7 @@ class G4Xoutput:
         return self.load_image_by_type('eosin', thumbnail=thumbnail, cached=cached)
 
     def load_segmentation(self, expanded: bool = True) -> np.ndarray:
-        arr = np.load(self.run_base / 'segmentation' / 'segmentation_mask.npz')
+        arr = np.load(self.segmentation_path)
         if expanded:
             return arr['nuclei_exp']
         else:
@@ -245,7 +245,7 @@ class G4Xoutput:
         if subdir is None:
             subdir = ''
 
-        list_path = self.run_base / subdir
+        list_path = self.data_dir / subdir
         output = os.listdir(list_path)
 
         contents = {'dirs': [], 'files': []}
@@ -259,8 +259,8 @@ class G4Xoutput:
 
     # region internal
     @staticmethod
-    def _load_image_base(run_base: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
-        img_path = next((run_base / parent_directory).glob(pattern), None)
+    def _load_image_base(data_dir: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
+        img_path = next((data_dir / parent_directory).glob(pattern), None)
         if img_path is None:
             raise FileNotFoundError(f'No file matching {pattern} found.')
         if img_path.suffix == '.jp2' or img_path.suffix == '.jpg':
@@ -273,12 +273,12 @@ class G4Xoutput:
 
     @staticmethod
     @lru_cache(maxsize=None)
-    def _load_image_cached(run_base: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
-        return G4Xoutput._load_image_base(run_base, parent_directory, pattern)
+    def _load_image_cached(data_dir: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
+        return G4Xoutput._load_image_base(data_dir, parent_directory, pattern)
 
     @staticmethod
-    def _load_image(run_base: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
-        return G4Xoutput._load_image_base(run_base, parent_directory, pattern)
+    def _load_image(data_dir: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
+        return G4Xoutput._load_image_base(data_dir, parent_directory, pattern)
 
     def _load_table(
         self, file_path: str | Path, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None

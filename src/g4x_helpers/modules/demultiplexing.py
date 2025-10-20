@@ -128,7 +128,7 @@ def load_manifest(file_path: str | Path) -> tuple[pl.DataFrame, dict]:
     return manifest, probe_dict
 
 
-def update_metadata_and_tx_file(g4x_out: 'G4Xoutput', manifest, out_dir):
+def update_metadata_and_tx_file(g4x_obj: 'G4Xoutput', manifest, out_dir):
     ## update metadata and transcript panel file
     shutil.copy(manifest, out_dir / 'transcript_panel.csv')
 
@@ -142,17 +142,17 @@ def update_metadata_and_tx_file(g4x_out: 'G4Xoutput', manifest, out_dir):
     with open(out_dir / 'run_meta.json', 'w') as f:
         _ = json.dump(meta, f)
     meta = {'run_metadata': meta}
-    (out_dir / 'g4x_viewer' / f'{g4x_out.sample_id}_run_metadata.json').unlink()
+    (out_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_run_metadata.json').unlink()
 
-    with open(out_dir / 'g4x_viewer' / f'{g4x_out.sample_id}_run_metadata.json', 'w') as f:
+    with open(out_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_run_metadata.json', 'w') as f:
         _ = json.dump(meta, f)
 
 
-def batched_demuxing(g4x_out: 'G4Xoutput', manifest, probe_dict, batch_dir, batch_size):
+def batched_demuxing(g4x_obj: 'G4Xoutput', manifest, probe_dict, batch_dir, batch_size):
     seq_reads = manifest['read'].unique().to_list()
     seq_reads = [int(x.split('_')[-1]) if isinstance(x, str) else x for x in seq_reads]
 
-    num_features = pl.scan_parquet(g4x_out.feature_table_path).select(pl.len()).collect().item()
+    num_features = pl.scan_parquet(g4x_obj.feature_table_path).select(pl.len()).collect().item()
     num_expected_batches = math.ceil(num_features / batch_size)
     cols_to_select = [
         'x_coord_shift',
@@ -166,7 +166,7 @@ def batched_demuxing(g4x_out: 'G4Xoutput', manifest, probe_dict, batch_dir, batc
         'TXUID',
     ]
     for i, feature_batch in tqdm(
-        enumerate(g4x_out.stream_features(batch_size, cols_to_select)),
+        enumerate(g4x_obj.stream_features(batch_size, cols_to_select)),
         total=num_expected_batches,
         desc='Demuxing transcripts',
         position=0,

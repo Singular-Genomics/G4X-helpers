@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 from pathlib import Path
 
 import pytest
@@ -10,7 +9,7 @@ from click.testing import CliRunner
 _SAMPLE_DIR_ENV = 'G4X_HELPERS_TEST_SAMPLE_DIR'
 
 _DEFAULT_SAMPLE_DIRS = [
-    Path('/mnt/scratch/users/floraths/projects/sample_cropper/cropped/A01_crop'),
+    Path(os.getcwd()).parent / 'test_sample' / 'A01_crop',
 ]
 
 

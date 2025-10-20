@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 @workflow
 def intersect_segmentation(
-    g4x_out: 'G4Xoutput',
+    g4x_obj: 'G4Xoutput',
     labels: np.ndarray | GeoDataFrame,
     out_dir: Path,
     *,
@@ -24,7 +24,7 @@ def intersect_segmentation(
 ) -> None:
     logger.info(f'Using provided output directory: {out_dir}')
 
-    signal_list = ['nuclear', 'eosin'] + g4x_out.proteins
+    signal_list = ['nuclear', 'eosin'] + g4x_obj.proteins
 
     if exclude_channels is not None:
         logger.info(f'Not processing channels: {", ".join(exclude_channels)}')
@@ -37,18 +37,18 @@ def intersect_segmentation(
 
     if isinstance(labels, GeoDataFrame):
         logger.info('Rasterizing provided GeoDataFrame.')
-        mask = seg.rasterize_polygons(gdf=labels, target_shape=g4x_out.shape)
+        mask = seg.rasterize_polygons(gdf=labels, target_shape=g4x_obj.shape)
     else:
         mask = labels
 
     logger.info('Extracting mask properties.')
-    segmentation_props = seg.get_mask_properties(g4x_out, mask)
+    segmentation_props = seg.get_mask_properties(g4x_obj, mask)
 
     logger.info('Assigning transcripts to mask labels.')
-    reads_new_labels = seg.assign_tx_to_mask_labels(g4x_out, mask)
+    reads_new_labels = seg.assign_tx_to_mask_labels(g4x_obj, mask)
 
     logger.info('Extracting protein signal.')
-    cell_by_protein = seg.extract_image_signals(g4x_out, mask, signal_list=signal_list)
+    cell_by_protein = seg.extract_image_signals(g4x_obj, mask, signal_list=signal_list)
 
     logger.info('Building output data structures.')
     cell_metadata = seg._make_cell_metadata(segmentation_props, cell_by_protein)
@@ -57,7 +57,7 @@ def intersect_segmentation(
 
     logger.info(f'Saving output files to {out_dir}')
 
-    outfile = utils.create_custom_out(out_dir, 'segmentation', 'segmentation_mask_updated.npz')
+    outfile = utils.create_custom_out(out_dir, 'segmentation', 'segmentation_mask.npz')
     logger.debug(f'segmentation mask --> {outfile}')
     np.savez(outfile, cell_labels=mask)
 
