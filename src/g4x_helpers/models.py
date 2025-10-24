@@ -6,14 +6,13 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-import anndata as ad
 import glymur
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import polars as pl
-import scanpy as sc
 import tifffile
+from anndata import AnnData, read_h5ad
 
 from . import utils
 
@@ -122,6 +121,10 @@ class G4Xoutput:
     def segmentation_path(self) -> Path:
         return self.data_dir / 'segmentation' / 'segmentation_mask.npz'
 
+    @property
+    def feature_mtx_path(self) -> Path:
+        return self.data_dir / 'single_cell_data' / 'feature_matrix.h5'
+
     def set_meta_attrs(self):
         static_attrs = [
             'platform',
@@ -141,8 +144,8 @@ class G4Xoutput:
         self.shape = utils.npzGetShape(self.segmentation_path, 'nuclei')
 
     # region methods
-    def load_adata(self, *, remove_nontargeting: bool = True, load_clustering: bool = True) -> ad.AnnData:
-        adata = sc.read_h5ad(self.data_dir / 'single_cell_data' / 'feature_matrix.h5')
+    def load_adata(self, *, remove_nontargeting: bool = True, load_clustering: bool = True) -> AnnData:
+        adata = read_h5ad(self.feature_mtx_path)
 
         adata.obs_names = adata.obs['cell_id']
         adata.var_names = adata.var['gene_id']
