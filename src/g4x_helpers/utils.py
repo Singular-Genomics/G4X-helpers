@@ -9,14 +9,8 @@ import traceback
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-import glymur
-import numpy as np
 import rich_click as click
-
-if TYPE_CHECKING:
-    from .models import G4Xoutput
 
 DEFAULT_THREADS = max(1, (os.cpu_count() // 2 or 4))
 
@@ -64,6 +58,8 @@ def _fail_message(func_name, e, trace_back=False):
 
 
 def initialize_sample(data_dir: str, sample_id: str | None, n_threads: int = DEFAULT_THREADS) -> None:
+    import glymur
+
     from .models import G4Xoutput
 
     glymur.set_option('lib.num_threads', n_threads)
@@ -92,6 +88,8 @@ def npzGetShape(npz, key):
 
     Reference: http://bit.ly/2qsSxy8
     """
+    import numpy as np
+
     with zipfile.ZipFile(npz) as archive:
         name = '{}.npy'.format(key)
         if name in archive.namelist():
@@ -251,7 +249,7 @@ def print_k_v(item, value, gap=2):
     click.secho(f'{value}', fg='blue', bold=True)
 
 
-def symlink_original_files(g4x_obj: 'G4Xoutput', out_dir: Path | str) -> None:
+def symlink_original_files(g4x_obj, out_dir: Path | str) -> None:
     ignore_file_list = ['clustering_umap.csv.gz', 'dgex.csv.gz', 'transcript_panel.csv']
     data_dir = Path(g4x_obj.data_dir).resolve()
 

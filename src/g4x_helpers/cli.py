@@ -1,13 +1,9 @@
-# import time as _time
-# _CLI_T0 = _time.perf_counter()
-
 import inspect
 import textwrap
 
 import rich_click as click
 
 from . import __version__, utils
-from . import main_features as main
 
 # click.rich_click.THEME = 'modern'
 click.rich_click.MAX_WIDTH = 100
@@ -123,9 +119,6 @@ TARVW_HELP = (
 @click.pass_context
 # @click.option('-v', '--verbose', count=True, help="Increase verbosity")
 def cli(ctx, g4x_data, out_dir, sample_id, threads, verbose, version):
-    # startup_ms = (_time.perf_counter() - _CLI_T0) * 1000
-    # click.secho(f'[startup] CLI initialized in {startup_ms:.1f} ms', dim=True)
-
     if version:
         click.echo(f'g4x-helpers version: {__version__}')
 
@@ -182,9 +175,11 @@ def cli(ctx, g4x_data, out_dir, sample_id, threads, verbose, version):
     help='Key/column in npz/geojson where labels should be taken from (optional)',
 )
 @click.pass_context
-def resegment(ctx, cell_labels, labels_key):
+def cli_resegment(ctx, cell_labels, labels_key):
+    from .main_features import resegment
+
     try:
-        main.resegment(
+        resegment(
             g4x_obj=ctx.obj['g4x_obj'],
             out_dir=ctx.obj['out_dir'],
             cell_labels=cell_labels,
@@ -215,9 +210,11 @@ def resegment(ctx, cell_labels, labels_key):
     help='Number of transcripts to process per batch.',
 )
 @click.pass_context
-def redemux(ctx, manifest, batch_size):
+def cli_redemux(ctx, manifest, batch_size):
+    from .main_features import redemux
+
     try:
-        main.redemux(
+        redemux(
             g4x_obj=ctx.obj['g4x_obj'],
             out_dir=ctx.obj['out_dir'],
             manifest=manifest,
@@ -264,9 +261,11 @@ def redemux(ctx, manifest, batch_size):
     help='Column name in metadata containing embedding. Parser will look for {emb_key}_1 and {emb_key}_2. If not provided, skips updating embedding.',
 )
 @click.pass_context
-def update_bin(ctx, metadata, cellid_key, cluster_key, cluster_color_key, emb_key):
+def cli_update_bin(ctx, metadata, cellid_key, cluster_key, cluster_color_key, emb_key):
+    from .main_features import update_bin
+
     try:
-        main.update_bin(
+        update_bin(
             g4x_obj=ctx.obj['g4x_obj'],
             out_dir=ctx.obj['out_dir'],
             metadata=metadata,
@@ -285,9 +284,11 @@ def update_bin(ctx, metadata, cellid_key, cluster_key, cluster_color_key, emb_ke
 # region new_bin
 @cli.command(name='new_bin', help=NWBIN_HELP)
 @click.pass_context
-def new_bin(ctx):
+def cli_new_bin(ctx):
+    from .main_features import new_bin
+
     try:
-        main.new_bin(
+        new_bin(
             g4x_obj=ctx.obj['g4x_obj'],  #
             out_dir=ctx.obj['out_dir'],
             n_threads=ctx.obj['threads'],
@@ -308,9 +309,11 @@ def new_bin(ctx):
     help='(optional) Path to G4X-viewer folder. If set, will tar specified folder instead of the one supplied by G4X_DIR.',
 )
 @click.pass_context
-def tar_viewer(ctx, viewer_dir):
+def cli_tar_viewer(ctx, viewer_dir):
+    from .main_features import tar_viewer
+
     try:
-        main.tar_viewer(
+        tar_viewer(
             g4x_obj=ctx.obj['g4x_obj'],  #
             out_dir=ctx.obj['out_dir'],
             viewer_dir=viewer_dir,
