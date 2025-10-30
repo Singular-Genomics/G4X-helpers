@@ -7,12 +7,12 @@ from pathlib import Path
 from typing import Literal
 
 import glymur
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import polars as pl
 import tifffile
 from anndata import AnnData, read_h5ad
+from matplotlib.pyplot import imread
 
 from . import utils
 
@@ -269,7 +269,7 @@ class G4Xoutput:
         if img_path.suffix == '.jp2' or img_path.suffix == '.jpg':
             img = glymur.Jp2k(img_path)[:]
         elif img_path.suffix == '.png':
-            img = plt.imread(img_path)
+            img = imread(img_path)
         else:
             img = tifffile.imread(img_path)
         return img

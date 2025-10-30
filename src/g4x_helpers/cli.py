@@ -1,7 +1,10 @@
 import inspect
 import textwrap
+import time
+from contextlib import contextmanager
 
 import rich_click as click
+from rich.console import Console
 
 from . import __version__, utils
 
@@ -65,6 +68,15 @@ TARVW_HELP = (
 )
 
 
+_console = Console()
+
+
+@contextmanager
+def _spinner(message: str):
+    with _console.status(message, spinner='dots', spinner_style='red'):
+        yield
+
+
 # region cli
 @click.group(
     context_settings=dict(help_option_names=['-h', '--help']),
@@ -74,14 +86,14 @@ TARVW_HELP = (
 )
 @click.argument(
     'g4x-data',  #
-    required=True,
+    required=False,
     type=click.Path(exists=True, file_okay=False),
     help='Directory containing G4X-data for a single sample',
     # panel='input',
 )
 @click.argument(
     'out-dir',
-    required=True,
+    required=False,
     type=click.Path(exists=True, file_okay=False, dir_okay=True, writable=True),
     help='Output directory used by subcommands',
     # panel='options [input/output]',
@@ -132,7 +144,11 @@ def cli(ctx, g4x_data, out_dir, sample_id, threads, verbose, version):
         ctx.obj['version'] = __version__
 
         if g4x_data:
-            g4x_obj = utils.initialize_sample(data_dir=g4x_data, sample_id=sample_id, n_threads=threads)
+            msg = f'loading G4X data from [blue]{g4x_data}[/blue]'
+            with _spinner(msg):
+                time.sleep(1)
+                g4x_obj = utils.initialize_sample(data_dir=g4x_data, sample_id=sample_id, n_threads=threads)
+
             ctx.obj['g4x_obj'] = g4x_obj
 
         # No subcommand given but data_dir is set → show sample info
@@ -176,9 +192,11 @@ def cli(ctx, g4x_data, out_dir, sample_id, threads, verbose, version):
 )
 @click.pass_context
 def cli_resegment(ctx, cell_labels, labels_key):
-    from .main_features import resegment
-
+    func_name = inspect.currentframe().f_code.co_name.removeprefix('cli_')
     try:
+        with _spinner(f'Initializing {func_name} process...'):
+            from .main_features import resegment
+
         resegment(
             g4x_obj=ctx.obj['g4x_obj'],
             out_dir=ctx.obj['out_dir'],
@@ -188,7 +206,6 @@ def cli_resegment(ctx, cell_labels, labels_key):
             verbose=ctx.obj['verbose'],
         )
     except Exception as e:
-        func_name = inspect.currentframe().f_code.co_name
         utils._fail_message(func_name, e, trace_back=False)
 
 
@@ -211,9 +228,11 @@ def cli_resegment(ctx, cell_labels, labels_key):
 )
 @click.pass_context
 def cli_redemux(ctx, manifest, batch_size):
-    from .main_features import redemux
-
+    func_name = inspect.currentframe().f_code.co_name.removeprefix('cli_')
     try:
+        with _spinner(f'Initializing {func_name} process...'):
+            from .main_features import redemux
+
         redemux(
             g4x_obj=ctx.obj['g4x_obj'],
             out_dir=ctx.obj['out_dir'],
@@ -223,7 +242,6 @@ def cli_redemux(ctx, manifest, batch_size):
             verbose=ctx.obj['verbose'],
         )
     except Exception as e:
-        func_name = inspect.currentframe().f_code.co_name
         utils._fail_message(func_name, e)
 
 
@@ -262,9 +280,11 @@ def cli_redemux(ctx, manifest, batch_size):
 )
 @click.pass_context
 def cli_update_bin(ctx, metadata, cellid_key, cluster_key, cluster_color_key, emb_key):
-    from .main_features import update_bin
-
+    func_name = inspect.currentframe().f_code.co_name.removeprefix('cli_')
     try:
+        with _spinner(f'Initializing {func_name} process...'):
+            from .main_features import update_bin
+
         update_bin(
             g4x_obj=ctx.obj['g4x_obj'],
             out_dir=ctx.obj['out_dir'],
@@ -276,7 +296,6 @@ def cli_update_bin(ctx, metadata, cellid_key, cluster_key, cluster_color_key, em
             verbose=ctx.obj['verbose'],
         )
     except Exception as e:
-        func_name = inspect.currentframe().f_code.co_name
         utils._fail_message(func_name, e)
 
 
@@ -285,9 +304,11 @@ def cli_update_bin(ctx, metadata, cellid_key, cluster_key, cluster_color_key, em
 @cli.command(name='new_bin', help=NWBIN_HELP)
 @click.pass_context
 def cli_new_bin(ctx):
-    from .main_features import new_bin
-
+    func_name = inspect.currentframe().f_code.co_name.removeprefix('cli_')
     try:
+        with _spinner(f'Initializing {func_name} process...'):
+            from .main_features import new_bin
+
         new_bin(
             g4x_obj=ctx.obj['g4x_obj'],  #
             out_dir=ctx.obj['out_dir'],
@@ -295,7 +316,6 @@ def cli_new_bin(ctx):
             verbose=ctx.obj['verbose'],
         )
     except Exception as e:
-        func_name = inspect.currentframe().f_code.co_name
         utils._fail_message(func_name, e)
 
 
@@ -310,9 +330,11 @@ def cli_new_bin(ctx):
 )
 @click.pass_context
 def cli_tar_viewer(ctx, viewer_dir):
-    from .main_features import tar_viewer
-
+    func_name = inspect.currentframe().f_code.co_name.removeprefix('cli_')
     try:
+        with _spinner(f'Initializing {func_name} process...'):
+            from .main_features import tar_viewer
+
         tar_viewer(
             g4x_obj=ctx.obj['g4x_obj'],  #
             out_dir=ctx.obj['out_dir'],
@@ -320,7 +342,6 @@ def cli_tar_viewer(ctx, viewer_dir):
             verbose=ctx.obj['verbose'],
         )
     except Exception as e:
-        func_name = inspect.currentframe().f_code.co_name
         utils._fail_message(func_name, e)
 
 
