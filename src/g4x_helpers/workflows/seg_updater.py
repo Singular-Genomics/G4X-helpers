@@ -3,9 +3,11 @@ from pathlib import Path
 
 import pandas as pd
 from tqdm import tqdm
+from typing import Literal
 
 from ..modules import bin_generation as bg
-from ..modules.g4x_viewer import CellMasksSchema_pb2 as CellMasksSchema
+from ..modules.g4x_viewer.v2 import CellMasksSchema_pb2 as CellMasksSchema_v2
+from ..modules.g4x_viewer.v3 import CellMasksSchema_pb2 as CellMasksSchema_v3
 from .decorator import workflow
 
 
@@ -14,6 +16,7 @@ def seg_updater(
     bin_file: Path,
     metadata_file: Path,
     out_path: Path,
+    bin_version: Literal['v2','v3'],
     *,
     cellid_key: str | None = None,
     cluster_key: str | None = None,
@@ -30,7 +33,10 @@ def seg_updater(
     logger.info(f'Loading {bin_file}.')
     with open(bin_file, 'rb') as f:
         data = f.read()
-    cell_masks = CellMasksSchema.CellMasks()
+    if bin_version == 'v2':
+        cell_masks = CellMasksSchema_v2.CellMasks()
+    else:
+        cell_masks = CellMasksSchema_v3.CellMasks()
     cell_masks.ParseFromString(data)
 
     ## load the metadata
@@ -92,29 +98,32 @@ def seg_updater(
 
     ## Do the actual updating
     logger.info('Updating cells.')
-    for cell in tqdm(cell_masks.cellMasks, desc='Updating cell data'):
-        current_cellid = cell.cellId
-        if current_cellid in metadata.index:
-            if update_cluster:
-                cell.clusterId = str(metadata.loc[current_cellid, cluster_key])
-            if update_cluster_color:
-                # clear out the existing color entries:
-                cell.ClearField('color')
-                cell.color.extend(metadata.loc[current_cellid, cluster_color_key])
-            if update_emb:
-                cell.umapValues.umapX = metadata.loc[current_cellid, f'{emb_key}_1']
-                cell.umapValues.umapY = metadata.loc[current_cellid, f'{emb_key}_2']
-        else:
-            logger.debug(f'{current_cellid} not found in metadata, not updating data for this cell.')
+    if bin_version == 'v2':
+        for cell in tqdm(cell_masks.cellMasks, desc='Updating cell data'):
+            current_cellid = cell.cellId
+            if current_cellid in metadata.index:
+                if update_cluster:
+                    cell.clusterId = str(metadata.loc[current_cellid, cluster_key])
+                if update_cluster_color:
+                    # clear out the existing color entries:
+                    cell.ClearField('color')
+                    cell.color.extend(metadata.loc[current_cellid, cluster_color_key])
+                if update_emb:
+                    cell.umapValues.umapX = metadata.loc[current_cellid, f'{emb_key}_1']
+                    cell.umapValues.umapY = metadata.loc[current_cellid, f'{emb_key}_2']
+            else:
+                logger.debug(f'{current_cellid} not found in metadata, not updating data for this cell.')
 
-    if update_cluster_color:
-        # clear the entire colormap list:
-        cell_masks.ClearField('colormap')
-        for cluster_id, color in cluster_palette.items():
-            entry = CellMasksSchema.ColormapEntry()
-            entry.clusterId = cluster_id
-            entry.color.extend(color)
-            cell_masks.colormap.append(entry)
+        if update_cluster_color:
+            # clear the entire colormap list:
+            cell_masks.ClearField('colormap')
+            for cluster_id, color in cluster_palette.items():
+                entry = CellMasksSchema_v2.ColormapEntry()
+                entry.clusterId = cluster_id
+                entry.color.extend(color)
+                cell_masks.colormap.append(entry)
+    else:
+        
 
     ## Write to file
     logger.debug(f'Writing updated bin file --> {out_path}')
