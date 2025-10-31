@@ -67,7 +67,7 @@ def save_configuration_file(
 
 
 def _process_x(tileOutputDirPath: Path, y_num_of_tiles: int, scaling_factor: int) -> None:
-    from ..modules.g4x_viewer import MetadataSchema_pb2 as MetadataSchema
+    from ..modules.g4x_viewer.v3 import MetadataSchema_pb2 as MetadataSchema
 
     for tile_y_index in range(y_num_of_tiles):
         outputTileData = MetadataSchema.TileData()
@@ -80,10 +80,9 @@ def _process_x(tileOutputDirPath: Path, y_num_of_tiles: int, scaling_factor: int
         )
         # Iterate over rows directly
         ## this can potentially be done lazily with this PR: https://github.com/pola-rs/polars/pull/23980
-        for position, color, gene, cell_id in df_current.iter_rows():
+        for position, gene, cell_id in df_current.iter_rows():
             outputPointData = outputTileData.pointsData.add()
             _ = outputPointData.position.extend(position)
-            _ = outputPointData.color.extend(color)
             outputPointData.geneName = gene
             outputPointData.cellId = str(cell_id)
 
