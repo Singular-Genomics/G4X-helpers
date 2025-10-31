@@ -58,7 +58,6 @@ def tx_converter(
     df = df.with_columns(
         (pl.col('x_pixel_coordinate') / MIN_TILE_SIZE).cast(pl.Int32).alias('tile_y_coord'),
         (pl.col('y_pixel_coordinate') / MIN_TILE_SIZE).cast(pl.Int32).alias('tile_x_coord'),
-        pl.col(tx_column).replace_strict(palette, default=[127, 127, 127]).alias('color'),
         pl.concat_list(['x_pixel_coordinate', 'y_pixel_coordinate']).alias('position'),
     )
 
@@ -105,7 +104,7 @@ def tx_converter(
                 df.filter(
                     ((pl.col('tile_x_coord') // scaling_factor) == tile_x_index),
                 )
-                .select(['position', 'color', tx_column, 'cell_id', 'tile_y_coord'])
+                .select(['position', tx_column, 'cell_id', 'tile_y_coord'])
                 .collect()
                 .sample(fraction=sampling_factor)
                 .write_parquet(tileOutputDirPath / 'tmp.parquet')
