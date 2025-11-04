@@ -1,16 +1,13 @@
 import logging
 import multiprocessing
-import random
 import warnings
 from pathlib import Path
 
 import anndata as ad
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix
 from skimage.morphology import disk, erosion
-from tqdm import tqdm
 from operator import itemgetter
 from typing import Literal
 
@@ -21,13 +18,14 @@ from .decorator import workflow
 
 DEFAULT_COLOR = [int(191), int(191), int(191)]
 
+
 @workflow
 def seg_converter(
     adata: ad.AnnData,
     seg_mask: np.ndarray,
     out_path: str | Path,
     *,
-    schema_version: Literal["v2", "v3"] = "v3",
+    bin_version: Literal['v2', 'v3'] = 'v3',
     metadata: str | Path | None = None,
     cluster_key: str | None = None,
     emb_key: str | None = None,
@@ -96,19 +94,19 @@ def seg_converter(
     centroid_y = obs_df['cell_x'].tolist()
     centroid_x = obs_df['cell_y'].tolist()
 
-    obs_df["total_counts"] = obs_df["total_counts"].astype(int)
-    obs_df["n_genes_by_counts"] = obs_df["n_genes_by_counts"].astype(int)
+    obs_df['total_counts'] = obs_df['total_counts'].astype(int)
+    obs_df['n_genes_by_counts'] = obs_df['n_genes_by_counts'].astype(int)
     if 'area' in obs_df.columns:
-        obs_df["area"] = obs_df["area"].astype(int)
+        obs_df['area'] = obs_df['area'].astype(int)
     else:
-        obs_df["area"] = obs_df["nuclei_expanded_area_um"].astype(int)
+        obs_df['area'] = obs_df['nuclei_expanded_area_um'].astype(int)
 
     if emb_key:
-        obs_df["umap_0"] = obs_df[f'{emb_key}_1']
-        obs_df["umap_1"] = obs_df[f'{emb_key}_2']
+        obs_df['umap_0'] = obs_df[f'{emb_key}_1']
+        obs_df['umap_1'] = obs_df[f'{emb_key}_2']
     else:
-        obs_df["umap_0"] = 0
-        obs_df["umap_1"] = 0
+        obs_df['umap_0'] = 0
+        obs_df['umap_1'] = 0
 
     if protein_list:
         protein_col_pos = []
@@ -129,21 +127,21 @@ def seg_converter(
         polygons = pool.starmap(bg.refine_polygon, pq_args)
 
     ## do conversion
-    if schema_version == "v2":
+    if bin_version == 'v2':
         outputCellSegmentation = CellMasksSchema_v2.CellMasks()
     else:
         outputCellSegmentation = CellMasksSchema_v3.CellMasks()
         outputCellSegmentation.metadata.geneNames.extend(gene_names)
         if protein_list:
-            protein_names = [x.split("_intensity")[0] for x in protein_list]
+            protein_names = [x.split('_intensity')[0] for x in protein_list]
             outputCellSegmentation.metadata.proteinNames.extend(protein_names)
 
     ## add the cluster color map
     if clusters_available:
-        obs_df["cluster_id"] = obs_df[cluster_key].astype(str)
-        cluster_palette = bg.generate_cluster_palette(obs_df["cluster_id"].tolist())
+        obs_df['cluster_id'] = obs_df[cluster_key].astype(str)
+        cluster_palette = bg.generate_cluster_palette(obs_df['cluster_id'].tolist())
         for cluster_id, color in cluster_palette.items():
-            if schema_version == "v2":
+            if bin_version == 'v2':
                 entry = CellMasksSchema_v2.ColormapEntry()
             else:
                 entry = CellMasksSchema_v3.ColormapEntry()
@@ -151,11 +149,11 @@ def seg_converter(
             entry.color.extend(color)
             outputCellSegmentation.colormap.append(entry)
     else:
-        if schema_version == "v2":
+        if bin_version == 'v2':
             entry = CellMasksSchema_v2.ColormapEntry()
         else:
             entry = CellMasksSchema_v3.ColormapEntry()
-        entry.clusterId = "-1"
+        entry.clusterId = '-1'
         entry.color.extend(DEFAULT_COLOR)
         outputCellSegmentation.colormap.append(entry)
     ## add the individual cells
