@@ -15,7 +15,7 @@ _sym_db = _symbol_database.Default()
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b'\n\x17TranscriptsSchema.proto"C\n\tPointData\x12\x14\n\x08position\x18\x01 \x03(\x01\x42\x02\x10\x01\x12\x10\n\x08geneName\x18\x03 \x01(\t\x12\x0e\n\x06\x63\x65llId\x18\x04 \x01(\t"B\n\x08TileData\x12\x1e\n\npointsData\x18\x01 \x03(\x0b\x32\n.PointData\x12\x16\n\x0enumberOfPoints\x18\x02 \x01(\r",\n\nColumnData\x12\x1e\n\x0b\x63olumnTiles\x18\x01 \x03(\x0b\x32\t.TileData".\n\tLevelData\x12!\n\x0clevelColumns\x18\x01 \x03(\x0b\x32\x0b.ColumnData"%\n\x08Metadata\x12\x19\n\x05level\x18\x01 \x03(\x0b\x32\n.LevelDatab\x06proto3'
+    b'\n\x17TranscriptsSchema.proto"C\n\tPointData\x12\x14\n\x08position\x18\x01 \x03(\x01\x42\x02\x10\x01\x12\x10\n\x08geneName\x18\x02 \x01(\t\x12\x0e\n\x06\x63\x65llId\x18\x03 \x01(\t"B\n\x08TileData\x12\x1e\n\npointsData\x18\x01 \x03(\x0b\x32\n.PointData\x12\x16\n\x0enumberOfPoints\x18\x02 \x01(\r",\n\nColumnData\x12\x1e\n\x0b\x63olumnTiles\x18\x01 \x03(\x0b\x32\t.TileData".\n\tLevelData\x12!\n\x0clevelColumns\x18\x01 \x03(\x0b\x32\x0b.ColumnData"(\n\x0bTranscripts\x12\x19\n\x05level\x18\x01 \x03(\x0b\x32\n.LevelDatab\x06proto3'
 )
 
 _globals = globals()
@@ -33,6 +33,6 @@ if not _descriptor._USE_C_DESCRIPTORS:
     _globals["_COLUMNDATA"]._serialized_end = 208
     _globals["_LEVELDATA"]._serialized_start = 210
     _globals["_LEVELDATA"]._serialized_end = 256
-    _globals["_METADATA"]._serialized_start = 258
-    _globals["_METADATA"]._serialized_end = 295
+    _globals["_TRANSCRIPTS"]._serialized_start = 258
+    _globals["_TRANSCRIPTS"]._serialized_end = 298
 # @@protoc_insertion_point(module_scope)
