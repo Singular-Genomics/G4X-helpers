@@ -168,14 +168,19 @@ def seg_converter(
         outputMaskData.clusterId = row.cluster_id
         outputMaskData.umapValues.umapX = row.umap_0
         outputMaskData.umapValues.umapY = row.umap_1
-        start = gex.indptr[i]
-        end = gex.indptr[i + 1]
-        indices = gex.indices[start:end]
-        values = gex.data[start:end]
-        _ = outputMaskData.nonzeroGeneIndices.extend(indices.tolist())
-        _ = outputMaskData.nonzeroGeneValues.extend(values.astype(int).tolist())
+        if bin_version == 'v3':
+            start = gex.indptr[i]
+            end = gex.indptr[i + 1]
+            indices = gex.indices[start:end]
+            values = gex.data[start:end]
+            _ = outputMaskData.nonzeroGeneIndices.extend(indices.tolist())
+            _ = outputMaskData.nonzeroGeneValues.extend(values.astype(int).tolist())
         if protein_list:
-            _ = outputMaskData.proteinValues.extend(get_prot_vals(row))
+            if bin_version == 'v2':
+                prot_vals = {prot: val for prot, val in zip(protein_list, get_prot_vals(row))}
+                outputMaskData.proteins.update(prot_vals)
+            else:
+                _ = outputMaskData.proteinValues.extend(get_prot_vals(row))
 
     ## write to file
     with open(out_path, 'wb') as file:
