@@ -17,7 +17,6 @@ def tar_viewer(
     *,
     logger: logging.Logger,
 ):
-
     logger.info('Checking files.')
     viewer_dir = Path(viewer_dir)
     assert viewer_dir.exists(), f'{viewer_dir} does not appear to exist.'
@@ -102,7 +101,6 @@ def tar_viewer(
             'transcript_src': tx_path.name,
         }
 
-        # TODO unclear what this is used for
         with open(viewer_dir / 'dataset.config.json', 'w') as f:
             json.dump(metadata, f)
 
