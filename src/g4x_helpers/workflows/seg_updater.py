@@ -16,7 +16,7 @@ def seg_updater(
     bin_file: Path,
     metadata_file: Path,
     out_path: Path,
-    bin_version: Literal['v2','v3'],
+    bin_version: Literal['v2', 'v3'],
     *,
     cellid_key: str | None = None,
     cluster_key: str | None = None,
@@ -98,32 +98,32 @@ def seg_updater(
 
     ## Do the actual updating
     logger.info('Updating cells.')
-    if bin_version == 'v2':
-        for cell in tqdm(cell_masks.cellMasks, desc='Updating cell data'):
-            current_cellid = cell.cellId
-            if current_cellid in metadata.index:
-                if update_cluster:
-                    cell.clusterId = str(metadata.loc[current_cellid, cluster_key])
-                if update_cluster_color:
-                    # clear out the existing color entries:
-                    cell.ClearField('color')
-                    cell.color.extend(metadata.loc[current_cellid, cluster_color_key])
-                if update_emb:
-                    cell.umapValues.umapX = metadata.loc[current_cellid, f'{emb_key}_1']
-                    cell.umapValues.umapY = metadata.loc[current_cellid, f'{emb_key}_2']
-            else:
-                logger.debug(f'{current_cellid} not found in metadata, not updating data for this cell.')
+    for cell in tqdm(cell_masks.cellMasks, desc='Updating cell data'):
+        current_cellid = cell.cellId
+        if current_cellid in metadata.index:
+            if update_cluster:
+                cell.clusterId = str(metadata.loc[current_cellid, cluster_key])
+            if update_cluster_color and bin_version == 'v2':
+                # clear out the existing color entries:
+                cell.ClearField('color')
+                cell.color.extend(metadata.loc[current_cellid, cluster_color_key])
+            if update_emb:
+                cell.umapValues.umapX = metadata.loc[current_cellid, f'{emb_key}_1']
+                cell.umapValues.umapY = metadata.loc[current_cellid, f'{emb_key}_2']
+        else:
+            logger.debug(f'{current_cellid} not found in metadata, not updating data for this cell.')
 
-        if update_cluster_color:
-            # clear the entire colormap list:
-            cell_masks.ClearField('colormap')
-            for cluster_id, color in cluster_palette.items():
+    # clear the entire colormap list:
+    if update_cluster_color:
+        cell_masks.ClearField('colormap')
+        for cluster_id, color in cluster_palette.items():
+            if bin_version == 'v2':
                 entry = CellMasksSchema_v2.ColormapEntry()
-                entry.clusterId = cluster_id
-                entry.color.extend(color)
-                cell_masks.colormap.append(entry)
-    else:
-        
+            else:
+                entry = CellMasksSchema_v3.ColormapEntry()
+            entry.clusterId = cluster_id
+            entry.color.extend(color)
+            cell_masks.colormap.append(entry)
 
     ## Write to file
     logger.debug(f'Writing updated bin file --> {out_path}')
