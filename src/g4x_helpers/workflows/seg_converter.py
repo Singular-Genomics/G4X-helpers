@@ -11,11 +11,15 @@ import pandas as pd
 from scipy.sparse import csr_matrix
 from skimage.morphology import disk, erosion
 from tqdm import tqdm
+from operator import itemgetter
+from typing import Literal
 
 from ..modules import bin_generation as bg
-from ..modules.g4x_viewer import CellMasksSchema_pb2 as CellMasksSchema
+from ..modules.g4x_viewer.v2 import CellMasksSchema_pb2 as CellMasksSchema_v2
+from ..modules.g4x_viewer.v3 import CellMasksSchema_pb2 as CellMasksSchema_v3
 from .decorator import workflow
 
+DEFAULT_COLOR = [int(191), int(191), int(191)]
 
 @workflow
 def seg_converter(
@@ -23,6 +27,7 @@ def seg_converter(
     seg_mask: np.ndarray,
     out_path: str | Path,
     *,
+    schema_version: Literal["v2", "v3"] = "v3",
     metadata: str | Path | None = None,
     cluster_key: str | None = None,
     emb_key: str | None = None,
@@ -85,36 +90,32 @@ def seg_converter(
     logger.debug('Adding single-cell metadata.')
     cell_ids = obs_df.index.tolist()
     num_cells = len(cell_ids)
+    adata = adata[cell_ids]
+    gene_names = adata.var_names
+    gex = adata.X
     centroid_y = obs_df['cell_x'].tolist()
     centroid_x = obs_df['cell_y'].tolist()
 
+    obs_df["total_counts"] = obs_df["total_counts"].astype(int)
+    obs_df["n_genes_by_counts"] = obs_df["n_genes_by_counts"].astype(int)
     if 'area' in obs_df.columns:
-        areas = obs_df['area'].tolist()
+        obs_df["area"] = obs_df["area"].astype(int)
     else:
-        areas = obs_df['nuclei_expanded_area'].tolist()
-    total_counts = obs_df['total_counts'].tolist()
-    total_genes = obs_df['n_genes_by_counts'].tolist()
+        obs_df["area"] = obs_df["nuclei_expanded_area_um"].astype(int)
 
-    if clusters_available:
-        clusters = obs_df[cluster_key].tolist()
-        cluster_palette = bg.generate_cluster_palette(clusters)
-        cluster_colors = obs_df[cluster_key].astype(str).map(cluster_palette).tolist()
+    if emb_key:
+        obs_df["umap_0"] = obs_df[f'{emb_key}_1']
+        obs_df["umap_1"] = obs_df[f'{emb_key}_2']
     else:
-        cmap = plt.get_cmap('hsv', 100)
-        clusters = ['-1'] * num_cells
-        cluster_colors = [[int(255 * x) for x in cmap(i % 100)[:3]] for i in range(num_cells)]
-        random.shuffle(cluster_colors)
+        obs_df["umap_0"] = 0
+        obs_df["umap_1"] = 0
 
     if protein_list:
-        prot_vals = list(obs_df[protein_list].to_dict(orient='index').values())
-    else:
-        prot_vals = [{} for _ in range(num_cells)]
-    if emb_key:
-        umap_x = obs_df[f'{emb_key}_1'].to_numpy()
-        umap_y = obs_df[f'{emb_key}_2'].to_numpy()
-    else:
-        umap_x = np.zeros(num_cells)
-        umap_y = np.zeros(num_cells)
+        protein_col_pos = []
+        for prot in protein_list:
+            protein_col_pos.append(int(np.argwhere([x == prot for x in obs_df.columns])) + 1)
+            obs_df[prot] = obs_df[prot].fillna(0).astype(int)
+        get_prot_vals = itemgetter(*protein_col_pos)
 
     ## refine polygons
     logger.debug('Refining polygons.')
@@ -128,67 +129,55 @@ def seg_converter(
         polygons = pool.starmap(bg.refine_polygon, pq_args)
 
     ## do conversion
-    # logger.debug(f"{sample_id}: Converting data to protobuff format...")
-    segmentation_source = {
-        'xs': [[y[0] for y in x] for x in polygons],
-        'ys': [[y[1] for y in x] for x in polygons],
-        'colors': cluster_colors,
-        'cell_id': cell_ids,
-        'area': areas,
-        'centroid_x': centroid_x,
-        'centroid_y': centroid_y,
-        'total_tx': total_counts,
-        'total_genes': total_genes,
-        'cluster_id': clusters,
-        'umap_x': umap_x,
-        'umap_y': umap_y,
-        'protein': prot_vals,
-    }
+    if schema_version == "v2":
+        outputCellSegmentation = CellMasksSchema_v2.CellMasks()
+    else:
+        outputCellSegmentation = CellMasksSchema_v3.CellMasks()
+        outputCellSegmentation.metadata.geneNames.extend(gene_names)
+        if protein_list:
+            protein_names = [x.split("_intensity")[0] for x in protein_list]
+            outputCellSegmentation.metadata.proteinNames.extend(protein_names)
 
-    outputCellSegmentation = CellMasksSchema.CellMasks()
-
-    for index in tqdm(range(len(segmentation_source['cell_id'])), desc='Processing cells'):
-        try:
-            cellPolygonPoints = [
-                coord
-                for pair in zip(segmentation_source['ys'][index], segmentation_source['xs'][index])
-                for coord in pair
-            ]
-            cellPolygonColor = segmentation_source['colors'][index]
-            cellId = segmentation_source['cell_id'][index]
-            cellTotalCounts = segmentation_source['total_tx'][index]
-            cellTotalGenes = segmentation_source['total_genes'][index]
-            cellArea = segmentation_source['area'][index]
-            clusterId = segmentation_source['cluster_id'][index]
-            cellProt = segmentation_source['protein'][index]
-            cellUmapX = segmentation_source['umap_x'][index]
-            cellUmapY = segmentation_source['umap_y'][index]
-        except Exception as e:
-            logger.debug(e)
-            pass
-        outputMaskData = outputCellSegmentation.cellMasks.add()
-        outputMaskData.vertices.extend(cellPolygonPoints + cellPolygonPoints[:2])
-        outputMaskData.color.extend(cellPolygonColor)
-        outputMaskData.cellId = str(cellId)
-        outputMaskData.area = str(cellArea)
-        outputMaskData.totalCounts = str(cellTotalCounts)
-        outputMaskData.totalGenes = str(cellTotalGenes)
-        outputMaskData.clusterId = str(clusterId)
-        outputMaskData.umapValues.umapX = cellUmapX
-        outputMaskData.umapValues.umapY = cellUmapY
-        outputMaskData.proteins.update(cellProt)
-
+    ## add the cluster color map
     if clusters_available:
+        obs_df["cluster_id"] = obs_df[cluster_key].astype(str)
+        cluster_palette = bg.generate_cluster_palette(obs_df["cluster_id"].tolist())
         for cluster_id, color in cluster_palette.items():
-            entry = CellMasksSchema.ColormapEntry()
+            if schema_version == "v2":
+                entry = CellMasksSchema_v2.ColormapEntry()
+            else:
+                entry = CellMasksSchema_v3.ColormapEntry()
             entry.clusterId = cluster_id
             entry.color.extend(color)
             outputCellSegmentation.colormap.append(entry)
     else:
-        entry = CellMasksSchema.ColormapEntry()
-        entry.clusterId = '-1'
-        entry.color.extend([int(31), int(119), int(180)])
+        if schema_version == "v2":
+            entry = CellMasksSchema_v2.ColormapEntry()
+        else:
+            entry = CellMasksSchema_v3.ColormapEntry()
+        entry.clusterId = "-1"
+        entry.color.extend(DEFAULT_COLOR)
         outputCellSegmentation.colormap.append(entry)
+    ## add the individual cells
+    for i, row in enumerate(obs_df.itertuples(index=True)):
+        outputMaskData = outputCellSegmentation.cellMasks.add()
+        cellPolygonPoints = [sub_coord for coord in polygons[i] for sub_coord in coord[::-1]]
+        _ = outputMaskData.vertices.extend(cellPolygonPoints + cellPolygonPoints[:2])
+        outputMaskData.cellId = row[0]
+        outputMaskData.area = row.area
+        outputMaskData.totalCounts = row.total_counts
+        outputMaskData.totalGenes = row.n_genes_by_counts
+        outputMaskData.clusterId = row.cluster_id
+        outputMaskData.umapValues.umapX = row.umap_0
+        outputMaskData.umapValues.umapY = row.umap_1
+        start = gex.indptr[i]
+        end = gex.indptr[i + 1]
+        indices = gex.indices[start:end]
+        values = gex.data[start:end]
+        _ = outputMaskData.nonzeroGeneIndices.extend(indices.tolist())
+        _ = outputMaskData.nonzeroGeneValues.extend(values.astype(int).tolist())
+        if protein_list:
+            _ = outputMaskData.proteinValues.extend(get_prot_vals(row))
 
     ## write to file
     with open(out_path, 'wb') as file:
