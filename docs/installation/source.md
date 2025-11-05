@@ -179,13 +179,14 @@ Hints on other systems are provided, but not supported! You can find further det
 ---
 
 To start using G4X-helpers, ensure that you have activated the environment in which the package was installed. 
-If your installation of G4X-helpers was successful, you can call the following commands from any terminal and help statements should be printed:
+If your installation of G4X-helpers was successful, the following commands should print help text:
 
 
-+ `resegment --help`  
-+ `update_bin --help`  
-+ `new_bin --help`  
-+ `tar_viewer --help`
++ `g4x-helpers --help`  
++ `g4x-helpers resegment --help`  
++ `g4x-helpers update_bin --help`  
++ `g4x-helpers new_bin --help`  
++ `g4x-helpers tar_viewer --help`
 
 
 !!!tip

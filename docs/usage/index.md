@@ -39,70 +39,75 @@ Before getting started, you need to ensure that the environment in which you ins
     source .venv/bin/activate
     ```
 
-    Once activated, your shell prompt should change to include the environment name (`g4x_helpers_env` in this case):
+    Once activated, your shell prompt should change to include the environment name (`g4x_helpers` in this case):
     
     ```bash
-    (g4x-helpers_env) $
+    (g4x-helpers) $
     ```
 
     You can further verify that you’re using the correct interpreter:
 
     ```bash
-    (g4x-helpers_env) $ which python
-    /Users/you/miniconda3/envs/g4x-helpers_env/bin/python
+    (g4x-helpers) $ which python
+    /Users/You/G4X-helpers/.venv/bin/python
     ```
 <br>
 
 ### Basic command pattern
 ---
 
-Every command follows standard CLI syntax:
+Every CLI invocation uses the `g4x-helpers` entry point followed by the command you want to run:
 
 ```
-command_name --option_1 VALUE_OPTION_1 --option_2 VALUE_OPTION_2
+g4x-helpers [GLOBAL OPTIONS] <command> --option-1 VALUE --option-2 VALUE
 ```
 
-To use these functions, you will need the contents of a [G4X-output folder](https://docs.singulargenomics.com/g4x_data/g4x_output/) (which is referred to as `run_base`) and in some cases some externally generated files.
+The global options (`--threads`, `--verbose`, `--version`) live on the `g4x-helpers` command itself and should be provided **before** the sub-command. Each command then defines its own required and optional arguments. All workflows assume you have a single-sample [G4X output directory](https://docs.singulargenomics.com/g4x_data/g4x_output/) and, in some cases, additional input files (e.g. manifests or metadata tables).
 
 
-### Example: using `--resegment` from the CLI
+### Example: running `resegment` from the CLI
 
-In the following example we want to apply a custom cell segmentation to our data, which is done via the `--resegment` tool.
+Below we apply a custom cell segmentation to existing data using the `resegment` sub-command.
 
-In the [feature reference](../features/resegment.md) for this command, we can see that there are required and optional arguments.
-We can also call `resegment --help` to see which arguments the tool accepts:
-
-```
-usage: resegment [-h] --run_base RUN_BASE --segmentation_mask SEGMENTATION_MASK [--sample_id SAMPLE_ID] [--out_dir OUT_DIR]
-                [--segmentation_mask_key SEGMENTATION_MASK_KEY] [--threads THREADS] [--verbose VERBOSE]
-
-options:
--h, --help            show this help message and exit
---run_base RUN_BASE   Path to G4X sample output folder
-    ...
+First, inspect the available options:
 
 ```
+$ g4x-helpers resegment --help
 
-In our scenario, we will provide the following values:
+Usage: g4x-helpers [OPTIONS] resegment [OPTIONS]
+
+  Reprocess G4X-output with a new segmentation
+
+Options:
+  -i, --g4x-data PATH      Directory containing G4X-data for a single sample  [required]
+  -s, --sample-id TEXT     Sample ID (used for naming outputs)
+  -o, --output PATH        Output directory used. Will edit G4X-data in-place if not provided.
+  --cell-labels PATH       File containing cell segmentation labels. supported file types: [.npy, .npz, .geojson]
+                           [required]
+  --labels-key TEXT        Key/column in npz/geojson where labels should be taken from (optional)
+  -h, --help               Show this message and exit.
+```
+
+For this run we provide:
 
 | argument | value | type |
 | --- | --- | --- |
-| `--run_base` | /path/to/g4x_output/directory/sample_id | directory |
-| `--segmentation_mask` | /path/to/custom/segmentation/seg_mask.npz | .npz file |
-| `--sample_id` | sample_A01 | string |
-| `--out_dir` | /path/to/resegmentation/output | directory |
+| `--g4x-data` | /path/to/g4x_output/directory/sample_id | directory |
+| `--cell-labels` | /path/to/custom/segmentation/seg_mask.npz | .npz file |
+| `--sample-id` | sample_A01 | string |
+| `--output` | /path/to/resegmentation/output | directory |
 
-The full command to run this operation is:
+The full command is:
 
 ```
-resegment \
-    --run_base /path/to/g4x_output/directory/sample_id \
-    --segmentation_mask /path/to/custom/segmentation/seg_mask.npz \
-    --sample_id sample_A01 \
-    --out_dir /path/to/resegmentation/output 
+g4x-helpers resegment \
+    --g4x-data /path/to/g4x_output/directory/sample_id \
+    --cell-labels /path/to/custom/segmentation/seg_mask.npz \
+    --sample-id sample_A01 \
+    --output /path/to/resegmentation/output
 ```
 
-If your command was successful, you will start seeing the output log of the `resegment` process.
+If the command succeeds you'll see the `resegment` progress log in your terminal.
 
 <br>
 
@@ -130,17 +135,17 @@ docker run --rm \
   -v /host/path/to/other_inputs:/data/inputs \
   -v /host/path/to/outputs:/data/outputs \
   ghcr.io/singular-genomics/g4x-helpers:latest \
-  command_name --option_1 VALUE_OPTION_1 --option_2 VALUE_OPTION_2
+  g4x-helpers [GLOBAL OPTIONS] <command> --option-1 VALUE --option-2 VALUE
 ```
 
 + `-v host:container` mounts your folder to let the container see your files. 
-+ `--rm` cleans up the container after it exits.+
++ `--rm` cleans up the container after it exits.
 + `ghcr.io/singular-genomics/g4x-helpers:latest` uses the latest version of G4X-helpers
 
 
-### example: using `--resegment` in Docker
+### Example: using `resegment` in Docker
 
-Here we run the same `--resegment` command as in the [cli-example](#example-using-resegment-from-the-cli) above
+Here we run the same `resegment` command as in the [CLI example](#example-running-resegment-from-the-cli) above.
 
 ```bash
 docker run --rm \
@@ -148,11 +153,11 @@ docker run --rm \
   -v /path/to/custom/segmentation:/data/inputs \
   -v /path/to/resegmentation/output:/data/outputs \
   ghcr.io/your-org/g4x-helpers:latest \
-  resegment \
-    --run_base /data/g4x_output/sample_id \
-    --segmentation_mask /data/inputs/seg_mask.npz \
-    --sample_id sample_A01 \
-    --out_dir /data/outputs/resegmentation
+  g4x-helpers resegment \
+    --g4x-data /data/g4x_output/sample_id \
+    --cell-labels /data/inputs/seg_mask.npz \
+    --sample-id sample_A01 \
+    --output /data/outputs/resegmentation
 ```
 
 --8<-- "_core/_partials/end_cap.md"
