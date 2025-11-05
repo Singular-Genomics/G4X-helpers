@@ -64,9 +64,7 @@ def try_load_segmentation(
 
         if labels_key is not None:
             if labels_key not in seg.columns:
-                raise KeyError(
-                    f"Column '{labels_key}' not found in GeoJSON; available columns: {seg.columns.tolist()}"
-                )
+                raise KeyError(f"Column '{labels_key}' not found in GeoJSON; available columns: {seg.columns.tolist()}")
 
             # ensure that a coliumn named 'label' exists
             seg['label'] = seg[labels_key]
@@ -173,7 +171,6 @@ def image_mask_intensity_extraction(
     channel_label: str = 'intensity_mean',
     lazy: bool = True,
 ) -> pl.DataFrame | pl.LazyFrame:
-    
     mask_flat = mask.ravel()
     img_flat = img.ravel()
 
