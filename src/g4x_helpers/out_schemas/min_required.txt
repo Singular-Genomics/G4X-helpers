@@ -1,0 +1,13 @@
++single_cell_data/
+	+feature_matrix.h5
+	...
+
++rna/
+	+transcript_table.csv.gz
+
++segmentation/
+	+segmentation_mask.npz
+
++run_meta.json
+
+...
