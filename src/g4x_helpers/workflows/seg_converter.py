@@ -1,15 +1,15 @@
 import logging
 import multiprocessing
 import warnings
+from operator import itemgetter
 from pathlib import Path
+from typing import Literal
 
 import anndata as ad
 import numpy as np
 import pandas as pd
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, issparse
 from skimage.morphology import disk, erosion
-from operator import itemgetter
-from typing import Literal
 
 from ..modules import bin_generation as bg
 from ..modules.g4x_viewer.v2 import CellMasksSchema_pb2 as CellMasksSchema_v2
@@ -33,7 +33,7 @@ def seg_converter(
     n_threads: int = 4,
     logger: logging.Logger | None = None,
 ) -> None:
-    logger.info('Creating G4X-Viewer bin file.')
+    logger.info('Creating G4X-viewer bin file.')
 
     warnings.filterwarnings(
         'ignore',
@@ -91,15 +91,29 @@ def seg_converter(
     adata = adata[cell_ids]
     gene_names = adata.var_names
     gex = adata.X
+    if not issparse(gex):
+        logger.debug('Converting dense expression matrix to CSR format.')
+        gex = csr_matrix(gex)
+    else:
+        gex = gex.tocsr()
     centroid_y = obs_df['cell_x'].tolist()
     centroid_x = obs_df['cell_y'].tolist()
 
     obs_df['total_counts'] = obs_df['total_counts'].astype(int)
     obs_df['n_genes_by_counts'] = obs_df['n_genes_by_counts'].astype(int)
-    if 'area' in obs_df.columns:
-        obs_df['area'] = obs_df['area'].astype(int)
+
+    area_cols = obs_df.filter(like='area').columns
+    area_select = [c for c in area_cols if 'expanded' in c]
+
+    if len(area_select) > 1:
+        raise ValueError(f'Multiple area columns found: {area_select}')
+    elif len(area_select) == 0:
+        raise ValueError('No area column found')
     else:
-        obs_df['area'] = obs_df['nuclei_expanded_area_um'].astype(int)
+        area_select = area_select[0]
+        logger.debug(f'Using area column: {area_select}')
+
+    obs_df['area'] = obs_df[area_select].astype(int)
 
     if emb_key:
         obs_df['umap_0'] = obs_df[f'{emb_key}_1']
@@ -156,18 +170,30 @@ def seg_converter(
         entry.clusterId = '-1'
         entry.color.extend(DEFAULT_COLOR)
         outputCellSegmentation.colormap.append(entry)
+        obs_df['cluster_id'] = '-1'
+
     ## add the individual cells
     for i, row in enumerate(obs_df.itertuples(index=True)):
         outputMaskData = outputCellSegmentation.cellMasks.add()
         cellPolygonPoints = [sub_coord for coord in polygons[i] for sub_coord in coord[::-1]]
         _ = outputMaskData.vertices.extend(cellPolygonPoints + cellPolygonPoints[:2])
-        outputMaskData.cellId = row[0]
-        outputMaskData.area = row.area
-        outputMaskData.totalCounts = row.total_counts
-        outputMaskData.totalGenes = row.n_genes_by_counts
-        outputMaskData.clusterId = row.cluster_id
+        area = int(row.area)
+        total_counts = int(row.total_counts)
+        total_genes = int(row.n_genes_by_counts)
+        cluster_id = str(getattr(row, 'cluster_id', '-1'))
+        outputMaskData.cellId = str(row[0])
+        if bin_version == 'v2':
+            outputMaskData.area = str(area)
+            outputMaskData.totalCounts = str(total_counts)
+            outputMaskData.totalGenes = str(total_genes)
+        else:
+            outputMaskData.area = area
+            outputMaskData.totalCounts = total_counts
+            outputMaskData.totalGenes = total_genes
+        outputMaskData.clusterId = cluster_id
         outputMaskData.umapValues.umapX = row.umap_0
         outputMaskData.umapValues.umapY = row.umap_1
+
         if bin_version == 'v3':
             start = gex.indptr[i]
             end = gex.indptr[i + 1]
@@ -175,6 +201,7 @@ def seg_converter(
             values = gex.data[start:end]
             _ = outputMaskData.nonzeroGeneIndices.extend(indices.tolist())
             _ = outputMaskData.nonzeroGeneValues.extend(values.astype(int).tolist())
+
         if protein_list:
             if bin_version == 'v2':
                 prot_vals = {prot: val for prot, val in zip(protein_list, get_prot_vals(row))}
@@ -186,4 +213,4 @@ def seg_converter(
     with open(out_path, 'wb') as file:
         file.write(outputCellSegmentation.SerializeToString())
 
-    logger.debug(f'G4X-Viewer bin --> {out_path}')
+    logger.debug(f'G4X-viewer bin --> {out_path}')
