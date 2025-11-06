@@ -52,7 +52,7 @@ def _base_command(func):
             g4x_obj=g4x_obj,
             out_dir=out_dir,
             n_threads=n_threads,
-            verbose=verbose,
+            # verbose=verbose,
             logger=logger,
             **kwargs,
         )
@@ -221,6 +221,7 @@ def new_bin(
         protein_list=[f'{x}_intensity_mean' for x in g4x_obj.proteins],
         n_threads=n_threads,
         logger=logger,
+        **kwargs,
     )
 
 
