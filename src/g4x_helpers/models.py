@@ -1,20 +1,24 @@
+from __future__ import annotations
+
 import json
 import os
 from collections.abc import Iterator
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import glymur
 import numpy as np
-import pandas as pd
 import polars as pl
 import tifffile
 from anndata import AnnData, read_h5ad
 from matplotlib.pyplot import imread
 
 from . import utils
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 @dataclass()
@@ -71,41 +75,39 @@ class G4Xoutput:
         self.set_meta_attrs()
 
         if self.transcript_panel:
-            transcript_panel = pd.read_csv(self.data_dir / 'transcript_panel.csv', index_col=0, header=0)
-            self.transcript_panel_dict = transcript_panel.to_dict()['panel_type']
-            self.genes = list(self.transcript_panel_dict.keys())
+            transcript_panel = pl.read_csv(self.data_dir / 'transcript_panel.csv')
+
+            if 'gene_name' not in transcript_panel.columns:
+                transcript_panel = transcript_panel.rename({'target_condensed': 'gene_name'})
+
+            transcript_panel = transcript_panel.unique('gene_name').sort('gene_name')
+            self.transcript_panel_dict = dict(zip(transcript_panel['gene_name'], transcript_panel['panel_type']))
+            self.genes = transcript_panel['gene_name'].to_list()
 
         if self.protein_panel:
-            protein_panel = pd.read_csv(self.data_dir / 'protein_panel.csv', index_col=0, header=0)
-            self.protein_panel_dict = protein_panel.to_dict()['panel_type']
-            self.proteins = list(self.protein_panel_dict.keys())
+            protein_panel = pl.read_csv(self.data_dir / 'protein_panel.csv').sort('target')
+            self.protein_panel_dict = dict(zip(protein_panel['target'], protein_panel['panel_type']))
+            self.proteins = protein_panel['target'].to_list()
 
     # region dunder
     def __repr__(self):
         machine_num = self.machine.removeprefix('g4-').lstrip('0')
         mac_run_id = f'G{machine_num.zfill(2)}-{self.run_id}'
-        gap = 16
-        repr_string = f'G4X-data @ {self.data_dir}\n'
-
         shp = (np.array(self.shape) * 0.3125) / 1000
 
-        # repr_string += f'Sample: {self.sample_id} of {mac_run_id}, {self.fc}\n'
-        # repr_string += f'imaged area: ({shp[1]:.2f} x {shp[0]:.2f}) mm\n'
-        # repr_string += f'software version: {self.software_version}\n\n'
-
+        gap = 16
+        repr_string = f'{"G4X-data":<{gap}} - {self.data_dir}\n'
         repr_string += f'{"Sample ID":<{gap}} - {self.sample_id} of {mac_run_id}, {self.fc}\n'
-        repr_string += f'{"imaged area":<{gap}} - ({shp[1]:.2f} x {shp[0]:.2f}) mm\n'
-        repr_string += f'{"software version":<{gap}} - {self.software_version}\n\n'
+        repr_string += f'{"Imaged area":<{gap}} - ({shp[1]:.2f} x {shp[0]:.2f}) mm\n'
+        repr_string += f'{"Software version":<{gap}} - {self.software_version}\n\n'
 
         d = 8
         if self.includes_transcript:
-            # repr_string += f'Transcript panel with {len(self.genes)} genes\t[{", ".join(self.genes[0:5])} ... ]\n'
             repr_string += (
                 f'{"Transcript panel":<{gap}} - {len(self.genes)} {"genes":<{d}}[{", ".join(self.genes[0:5])} ... ]\n'
             )
 
         if self.includes_protein:
-            # repr_string += f'Protein panel with {len(self.proteins)} proteins\t[{", ".join(self.proteins[0:5])} ... ]\n'
             repr_string += f'{"Protein panel":<{gap}} - {len(self.proteins)} {"proteins":<{d + 1}}[{", ".join(self.proteins[0:5])} ... ]\n'
 
         return repr_string
@@ -125,7 +127,14 @@ class G4Xoutput:
 
     @property
     def feature_table_path(self) -> Path:
-        return self.data_dir / 'rna' / 'transcript_table.parquet'
+        v3_loc = self.data_dir / 'rna' / 'transcript_table.parquet'
+        v2_loc = self.data_dir / 'diagnostics' / 'transcript_table.parquet'
+        if v3_loc.exists():
+            return v3_loc
+        elif v2_loc.exists():
+            return v2_loc
+        else:
+            raise FileNotFoundError('No transcript_table.parquet found in expected locations.')
 
     @property
     def segmentation_path(self) -> Path:
@@ -167,7 +176,11 @@ class G4Xoutput:
             adata = adata[:, adata.var.query(" probe_type == 'targeting' ").index].copy()
 
         if load_clustering:
-            df = pd.read_csv(self.data_dir / 'single_cell_data' / 'clustering_umap.csv.gz', index_col=0, header=0)
+            df = (
+                pl.read_csv(self.data_dir / 'single_cell_data' / 'clustering_umap.csv.gz')
+                .to_pandas()
+                .set_index('label')
+            )
             adata.obs = adata.obs.merge(df, how='left', left_index=True, right_index=True)
             umap_key = '_'.join(sorted([x for x in adata.obs.columns if 'X_umap' in x])[0].split('_')[:-1])
             adata.obsm['X_umap'] = adata.obs[[f'{umap_key}_1', f'{umap_key}_2']].to_numpy(dtype=float)
@@ -234,12 +247,12 @@ class G4Xoutput:
     # TODO: this is not used anywhere, consider removing. it's also broken
     def load_feature_table(
         self, *, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
-    ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
+    ) -> 'pd.DataFrame' | pl.DataFrame | pl.LazyFrame:
         return self._load_table(self.feature_table_path, return_polars, lazy, columns)
 
     def load_transcript_table(
         self, *, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
-    ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
+    ) -> 'pd.DataFrame' | pl.DataFrame | pl.LazyFrame:
         return self._load_table(self.transcript_table_path, return_polars, lazy, columns)
 
     def stream_features(self, batch_size: int, columns: str | list[str] | None = None) -> Iterator[pl.DataFrame]:
@@ -295,7 +308,7 @@ class G4Xoutput:
 
     def _load_table(
         self, file_path: str | Path, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
-    ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
+    ) -> 'pd.DataFrame' | pl.DataFrame | pl.LazyFrame:
         file_path = Path(file_path)
         if lazy:
             if file_path.suffix == '.parquet':
