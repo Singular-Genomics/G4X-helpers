@@ -17,8 +17,17 @@ console = Console()
 DEFAULT_THREADS = max(1, (os.cpu_count() // 2 or 4))
 
 
+@contextmanager
+def _spinner(message: str):
+    with console.status(message, spinner='dots', spinner_style='red'):
+        yield
+
+
 def validate_data_dir(data_dir, resolve_path=False) -> Path:
     """check that expected outputs are present."""
+
+    class RequiredFileMissing(FileNotFoundError):
+        pass
 
     data_dir = validate_path(path_str=data_dir, must_exist=True, is_file_ok=False, resolve_path=resolve_path)
 
@@ -31,30 +40,37 @@ def validate_data_dir(data_dir, resolve_path=False) -> Path:
     ]
 
     for p in required_paths:
-        validate_path(data_dir / p, must_exist=True, is_dir_ok=False, is_file_ok=True)
+        path = data_dir / p
+        if not validate_path(path_str=path, must_exist=True, is_dir_ok=False, is_file_ok=True, return_bool=True):
+            raise RequiredFileMissing(f'{path}')
 
     return data_dir
 
 
-@contextmanager
-def _spinner(message: str):
-    with console.status(message, spinner='dots', spinner_style='red'):
-        yield
-
-
-def validate_path(path_str, must_exist=True, is_dir_ok=True, is_file_ok=True, resolve_path=False) -> Path:
+def validate_path(
+    path_str, must_exist=True, is_dir_ok=True, is_file_ok=True, resolve_path=False, return_bool=False
+) -> Path:
     path = Path(path_str)  # .expanduser().resolve()
     if resolve_path:
         path = path.resolve()
 
     if must_exist and not path.exists():
-        raise FileNotFoundError(f'Path does not exist: {path}')
+        if not return_bool:
+            raise FileNotFoundError(f'Path does not exist: {path}')
+        return False
 
     if path.exists():
         if path.is_dir() and not is_dir_ok:
-            raise ValueError(f'Expected a file but got a directory: {path}')
+            if not return_bool:
+                raise ValueError(f'Expected a file but got a directory: {path}')
+            return False
         if path.is_file() and not is_file_ok:
-            raise ValueError(f'Expected a directory but got a file: {path}')
+            if not return_bool:
+                raise ValueError(f'Expected a directory but got a file: {path}')
+            return False
+
+    if return_bool:
+        return True
 
     return path
 
