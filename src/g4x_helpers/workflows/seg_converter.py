@@ -103,15 +103,23 @@ def seg_converter(
     obs_df['n_genes_by_counts'] = obs_df['n_genes_by_counts'].astype(int)
 
     area_cols = obs_df.filter(like='area').columns
-    area_select = [c for c in area_cols if 'expanded' in c]
-
-    if len(area_select) > 1:
-        raise ValueError(f'Multiple area columns found: {area_select}')
-    elif len(area_select) == 0:
+    if not len(area_cols):
         raise ValueError('No area column found')
+
+    if len(area_cols) == 1:
+        area_select = area_cols[0]
     else:
-        area_select = area_select[0]
-        logger.debug(f'Using area column: {area_select}')
+        logger.debug(f'Multiple area columns found: {area_cols}. Looking for expanded area column.')
+        expanded_area_cols = [f for f in area_cols if 'expanded' in f]
+        if len(expanded_area_cols) != 1:
+            raise ValueError(
+                'No expanded area column found among multiple area columns.'
+                if not expanded_area_cols
+                else f'Multiple expanded area columns found: {expanded_area_cols}'
+            )
+        area_select = expanded_area_cols[0]
+
+    logger.debug(f'Using area column: {area_select}')
 
     obs_df['area'] = obs_df[area_select].astype(int)
 
