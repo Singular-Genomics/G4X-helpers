@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-# import inspect
 import gzip
 import logging
 import os
 import shutil
 import traceback
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
 import rich_click as click
+from rich.console import Console
+
+console = Console()
 
 DEFAULT_THREADS = max(1, (os.cpu_count() // 2 or 4))
 
@@ -31,6 +34,12 @@ def validate_data_dir(data_dir, resolve_path=False) -> Path:
         validate_path(data_dir / p, must_exist=True, is_dir_ok=False, is_file_ok=True)
 
     return data_dir
+
+
+@contextmanager
+def _spinner(message: str):
+    with console.status(message, spinner='dots', spinner_style='red'):
+        yield
 
 
 def validate_path(path_str, must_exist=True, is_dir_ok=True, is_file_ok=True, resolve_path=False) -> Path:
@@ -58,20 +67,28 @@ def _fail_message(func_name, e, trace_back=False):
     raise click.ClickException(f'{type(e).__name__}: {e}')
 
 
-def initialize_sample(data_dir: str, sample_id: str | None, n_threads: int = DEFAULT_THREADS) -> None:
-    import glymur
+def initialize_sample(
+    data_dir: str, output: str | None, sample_id: str | None, n_threads: int = DEFAULT_THREADS
+) -> None:
+    msg = f'loading G4X-data from [blue]{data_dir}[/blue]'
+    with _spinner(msg):
+        import glymur
 
-    from .models import G4Xoutput
+        from .models import G4Xoutput
 
-    glymur.set_option('lib.num_threads', n_threads)
-    try:
-        sample = G4Xoutput(data_dir=data_dir, sample_id=sample_id)
-    except Exception as e:
-        click.echo('')
-        click.secho('Failed to load G4Xoutput:', fg='red', err=True, bold=True)
-        raise click.ClickException(f'{type(e).__name__}: {e}')
+        glymur.set_option('lib.num_threads', n_threads)
+        try:
+            sample = G4Xoutput(data_dir=data_dir, sample_id=sample_id)
+        except Exception as e:
+            click.echo('\n')
+            click.secho('Failed to load G4X-data:', fg='red', err=True, bold=True)
+            raise click.ClickException(f'{e}')
 
-    return sample
+    if not output:
+        click.secho('No output directory specified. Editing in-place!', fg='blue', bold=True)
+        output = sample.data_dir
+
+    return sample, output
 
 
 # region file operations
