@@ -1,6 +1,5 @@
 import inspect
 import textwrap
-import time
 from contextlib import contextmanager
 
 import rich_click as click
@@ -38,14 +37,25 @@ click.rich_click.COMMAND_GROUPS = {
     ],
 }
 
-# click.rich_click.OPTION_GROUPS = {
-#     'g4x-helpers': [
-#         {
-#             'name': 'foo',  #
-#             'options': ['--input', '--out-dir'],
-#         }
-#     ]
-# }
+
+click.rich_click.OPTION_GROUPS = {
+    'g4x-helpers': [
+        {
+            'name': 'in/out',  #
+            'options': ['--input', '--output'],
+        },
+        {
+            'name': 'options',  #
+            'options': [
+                '--sample-id',
+                '--threads',
+                '--verbose',
+                '--version',
+                '--help',
+            ],
+        },
+    ]
+}
 
 CLI_HELP = 'Helper models and post-processing tools for G4X-data\n\ndocs.singulargenomics.com'
 
@@ -84,19 +94,21 @@ def _spinner(message: str):
     add_help_option=True,
     help=CLI_HELP,
 )
-@click.argument(
-    'g4x-data',  #
+@click.option(
+    '-i',
+    '--input',  #
     required=False,
     type=click.Path(exists=True, file_okay=False),
     help='Directory containing G4X-data for a single sample',
-    # panel='input',
+    panel='[input/output]',
 )
-@click.argument(
-    'out-dir',
+@click.option(
+    '-o',
+    '--output',
     required=False,
     type=click.Path(exists=True, file_okay=False, dir_okay=True, writable=True),
     help='Output directory used by subcommands',
-    # panel='options [input/output]',
+    panel='[input/output]',
 )
 @click.option(
     '--sample-id',  #
@@ -130,40 +142,39 @@ def _spinner(message: str):
 )
 @click.pass_context
 # @click.option('-v', '--verbose', count=True, help="Increase verbosity")
-def cli(ctx, g4x_data, out_dir, sample_id, threads, verbose, version):
+def cli(ctx, input, output, sample_id, threads, verbose, version):
     if version:
         click.echo(f'g4x-helpers version: {__version__}')
 
     else:
         ctx.ensure_object(dict)
 
-        ctx.obj['data_dir'] = g4x_data
-        ctx.obj['out_dir'] = out_dir
+        ctx.obj['data_dir'] = input
+        ctx.obj['out_dir'] = output
         ctx.obj['threads'] = threads
         ctx.obj['verbose'] = verbose
         ctx.obj['version'] = __version__
 
-        if g4x_data:
-            msg = f'loading G4X data from [blue]{g4x_data}[/blue]'
+        if input:
+            msg = f'loading G4X-data from [blue]{input}[/blue]'
             with _spinner(msg):
-                time.sleep(1)
-                g4x_obj = utils.initialize_sample(data_dir=g4x_data, sample_id=sample_id, n_threads=threads)
+                g4x_obj = utils.initialize_sample(data_dir=input, sample_id=sample_id, n_threads=threads)
 
             ctx.obj['g4x_obj'] = g4x_obj
 
         # No subcommand given but data_dir is set → show sample info
-        if ctx.invoked_subcommand is None and g4x_data:
+        if ctx.invoked_subcommand is None and input:
             click.secho('\nG4X-helpers successfully initialized with:\n', bold=True, dim=True)
             click.echo(textwrap.indent(repr(g4x_obj), prefix='    '))
             click.secho('please provide a subcommand, use -h for help\n', fg='blue')
 
         # No subcommand and no options given → show help
-        elif ctx.invoked_subcommand is None and not g4x_data:
+        elif ctx.invoked_subcommand is None and not input:
             click.echo(ctx.get_help())
             ctx.exit()
 
-        elif ctx.invoked_subcommand and g4x_data:
-            if not out_dir:
+        elif ctx.invoked_subcommand and input:
+            if not output:
                 click.secho('!! No output directory specified. Do you want to edit in-place?', fg='blue', bold=True)
                 confirm = click.confirm('Confirm in-place editing', default=False)
                 if confirm:
@@ -215,7 +226,7 @@ def cli_resegment(ctx, cell_labels, labels_key):
 @click.argument(
     'manifest',
     panel='commands',
-    required=False,
+    required=True,
     type=click.Path(exists=True, dir_okay=False),
     help='Path to manifest for demuxing. The manifest must be a 3-column CSV with the following header: target,sequence,read.',
 )
