@@ -1,9 +1,11 @@
 import json
 import math
-import re
+
+# import re
 import shutil
 from datetime import datetime
-from pathlib import Path
+
+# from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -21,6 +23,17 @@ LUT[ord('C'), 0] = 1.0
 LUT[ord('T'), 1] = 1.0
 LUT[ord('G'), 2] = 1.0
 LUT[ord('A'), 3] = 1.0
+
+primer_read_map = {
+    'SP1': 1,
+    'm7a': 2,
+    'm9a': 3,
+    'm6a': 4,
+    'm8a': 5,
+    'm3a': 6,
+}
+
+PROBE_PATTERN = r'^(.*?)-([ACGT]{2,30})-([^-]+)$'
 
 
 def one_hot_encode_str_array(seqs: list[str], seq_len: int) -> np.ndarray:
@@ -110,19 +123,72 @@ def demux(
     return reads
 
 
-def load_manifest(file_path: str | Path) -> tuple[pl.DataFrame, dict]:
-    manifest = pl.read_csv(file_path)
-    target_list = manifest['target'].to_list()
+# def load_manifest(file_path: str | Path) -> tuple[pl.DataFrame, dict]:
+#     manifest = pl.read_csv(file_path)
+#     target_list = manifest['probe_name'].to_list()
 
-    p = re.compile('-[ACGT]{2,30}')
-    match = re.findall(pattern=p, string=target_list[0])
-    if len(match) == 0:
-        probe_dict = {p: '-'.join(p.split('-')[:-1]) for p in target_list}
+#     p = re.compile('-[ACGT]{2,30}')
+#     match = re.findall(pattern=p, string=target_list[0])
+#     if len(match) == 0:
+#         probe_dict = {p: '-'.join(p.split('-')[:-1]) for p in target_list}
+#     else:
+#         probe_dict = {}
+#         for probe in target_list:
+#             match = re.findall(pattern=p, string=probe)
+#             probe_dict[probe] = probe.split(match[0])[0]
+#     probe_dict['UNDETERMINED'] = 'UNDETERMINED'
+
+#     return manifest, probe_dict
+
+
+def parse_input_manifest(file_path: str) -> pl.DataFrame:
+    """
+    Parse strings in `df[col]` of the form '<prefix>-<15mer>-<primer>'
+    and add columns: gene_name, sequence, primer, primer_code, read.
+    Rows that don't match the pattern get nulls in the new columns.
+    """
+    df = pl.read_csv(file_path)
+
+    col = 'probe_name'
+    if col not in df.columns:
+        raise ValueError(f"transcript manifest must contain column '{col}'")
+
+    parsed = df.with_columns(
+        [
+            pl.col(col).str.extract(PROBE_PATTERN, 1).alias('gene_name'),
+            pl.col(col).str.extract(PROBE_PATTERN, 2).alias('sequence'),
+            pl.col(col).str.extract(PROBE_PATTERN, 3).alias('primer'),
+        ]
+    )
+
+    null_count = parsed.null_count()['sequence'][0]
+    if null_count > 0:
+        print(f'{null_count} probes with invalid sequence format will be ignored:')
+        null_seqs = parsed.filter(pl.col('sequence').is_null())['probe_name'].to_list()
+        for ns in null_seqs:
+            print(f'- {ns}')
+
+    if 'read' in df.columns:
+        print("Warning: 'read' column in input DataFrame will be overwritten.")
+        parsed = parsed.drop('read')
     else:
-        probe_dict = {}
-        for probe in target_list:
-            match = re.findall(pattern=p, string=probe)
-            probe_dict[probe] = probe.split(match[0])[0]
+        plist = parsed['primer'].unique().to_list()
+        ign_primer = [p for p in plist if p not in primer_read_map]
+        if len(ign_primer) > 0:
+            print('Warning: the following primer names are not known and will be ignored:')
+            for ip in ign_primer:
+                print(f'- {ip}')
+        parsed = parsed.filter(pl.col('primer').is_in(primer_read_map.keys())).with_columns(
+            pl.col('primer').replace(primer_read_map).cast(pl.Int8).alias('read')
+        )
+
+    if 'gene_name' in df.columns:
+        print("Warning: 'gene_name' column in input DataFrame will be overwritten.")
+        parsed = parsed.drop('gene_name')
+
+    manifest = parsed.join(df, on=col, how='left')
+
+    probe_dict = dict(zip(manifest['probe_name'].to_list(), manifest['gene_name'].to_list()))
     probe_dict['UNDETERMINED'] = 'UNDETERMINED'
 
     return manifest, probe_dict
@@ -182,7 +248,7 @@ def batched_demuxing(g4x_obj: 'G4Xoutput', manifest, probe_dict, batch_dir, batc
 
             seqs = feature_batch_read['sequence_to_demux'].to_list()
             codes = manifest_read['sequence'].to_list()
-            codebook_target_ids = np.array(manifest_read['target'].to_list())
+            codebook_target_ids = np.array(manifest_read['probe_name'].to_list())
 
             hammings = batched_dot_product_hamming_matrix(seqs, codes, batch_size=batch_size)
             feature_batch_read = demux(hammings, feature_batch_read, codebook_target_ids, probe_dict)
