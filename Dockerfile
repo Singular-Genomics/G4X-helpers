@@ -1,5 +1,5 @@
 # Use a slim Python base image
-FROM python:3.10-slim-bookworm
+FROM python:3.12-slim-bookworm
 
 LABEL org.opencontainers.image.source="https://github.com/Singular-Genomics/G4X-helpers"
 

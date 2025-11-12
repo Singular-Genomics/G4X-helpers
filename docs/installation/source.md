@@ -67,7 +67,7 @@ cd G4X-helpers
     Create the environment:
 
     ```bash
-    conda create -n g4x-helpers_env python=3.10
+    conda create -n g4x-helpers_env python=3.12
     ```
 
     Activate the environment:
