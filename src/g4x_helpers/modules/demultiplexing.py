@@ -101,8 +101,8 @@ def demux(
 
     reads = reads.with_columns(
         [
-            pl.Series('transcript_new', transcripts),
-            pl.Series('transcript_condensed_new', transcript_condensed),
+            pl.Series('probe_name_new', transcripts),
+            pl.Series('gene_name_new', transcript_condensed),
             pl.Series('demuxed_new', demuxed),
         ]
     )
@@ -155,14 +155,14 @@ def batched_demuxing(g4x_obj: 'G4Xoutput', manifest, probe_dict, batch_dir, batc
     num_features = pl.scan_parquet(g4x_obj.feature_table_path).select(pl.len()).collect().item()
     num_expected_batches = math.ceil(num_features / batch_size)
     cols_to_select = [
-        'x_coord_shift',
-        'y_coord_shift',
-        'z',
+        'y_pixel_coordinate',
+        'x_pixel_coordinate',
+        'z_level',
         'demuxed',
-        'transcript_condensed',
-        'meanQS',
-        'sequence_to_demux',
-        'transcript',
+        'gene_name',
+        'confidence_score',
+        'sequence',
+        'probe_name',
         'TXUID',
     ]
     for i, feature_batch in tqdm(
@@ -180,7 +180,7 @@ def batched_demuxing(g4x_obj: 'G4Xoutput', manifest, probe_dict, batch_dir, batc
             if len(feature_batch_read) == 0 or len(manifest_read) == 0:
                 continue
 
-            seqs = feature_batch_read['sequence_to_demux'].to_list()
+            seqs = feature_batch_read['sequence'].to_list()
             codes = manifest_read['sequence'].to_list()
             codebook_target_ids = np.array(manifest_read['target'].to_list())
 
@@ -205,23 +205,23 @@ def concatenate_and_cleanup(batch_dir, out_dir):
     _ = (
         tx_table.filter(pl.col('demuxed_new'))
         .drop(
-            'transcript',
-            'transcript_new',
-            'transcript_condensed',
+            'probe_name',
+            'probe_name_new',
+            'gene_name',
             'demuxed',
             'demuxed_new',
-            'sequence_to_demux',
+            'sequence',
             'TXUID',
         )
-        .rename(
-            {
-                'transcript_condensed_new': 'gene_name',
-                'x_coord_shift': 'y_pixel_coordinate',
-                'y_coord_shift': 'x_pixel_coordinate',
-                'z': 'z_level',
-                'meanQS': 'confidence_score',
-            }
-        )
+        # .rename(
+        #     {
+        #         'gene_name_new': 'gene_name',
+        #         'x_coord_shift': 'y_pixel_coordinate',
+        #         'y_coord_shift': 'x_pixel_coordinate',
+        #         'z': 'z_level',
+        #         'meanQS': 'confidence_score',
+        #     }
+        # )
         .sink_csv(final_tx_table_path)
     )
 

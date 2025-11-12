@@ -257,6 +257,19 @@ class G4Xoutput:
 
     def stream_features(self, batch_size: int, columns: str | list[str] | None = None) -> Iterator[pl.DataFrame]:
         df = pl.scan_parquet(self.feature_table_path)
+
+        v2v3_rename_map = {
+            'gene_name': 'transcript_condensed',
+            'y_pixel_coordinate': 'y_coord_shift',
+            'x_pixel_coordinate': 'x_coord_shift',
+            'z_level': 'z',
+            'confidence_score': 'meanQS',
+            'sequence': 'sequence_to_demux',
+            'probe_name': 'transcript',
+        }
+
+        df = df.rename({v2v3_rename_map[k]: k for k in v2v3_rename_map if v2v3_rename_map[k] in df.columns})
+
         if columns:
             df = df.select(columns)
         offset = 0
