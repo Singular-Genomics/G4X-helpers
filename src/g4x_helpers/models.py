@@ -60,7 +60,7 @@ class G4Xoutput:
     sample_id: str | None = None
 
     def __post_init__(self):
-        self.data_dir = utils.validate_data_dir(self.data_dir)
+        self.data_dir = utils.validate_data_dir(self.data_dir, resolve_path=True)
 
         if self.sample_id is None:
             self.sample_id = self.data_dir.name
@@ -84,19 +84,29 @@ class G4Xoutput:
     def __repr__(self):
         machine_num = self.machine.removeprefix('g4-').lstrip('0')
         mac_run_id = f'G{machine_num.zfill(2)}-{self.run_id}'
-
-        repr_string = f'G4X-output @ {self.data_dir}\n'
-        repr_string += f'Sample: \033[1m{self.sample_id}\033[0m of {mac_run_id}, {self.fc}\n'
+        gap = 16
+        repr_string = f'G4X-data @ {self.data_dir}\n'
 
         shp = (np.array(self.shape) * 0.3125) / 1000
-        repr_string += f'imaged area: ({shp[1]:.2f} x {shp[0]:.2f}) mm\n'
-        repr_string += f'software version: {self.software_version}\n\n'
 
+        # repr_string += f'Sample: {self.sample_id} of {mac_run_id}, {self.fc}\n'
+        # repr_string += f'imaged area: ({shp[1]:.2f} x {shp[0]:.2f}) mm\n'
+        # repr_string += f'software version: {self.software_version}\n\n'
+
+        repr_string += f'{"Sample ID":<{gap}} - {self.sample_id} of {mac_run_id}, {self.fc}\n'
+        repr_string += f'{"imaged area":<{gap}} - ({shp[1]:.2f} x {shp[0]:.2f}) mm\n'
+        repr_string += f'{"software version":<{gap}} - {self.software_version}\n\n'
+
+        d = 8
         if self.includes_transcript:
-            repr_string += f'Transcript panel with {len(self.genes)} genes\t[{", ".join(self.genes[0:5])} ... ]\n'
+            # repr_string += f'Transcript panel with {len(self.genes)} genes\t[{", ".join(self.genes[0:5])} ... ]\n'
+            repr_string += (
+                f'{"Transcript panel":<{gap}} - {len(self.genes)} {"genes":<{d}}[{", ".join(self.genes[0:5])} ... ]\n'
+            )
 
         if self.includes_protein:
-            repr_string += f'Protein panel with {len(self.proteins)} proteins\t[{", ".join(self.proteins[0:5])} ... ]\n'
+            # repr_string += f'Protein panel with {len(self.proteins)} proteins\t[{", ".join(self.proteins[0:5])} ... ]\n'
+            repr_string += f'{"Protein panel":<{gap}} - {len(self.proteins)} {"proteins":<{d + 1}}[{", ".join(self.proteins[0:5])} ... ]\n'
 
         return repr_string
 
