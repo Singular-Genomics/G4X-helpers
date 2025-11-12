@@ -14,10 +14,10 @@ import rich_click as click
 DEFAULT_THREADS = max(1, (os.cpu_count() // 2 or 4))
 
 
-def validate_data_dir(data_dir):
+def validate_data_dir(data_dir, resolve_path=False) -> Path:
     """check that expected outputs are present."""
 
-    data_dir = validate_path(path_str=data_dir, must_exist=True, is_file_ok=False)
+    data_dir = validate_path(path_str=data_dir, must_exist=True, is_file_ok=False, resolve_path=resolve_path)
 
     # TODO: add more required files to check for
     required_paths = [
@@ -33,8 +33,10 @@ def validate_data_dir(data_dir):
     return data_dir
 
 
-def validate_path(path_str, must_exist=True, is_dir_ok=True, is_file_ok=True):
+def validate_path(path_str, must_exist=True, is_dir_ok=True, is_file_ok=True, resolve_path=False) -> Path:
     path = Path(path_str)  # .expanduser().resolve()
+    if resolve_path:
+        path = path.resolve()
 
     if must_exist and not path.exists():
         raise FileNotFoundError(f'Path does not exist: {path}')
@@ -76,39 +78,10 @@ def initialize_sample(data_dir: str, sample_id: str | None, n_threads: int = DEF
 def npzGetShape(npz_path, key):
     import numpy as np
 
-    if hasattr(np.lib.format, '_read_array_header'):
-        with np.lib.format.open_memmap(npz_path, mode='r') as memmap:
-            return memmap.shape
-    else:
-        with np.load(npz_path, mmap_mode='r') as data:
-            return data[key].shape
-
-
-# def npzGetShape(npz, key):
-#     """Takes a path to an .npz file and key to stored array and returns array shape
-#     without loading the array into memory
-
-#     Parameters
-#         npz: str
-#         key: str
-
-#     Raises: KeyError
-
-#     Returns: tuple
-
-#     Reference: http://bit.ly/2qsSxy8
-#     """
-#     import numpy as np
-
-#     with zipfile.ZipFile(npz) as archive:
-#         name = '{}.npy'.format(key)
-#         if name in archive.namelist():
-#             npy = archive.open(name)
-#             version = np.lib.format.read_magic(npy)
-#             shape, _, _ = np.lib.format._read_array_header(npy, version)
-#             return shape
-#         else:
-#             raise KeyError('{} not in archive'.format(key))
+    with np.load(npz_path, mmap_mode='r') as data:
+        if key not in data:
+            raise KeyError(f'{key} not in archive')
+        return data[key].shape
 
 
 def delete_existing(outfile: str | Path) -> None:
