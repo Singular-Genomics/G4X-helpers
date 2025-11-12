@@ -1,9 +1,6 @@
 import inspect
-import textwrap
-from contextlib import contextmanager
 
 import rich_click as click
-from rich.console import Console
 
 from . import __version__, utils
 
@@ -26,9 +23,9 @@ click.rich_click.STYLE_REQUIRED_SHORT = 'bold yellow'
 click.rich_click.STYLE_REQUIRED_LONG = 'bold yellow'
 click.rich_click.STYLE_OPTIONS_PANEL_BORDER = 'dim'
 click.rich_click.STYLE_COMMANDS_PANEL_BORDER = 'dim'
-# click.rich_click.COMMANDS_BEFORE_OPTIONS = True
+click.rich_click.COMMANDS_BEFORE_OPTIONS = True
 
-click.rich_click.ARGUMENTS_PANEL_TITLE = 'in/out'
+# click.rich_click.ARGUMENTS_PANEL_TITLE = 'in/out'
 
 click.rich_click.COMMAND_GROUPS = {
     'g4x-helpers': [
@@ -38,24 +35,24 @@ click.rich_click.COMMAND_GROUPS = {
 }
 
 
-click.rich_click.OPTION_GROUPS = {
-    'g4x-helpers': [
-        {
-            'name': 'in/out',  #
-            'options': ['--input', '--output'],
-        },
-        {
-            'name': 'options',  #
-            'options': [
-                '--sample-id',
-                '--threads',
-                '--verbose',
-                '--version',
-                '--help',
-            ],
-        },
-    ]
-}
+# click.rich_click.OPTION_GROUPS = {
+#     'g4x-helpers': [
+#         {
+#             'name': 'in/out',  #
+#             'options': ['--input', '--output'],
+#         },
+#         {
+#             'name': 'options',  #
+#             'options': [
+#                 '--sample-id',
+#                 '--threads',
+#                 '--verbose',
+#                 '--version',
+#                 '--help',
+#             ],
+#         },
+#     ]
+# }
 
 CLI_HELP = 'Helper models and post-processing tools for G4X-data\n\ndocs.singulargenomics.com'
 
@@ -72,19 +69,55 @@ NWBIN_HELP = 'Create new G4X-viewer .bin file from sample directory'
 
 TARVW_HELP = (
     'Package G4X-viewer folder for distribution\n\n'
-    'Creates a .tar archive of the data_dir/g4x_viewer folder for easy upload and sharing.\n\n'
+    'Creates a .tar archive of the "g4x_viewer" directory for easy upload and sharing.\n\n'
     'Archive file name: {SAMPLE_ID}_g4x_viewer.tar\n\n'
-    'If no OUT_DIR is specified via g4x-helpers top-level command, the archive will be created in the data_dir directory.'
 )
 
+VALIDATE_HELP = 'Validate G4X-data directory structure and files'
 
-_console = Console()
 
+def io_opts(*, takes_input=False, writes_output=True):
+    options = []
 
-@contextmanager
-def _spinner(message: str):
-    with _console.status(message, spinner='dots', spinner_style='red'):
-        yield
+    def decorator(f):
+        if takes_input:
+            options.append(
+                click.option(
+                    '-i',
+                    '--g4x-data',
+                    required=True,
+                    type=click.Path(exists=True, file_okay=False),
+                    help='Directory containing G4X-data for a single sample',
+                    panel='data i/o',
+                )
+            )
+            options.append(
+                click.option(
+                    '-s',
+                    '--sample-id',  #
+                    required=False,
+                    type=str,
+                    help='Sample ID (used for naming outputs)',
+                    panel='data i/o',
+                )
+            )
+        if writes_output:
+            options.append(
+                click.option(
+                    '-o',
+                    '--output',
+                    required=False,
+                    type=click.Path(exists=True, file_okay=False, dir_okay=True, writable=True),
+                    help='Output directory used. Will edit G4X-data in-place if not provided.',
+                    panel='data i/o',
+                )
+            )
+
+        for opt in reversed(options):
+            f = opt(f)
+        return f
+
+    return decorator
 
 
 # region cli
@@ -93,28 +126,6 @@ def _spinner(message: str):
     invoke_without_command=True,
     add_help_option=True,
     help=CLI_HELP,
-)
-@click.option(
-    '-i',
-    '--input',  #
-    required=False,
-    type=click.Path(exists=True, file_okay=False),
-    help='Directory containing G4X-data for a single sample',
-    panel='[input/output]',
-)
-@click.option(
-    '-o',
-    '--output',
-    required=False,
-    type=click.Path(exists=True, file_okay=False, dir_okay=True, writable=True),
-    help='Output directory used by subcommands',
-    panel='[input/output]',
-)
-@click.option(
-    '--sample-id',  #
-    required=False,
-    type=str,
-    help='Sample ID (used for naming outputs)',
 )
 @click.option(
     '-t',
@@ -142,54 +153,29 @@ def _spinner(message: str):
 )
 @click.pass_context
 # @click.option('-v', '--verbose', count=True, help="Increase verbosity")
-def cli(ctx, input, output, sample_id, threads, verbose, version):
+def cli(ctx, threads, verbose, version):
     if version:
-        click.echo(f'g4x-helpers version: {__version__}')
+        click.echo(f'g4x-helpers: {__version__}')
+        ctx.exit()
 
-    else:
+    # No subcommand and no input given → show help
+    if not ctx.invoked_subcommand:
+        click.echo(ctx.get_help())
+        ctx.exit()
+
+    if ctx.invoked_subcommand:
         ctx.ensure_object(dict)
-
-        ctx.obj['data_dir'] = input
-        ctx.obj['out_dir'] = output
         ctx.obj['threads'] = threads
         ctx.obj['verbose'] = verbose
         ctx.obj['version'] = __version__
-
-        if input:
-            msg = f'loading G4X-data from [blue]{input}[/blue]'
-            with _spinner(msg):
-                g4x_obj = utils.initialize_sample(data_dir=input, sample_id=sample_id, n_threads=threads)
-
-            ctx.obj['g4x_obj'] = g4x_obj
-
-        # No subcommand given but data_dir is set → show sample info
-        if ctx.invoked_subcommand is None and input:
-            click.secho('\nG4X-helpers successfully initialized with:\n', bold=True, dim=True)
-            click.echo(textwrap.indent(repr(g4x_obj), prefix='    '))
-            click.secho('please provide a subcommand, use -h for help\n', fg='blue')
-
-        # No subcommand and no options given → show help
-        elif ctx.invoked_subcommand is None and not input:
-            click.echo(ctx.get_help())
-            ctx.exit()
-
-        elif ctx.invoked_subcommand and input:
-            if not output:
-                click.secho('!! No output directory specified. Do you want to edit in-place?', fg='blue', bold=True)
-                confirm = click.confirm('Confirm in-place editing', default=False)
-                if confirm:
-                    click.secho('In-place editing confirmed!')
-                else:
-                    click.secho('Operation cancelled by user.', fg='red')
-                    ctx.exit()
 
 
 ############################################################
 # region resegment
 @cli.command(name='resegment', help=RESEG_HELP)
-@click.argument(
-    'cell-labels',
-    panel='commands',
+@io_opts(takes_input=True, writes_output=True)
+@click.option(
+    '--cell-labels',
     required=True,
     type=click.Path(exists=True, dir_okay=False),
     help='File containing cell segmentation labels.\n\nsupported file types: [.npy, .npz, .geojson]',
@@ -202,15 +188,20 @@ def cli(ctx, input, output, sample_id, threads, verbose, version):
     help='Key/column in npz/geojson where labels should be taken from (optional)',
 )
 @click.pass_context
-def cli_resegment(ctx, cell_labels, labels_key):
+def cli_resegment(ctx, g4x_data, output, sample_id, cell_labels, labels_key):
     func_name = inspect.currentframe().f_code.co_name.removeprefix('cli_')
+
+    g4x_obj, output = utils.initialize_sample(
+        data_dir=g4x_data, output=output, sample_id=sample_id, n_threads=ctx.obj['threads']
+    )
+
     try:
-        with _spinner(f'Initializing {func_name} process...'):
+        with utils._spinner(f'Initializing {func_name} process...'):
             from .main_features import resegment
 
         resegment(
-            g4x_obj=ctx.obj['g4x_obj'],
-            out_dir=ctx.obj['out_dir'],
+            g4x_obj=g4x_obj,
+            out_dir=output,
             cell_labels=cell_labels,
             labels_key=labels_key,
             n_threads=ctx.obj['threads'],
@@ -223,9 +214,9 @@ def cli_resegment(ctx, cell_labels, labels_key):
 ############################################################
 # region redemux
 @cli.command(name='redemux', help=REDMX_HELP)
-@click.argument(
-    'manifest',
-    panel='commands',
+@io_opts(takes_input=True, writes_output=True)
+@click.option(
+    '--manifest',
     required=True,
     type=click.Path(exists=True, dir_okay=False),
     help='Path to manifest for demuxing. The manifest must be a 3-column CSV with the following header: target,sequence,read.',
@@ -238,15 +229,18 @@ def cli_resegment(ctx, cell_labels, labels_key):
     help='Number of transcripts to process per batch.',
 )
 @click.pass_context
-def cli_redemux(ctx, manifest, batch_size):
+def cli_redemux(ctx, g4x_data, output, sample_id, manifest, batch_size):
     func_name = inspect.currentframe().f_code.co_name.removeprefix('cli_')
+    g4x_obj, output = utils.initialize_sample(
+        data_dir=g4x_data, output=output, sample_id=sample_id, n_threads=ctx.obj['threads']
+    )
     try:
-        with _spinner(f'Initializing {func_name} process...'):
+        with utils._spinner(f'Initializing {func_name} process...'):
             from .main_features import redemux
 
         redemux(
-            g4x_obj=ctx.obj['g4x_obj'],
-            out_dir=ctx.obj['out_dir'],
+            g4x_obj=g4x_obj,
+            out_dir=output,
             manifest=manifest,
             batch_size=batch_size,
             n_threads=ctx.obj['threads'],
@@ -259,6 +253,7 @@ def cli_redemux(ctx, manifest, batch_size):
 ############################################################
 # region update_bin
 @cli.command(name='update_bin', help=UDBIN_HELP)
+@io_opts(takes_input=True, writes_output=True)
 @click.option(
     '--metadata',
     required=True,
@@ -290,15 +285,18 @@ def cli_redemux(ctx, manifest, batch_size):
     help='Column name in metadata containing embedding. Parser will look for {emb_key}_1 and {emb_key}_2. If not provided, skips updating embedding.',
 )
 @click.pass_context
-def cli_update_bin(ctx, metadata, cellid_key, cluster_key, cluster_color_key, emb_key):
+def cli_update_bin(ctx, g4x_data, output, sample_id, metadata, cellid_key, cluster_key, cluster_color_key, emb_key):
     func_name = inspect.currentframe().f_code.co_name.removeprefix('cli_')
+    g4x_obj, output = utils.initialize_sample(
+        data_dir=g4x_data, output=output, sample_id=sample_id, n_threads=ctx.obj['threads']
+    )
     try:
-        with _spinner(f'Initializing {func_name} process...'):
+        with utils._spinner(f'Initializing {func_name} process...'):
             from .main_features import update_bin
 
         update_bin(
-            g4x_obj=ctx.obj['g4x_obj'],
-            out_dir=ctx.obj['out_dir'],
+            g4x_obj=g4x_obj,
+            out_dir=output,
             metadata=metadata,
             cellid_key=cellid_key,
             cluster_key=cluster_key,
@@ -313,42 +311,50 @@ def cli_update_bin(ctx, metadata, cellid_key, cluster_key, cluster_color_key, em
 ############################################################
 # region new_bin
 @cli.command(name='new_bin', help=NWBIN_HELP)
+@io_opts(takes_input=True, writes_output=True)
 @click.pass_context
-def cli_new_bin(ctx):
+def cli_new_bin(ctx, g4x_data, output, sample_id):
     func_name = inspect.currentframe().f_code.co_name.removeprefix('cli_')
+    g4x_obj, output = utils.initialize_sample(
+        data_dir=g4x_data, output=output, sample_id=sample_id, n_threads=ctx.obj['threads']
+    )
     try:
-        with _spinner(f'Initializing {func_name} process...'):
+        with utils._spinner(f'Initializing {func_name} process...'):
             from .main_features import new_bin
 
         new_bin(
-            g4x_obj=ctx.obj['g4x_obj'],  #
-            out_dir=ctx.obj['out_dir'],
+            g4x_obj=g4x_obj,  #
+            out_dir=output,
             n_threads=ctx.obj['threads'],
             verbose=ctx.obj['verbose'],
         )
     except Exception as e:
-        utils._fail_message(func_name, e)
+        utils._fail_message(func_name, e, trace_back=True)
 
 
 ############################################################
 # region tar_viewer
 @cli.command(name='tar_viewer', help=TARVW_HELP)
+@io_opts(takes_input=True, writes_output=True)
 @click.option(
     '--viewer-dir',
     required=False,
     type=click.Path(exists=True, file_okay=False),
-    help='(optional) Path to G4X-viewer folder. If set, will tar specified folder instead of the one supplied by G4X_DIR.',
+    help='(optional) Path to G4X-viewer folder. If set, will archive the specified folder instead of the one supplied by G4X-data.',
 )
 @click.pass_context
-def cli_tar_viewer(ctx, viewer_dir):
+def cli_tar_viewer(ctx, g4x_data, output, sample_id, viewer_dir):
     func_name = inspect.currentframe().f_code.co_name.removeprefix('cli_')
+    g4x_obj, output = utils.initialize_sample(
+        data_dir=g4x_data, output=output, sample_id=sample_id, n_threads=ctx.obj['threads']
+    )
     try:
-        with _spinner(f'Initializing {func_name} process...'):
+        with utils._spinner(f'Initializing {func_name} process...'):
             from .main_features import tar_viewer
 
         tar_viewer(
-            g4x_obj=ctx.obj['g4x_obj'],  #
-            out_dir=ctx.obj['out_dir'],
+            g4x_obj=g4x_obj,
+            out_dir=output,
             viewer_dir=viewer_dir,
             verbose=ctx.obj['verbose'],
         )
