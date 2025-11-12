@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import anndata as ad
+import geopandas
 import numpy as np
 import polars as pl
 import scanpy as sc
@@ -16,8 +18,70 @@ from skimage.measure._regionprops import RegionProperties
 from tqdm import tqdm
 
 if TYPE_CHECKING:
-    # This import is only for type checkers (mypy, PyCharm, etc.), not at runtime
+    from geopandas.geodataframe import GeoDataFrame
+
     from g4x_helpers.models import G4Xoutput
+
+SUPPORTED_MASK_FILETYPES = {'.npy', '.npz', '.geojson'}
+
+
+def try_load_segmentation(
+    cell_labels: Path, expected_shape: tuple[int], labels_key: str | None = None
+) -> np.ndarray | geopandas.GeoDataFrame:
+    ## load new segmentation
+    suffix = cell_labels.suffix.lower()
+
+    if cell_labels.suffix not in SUPPORTED_MASK_FILETYPES:
+        raise ValueError(f'{cell_labels.suffix} is not a supported file type.')
+
+    if suffix == '.npz':
+        with np.load(cell_labels) as labels:
+            available_keys = list(labels.keys())
+
+            if labels_key:  # if a key is specified
+                if labels_key not in labels:
+                    raise KeyError(f"Key '{labels_key}' not found in .npz; available keys: {available_keys}")
+                seg = labels[labels_key]
+
+            else:  # if no key specified,
+                if len(labels) == 1:  # and only one key is available, use that key
+                    seg = labels[available_keys[0]]
+                else:  # and multiple keys are available, raise an error
+                    if len(labels) > 1:
+                        raise ValueError(
+                            f"Multiple keys found in .npz: {available_keys}.\nPlease specify a key using 'labels_key'"
+                        )
+                seg = labels
+
+    elif suffix == '.npy':
+        # .npy: directly returns the array, no context manager available
+        if labels_key is not None:
+            print('file is .npy, ignoring provided labels_key.')
+        seg = np.load(cell_labels)
+
+    elif suffix == '.geojson':
+        seg = geopandas.read_file(cell_labels)
+
+        if labels_key is not None:
+            if labels_key not in seg.columns:
+                raise KeyError(f"Column '{labels_key}' not found in GeoJSON; available columns: {seg.columns.tolist()}")
+
+            # ensure that a coliumn named 'label' exists
+            seg['label'] = seg[labels_key]
+
+        else:
+            if 'label' not in seg.columns:
+                raise ValueError(
+                    "No column named 'label' found in GeoJSON. Please specify which column to use for labels via labels_key."
+                )
+
+    # only validate shape for numpy arrays
+    if isinstance(seg, np.ndarray):
+        assert seg.shape == expected_shape, (
+            f'provided mask shape {seg.shape} does not match G4X sample shape {expected_shape}'
+        )
+
+    return seg
 
 
 def _make_cell_metadata(segmentation_props: pl.DataFrame, cell_by_protein: pl.DataFrame) -> pl.DataFrame:
@@ -116,7 +180,12 @@ def image_mask_intensity_extraction(
         mask_flat = mask_flat[bead_mask_flat]
         img_flat = img_flat[bead_mask_flat]
 
-    intensity_means = np.bincount(mask_flat, weights=img_flat)[1:] / np.bincount(mask_flat)[1:]
+    # intensity_means = np.bincount(mask_flat, weights=img_flat)[1:] / np.bincount(mask_flat)[1:]
+    counts = np.bincount(mask_flat)[1:]
+    sums = np.bincount(mask_flat, weights=img_flat)[1:]
+
+    # Avoid division by zero:
+    intensity_means = np.divide(sums, counts, out=np.zeros_like(sums), where=counts != 0)
 
     if lazy:
         prop_tab = pl.LazyFrame(
@@ -199,7 +268,7 @@ def extract_image_signals(
     channel_name_map['nuclear'] = 'nuclearstain'
     channel_name_map['eosin'] = 'cytoplasmicstain'
 
-    for i, signal_name in enumerate(signal_list):
+    for signal_name in tqdm(signal_list, desc='Extracting protein signal'):
         if signal_name not in ['nuclear', 'eosin']:
             image_type = 'protein'
             protein = signal_name
@@ -220,7 +289,7 @@ def extract_image_signals(
             lazy=lazy,
         )
 
-        if i == 0:
+        if signal_name == signal_list[0]:
             signal_df = prop_tab
         else:
             signal_df = join_frames(signal_df, prop_tab)
