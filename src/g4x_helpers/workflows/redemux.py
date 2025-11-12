@@ -37,7 +37,7 @@ def redemux(
 
     ## load the new manifest file that we will demux against
     logger.info('Loading manifest file.')
-    manifest, probe_dict = dmx.load_manifest(manifest)
+    manifest, probe_dict = dmx.parse_input_manifest(manifest)
 
     logger.info('Performing re-demuxing.')
     dmx.batched_demuxing(g4x_obj, manifest, probe_dict, batch_dir, batch_size)
