@@ -169,7 +169,7 @@ def parse_input_manifest(file_path: str) -> pl.DataFrame:
             print(f'- {ns}')
 
     if 'read' in df.columns:
-        print("Warning: 'read' column in input DataFrame will be overwritten.")
+        print("Using 'read' column provided by input manifest.")
         parsed = parsed.drop('read')
     else:
         plist = parsed['primer'].unique().to_list()
@@ -183,7 +183,7 @@ def parse_input_manifest(file_path: str) -> pl.DataFrame:
         )
 
     if 'gene_name' in df.columns:
-        print("Warning: 'gene_name' column in input DataFrame will be overwritten.")
+        print("Using 'gene_name' column provided by input manifest.")
         parsed = parsed.drop('gene_name')
 
     manifest = parsed.join(df, on=col, how='left')

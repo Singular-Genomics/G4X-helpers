@@ -29,6 +29,7 @@ def try_load_segmentation(
     cell_labels: Path, expected_shape: tuple[int], labels_key: str | None = None
 ) -> np.ndarray | geopandas.GeoDataFrame:
     ## load new segmentation
+    cell_labels = Path(cell_labels)
     suffix = cell_labels.suffix.lower()
 
     if cell_labels.suffix not in SUPPORTED_MASK_FILETYPES:
@@ -51,7 +52,7 @@ def try_load_segmentation(
                         raise ValueError(
                             f"Multiple keys found in .npz: {available_keys}.\nPlease specify a key using 'labels_key'"
                         )
-                seg = labels
+                    seg = labels
 
     elif suffix == '.npy':
         # .npy: directly returns the array, no context manager available
@@ -150,7 +151,6 @@ def get_mask_properties(sample: 'G4Xoutput', mask: np.ndarray) -> pl.DataFrame:
 def assign_tx_to_mask_labels(sample: 'G4Xoutput', mask: np.ndarray) -> pl.DataFrame:
     reads = sample.load_transcript_table()
 
-    # assuming coord order == 'yx':
     coord_order = ['y_pixel_coordinate', 'x_pixel_coordinate']
 
     tx_coords = reads[coord_order].to_numpy()
