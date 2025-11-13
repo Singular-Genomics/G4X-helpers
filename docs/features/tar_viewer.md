@@ -6,18 +6,8 @@
 Tars a G4X-viewer folder by validating and organizing key viewer assets (e.g., `.bin`, `.ome.tiff`, `.tar`, etc.), generating the required `dataset.config.json` metadata file, and creating a `.tar` archive ready for use with the Single-File upload option in the G4X-viewer.
 
 
-## usage
----
-
-```bash
-$ g4x-helpers tar_viewer
-  --g4x-data /path/to/G4X/output
-
-  # ─── optional ───
-  --viewer-dir /path/to/g4x_viewer_folder
-  --output <output_dir>
-  --sample-id <sample_id>
-```
+## Usage
+![`g4x-helpers tar_viewer --help`](../img/tar_viewer-help.svg)
 
 
 ## argument description
@@ -44,8 +34,7 @@ $ g4x-helpers tar_viewer
 
 > Optional sample identifier override used when naming the generated archive.
 
-!!! note
-    Runtime options (`--threads`, `--verbose`) belong on the base command:  
-    `g4x-helpers --verbose 2 tar_viewer --g4x-data ...`
-
 <br>
+--8<-- "_core/_partials/global_options_note.md"
+<br>
+--8<-- "_core/_partials/end_cap.md"

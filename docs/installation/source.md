@@ -1,6 +1,6 @@
 <br>
 
-# source installation
+# Source installation
 
 This page explains how you can install `G4X-helpers` on your local machine. If you’re happy running the tool via `Docker`, you can skip these installation steps and head to the [Docker setup](./docker.md) section.  
 

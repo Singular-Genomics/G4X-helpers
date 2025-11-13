@@ -5,22 +5,9 @@
 
 Updates an existing `.bin` segmentation file with new clustering, embedding, or color metadata from a CSV file.
 
-## usage 
----
+## Usage
+![`g4x-helpers update_bin --help`](../img/update_bin-help.svg)
 
-```bash
-$ g4x-helpers update_bin 
-  --g4x-data /path/to/G4X/output
-  --metadata /path/to/metadata.csv
-
-  # ─── optional ───
-  --output <output_dir>
-  --sample-id <sample_id>
-  --cellid-key <cellid_key>
-  --cluster-key <cluster_key>
-  --cluster-color-key <cluster_color_key>
-  --emb-key <emb_key>
-```
 
 ## argument descriptions
 ---
@@ -60,8 +47,7 @@ $ g4x-helpers update_bin
 
 > Prefix for embedding coordinates. The command looks for two columns: `{emb_key}_1` and `{emb_key}_2`. Used to embed cells in UMAP/tSNE/etc. space.
 
-!!! note
-    Control threads and verbosity on the root command:  
-    `g4x-helpers --threads 8 update_bin --g4x-data ...`
-
 <br>
+--8<-- "_core/_partials/global_options_note.md"
+<br>
+--8<-- "_core/_partials/end_cap.md"

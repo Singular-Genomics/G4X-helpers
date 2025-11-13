@@ -13,21 +13,21 @@ repo_url: https://github.com/Singular-Genomics/G4X-helpers
 nav:
   - G4X-helpers: index.md
 
-  - installation:
-    - installation: ./installation/index.md
-    - source install: ./installation/source.md
+  - Installation:
+    - Installation: ./installation/index.md
+    - Source install: ./installation/source.md
     - Docker setup: ./installation/docker.md
+
+  - Usage:
+    - usage: usage/index.md
 
   - CLI features:
     - CLI features: ./features/index.md
-    - --resegment: ./features/resegment.md
-    - --redemux: ./features/redemux.md
-    - --update_bin: ./features/update_bin.md
-    - --new_bin: ./features/new_bin.md
-    - --tar_viewer: ./features/tar_viewer.md
+    - resegment: ./features/resegment.md
+    - redemux: ./features/redemux.md
+    - update_bin: ./features/update_bin.md
+    - new_bin: ./features/new_bin.md
+    - tar_viewer: ./features/tar_viewer.md
 
-  - usage:
-    - usage: usage/index.md
-
-  - contributing: contributing.md
-  - changelog: changelog.md
+  - Contributing: contributing.md
+  - Changelog: changelog.md
