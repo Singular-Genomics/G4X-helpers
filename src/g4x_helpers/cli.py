@@ -261,6 +261,11 @@ def cli_redemux(ctx, g4x_data, output, sample_id, manifest, batch_size):
     help='Path to metadata table where clustering and/or embedding information will be extracted. Table must contain a header.',
 )
 @click.option(
+    '--bin-file',
+    type=click.Path(exists=True, dir_okay=False),
+    help='Path to a specific .bin file to update.',
+)
+@click.option(
     '--cellid-key',
     default=None,
     type=str,
@@ -285,7 +290,9 @@ def cli_redemux(ctx, g4x_data, output, sample_id, manifest, batch_size):
     help='Column name in metadata containing embedding. Parser will look for {emb_key}_1 and {emb_key}_2. If not provided, skips updating embedding.',
 )
 @click.pass_context
-def cli_update_bin(ctx, g4x_data, output, sample_id, metadata, cellid_key, cluster_key, cluster_color_key, emb_key):
+def cli_update_bin(
+    ctx, g4x_data, output, sample_id, metadata, bin_file, cellid_key, cluster_key, cluster_color_key, emb_key
+):
     func_name = inspect.currentframe().f_code.co_name.removeprefix('cli_')
     g4x_obj, output = utils.initialize_sample(
         data_dir=g4x_data, output=output, sample_id=sample_id, n_threads=ctx.obj['threads']
@@ -297,6 +304,7 @@ def cli_update_bin(ctx, g4x_data, output, sample_id, metadata, cellid_key, clust
         update_bin(
             g4x_obj=g4x_obj,
             out_dir=output,
+            bin_file=bin_file,
             metadata=metadata,
             cellid_key=cellid_key,
             cluster_key=cluster_key,

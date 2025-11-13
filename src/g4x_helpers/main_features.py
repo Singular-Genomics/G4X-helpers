@@ -163,6 +163,7 @@ def update_bin(
     out_dir: str,
     metadata: str,
     *,
+    bin_file: str | None = None,
     cellid_key: str | None = None,
     cluster_key: str | None = None,
     cluster_color_key: str | None = None,
@@ -176,7 +177,7 @@ def update_bin(
     view_dir.mkdir(parents=True, exist_ok=True)
 
     wflw.seg_updater(
-        bin_file=g4x_obj.data_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}.bin',
+        bin_file=g4x_obj.data_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}.bin' if bin_file is None else bin_file,
         metadata_file=metadata,
         out_path=view_dir / f'{g4x_obj.sample_id}.bin',
         cellid_key=cellid_key,
