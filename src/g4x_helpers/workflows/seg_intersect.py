@@ -55,6 +55,9 @@ def intersect_segmentation(
     cell_by_gene = seg._make_cell_by_gene(segmentation_props, reads_new_labels)
     adata = seg._make_adata(cell_by_gene, cell_metadata)
 
+    probe_types = g4x_obj.load_adata(remove_nontargeting=False, load_clustering=False).var['probe_type']
+    adata.var = adata.var.merge(probe_types, left_index=True, right_index=True, how='left')
+
     logger.info(f'Saving output files to {out_dir}')
 
     outfile = utils.create_custom_out(out_dir, 'segmentation', 'segmentation_mask.npz')

@@ -224,12 +224,16 @@ class G4Xoutput:
     def load_eosin_image(self, thumbnail: bool = False, cached: bool = False) -> np.ndarray:
         return self.load_image_by_type('eosin', thumbnail=thumbnail, cached=cached)
 
-    def load_segmentation(self, expanded: bool = True) -> np.ndarray:
+    def load_segmentation(self, expanded: bool = True, key: str | None = None) -> np.ndarray:
+        from .modules.segmentation import try_load_segmentation
+
         arr = np.load(self.segmentation_path)
-        if expanded:
-            return arr['nuclei_exp']
-        else:
-            return arr['nuclei']
+        available_keys = list(arr.keys())
+
+        if 'nuclei' and 'nuclei_exp' in available_keys:
+            key = 'nuclei_exp' if expanded else 'nuclei'
+
+        return try_load_segmentation(cell_labels=self.segmentation_path, expected_shape=self.shape, labels_key=key)
 
     # TODO: this is not used anywhere, consider removing. it's also broken
     def load_feature_table(
