@@ -50,6 +50,6 @@ repos:
   hooks:
     - id: rich-codex
       name: Run Rich Codex on SVG assets
-      entry: uv run rich-codex --skip-git-checks --no-confirm --clean-img-paths docs/img/*.svg
+      entry: env FORCE_COLOR=1 TERMINAL_WIDTH=85 uv run rich-codex --skip-git-checks --no-confirm --clean-img-paths docs/img/*.svg
       language: system
       pass_filenames: false

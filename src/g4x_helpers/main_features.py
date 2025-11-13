@@ -18,7 +18,7 @@ def _base_command(func):
     def wrapper(
         g4x_obj: 'G4Xoutput',
         out_dir: str,
-        n_threads: int = 4,
+        n_threads: int = utils.DEFAULT_THREADS,
         verbose: int = 1,
         file_logger: bool = True,
         **kwargs,
