@@ -1,14 +1,18 @@
 <br>
 
-# usage
+# Usage
 
 G4X-helpers offers several tools for common post-processing needs, each of which is described in detail in the [CLI features](../features/index.md) section. On this page, we will demonstrate how to execute these tools either from the CLI or through a Docker image (depending on how you [installed G4X-helpers](../installation/index.md)).
-!!!note
-    G4X-helpers can also be imported as a Python module, in which case it can provide some convenience functions to access and interact with your data. Documentation for this will follow in a separate section.
+
+## Quickstart
+If you have installed G4X-helpers and your environment is functional, you can get an overview of the basic usage by calling the main entrypoint `g4x-helpers --help`.  
+Please refer to the sections below for details on how to run a subcommand.
+
+![`g4x-helpers --help`](../img/main-help.svg)
 
 <br>
 
-## CLI Usage
+## CLI usage
 ---
 ### Activating your environment
 Before getting started, you need to ensure that the environment in which you installed G4X-helpers is activated. How this is done depends on your installation method. We recommend [installing it into a Conda environment](../installation/source.md#step-2-install-the-package). 
@@ -39,7 +43,7 @@ Before getting started, you need to ensure that the environment in which you ins
     source .venv/bin/activate
     ```
 
-    Once activated, your shell prompt should change to include the environment name (`g4x_helpers` in this case):
+    Once activated, your shell prompt should change to include the environment name (`g4x_helpers` is the default):
     
     ```bash
     (g4x-helpers) $
@@ -55,14 +59,43 @@ Before getting started, you need to ensure that the environment in which you ins
 
 ### Basic command pattern
 ---
-
-Every CLI invocation uses the `g4x-helpers` entry point followed by the command you want to run:
-
 ```
 g4x-helpers [GLOBAL OPTIONS] <command> --option-1 VALUE --option-2 VALUE
 ```
 
 The global options (`--threads`, `--verbose`, `--version`) live on the `g4x-helpers` command itself and should be provided **before** the sub-command. Each command then defines its own required and optional arguments. All workflows assume you have a single-sample [G4X output directory](https://docs.singulargenomics.com/g4x_data/g4x_output/) and, in some cases, additional input files (e.g. manifests or metadata tables).
+
+#### Global options
+
+| option | default | description |
+| --- | --- | --- |
+| `--threads` / `-t` | system-dependent | Number of worker threads used by CPU-heavy steps (segmentation, demultiplexing, conversions). Increase to speed up processing or lower it when sharing a server. |
+| `--verbose` / `-v` | `1` | Controls logging detail in the terminal. `0` prints warnings only, `1` shows progress-level logs, `2` enables detailed debugging output. |
+| `--version` | — | Prints the installed `g4x-helpers` version and exits, which is helpful for troubleshooting and documentation. |
+| `--help` / `-h` | — | Standard Click help flag that prints contextual usage information for the command you attach it to. |
+
+!!! tip
+    Always place global options **before** the sub-command: `g4x-helpers --threads 8 resegment ...`
+
+#### Discovering CLI commands
+
+- List every available sub-command and a short description:
+
+    ```bash
+    g4x-helpers --help
+    ```
+
+- Show detailed usage and arguments for a specific command (e.g. `redemux`):
+
+    ```bash
+    g4x-helpers redemux --help
+    ```
+
+- Confirm which package version your environment is using:
+
+    ```bash
+    g4x-helpers --version
+    ```
 
 
 ### Example: running `resegment` from the CLI
@@ -111,7 +144,7 @@ If the command succeeds you'll see the `resegment` progress log in your terminal
 
 <br>
 
-## Docker Usage
+## Docker usage
 ---
 ### Pull the G4X-helpers image
 
@@ -159,5 +192,14 @@ docker run --rm \
     --sample-id sample_A01 \
     --output /data/outputs/resegmentation
 ```
+
+## Python module
+---
+!!!note
+    G4X-helpers can also be imported as a Python module, in which case it can provide some convenience functions to access and interact with your data.  
+    Documentation for this will follow in a separate section.
+
+<br>
+
 
 --8<-- "_core/_partials/end_cap.md"

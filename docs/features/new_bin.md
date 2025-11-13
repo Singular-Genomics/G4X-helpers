@@ -6,17 +6,8 @@
 This tool will create a new `.bin` segmentation file compatible with the G4X-viewer using the processed output from a G4X run. This is typically only needed to update older outputs to newer versions of the `.bin` format.
 
 
-## usage 
----
-
-```bash
-$ g4x-helpers new_bin 
-  --g4x-data /path/to/G4X_sample_output
-
-  # ─── optional ───
-  --output <output_dir>
-  --sample-id <sample_id>
-```
+## Usage
+![`g4x-helpers new_bin --help`](../img/new_bin-help.svg)
 
 
 ## argument descriptions
@@ -37,8 +28,7 @@ $ g4x-helpers new_bin
 
 > Optional override for the sample identifier inferred from `--g4x-data`.
 
-!!! note
-    Global options (`--threads`, `--verbose`) must be supplied on the root command:  
-    `g4x-helpers --threads 16 new_bin --g4x-data ...`
-
 <br>
+--8<-- "_core/_partials/global_options_note.md"
+<br>
+--8<-- "_core/_partials/end_cap.md"

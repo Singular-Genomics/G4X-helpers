@@ -5,18 +5,8 @@
 
 Replaces or updates the transcript manifest in a G4X run, reassigns transcripts via demultiplexing, and regenerates all downstream single-cell data and `.tar` viewer files.
 
-## usage
----
-```bash
-$ g4x-helpers redemux
-  --g4x-data /path/to/G4X/output
-  --manifest /path/to/manifest.csv
-
-  # ─── optional ───
-  --batch-size <n_transcripts>
-  --output <output_dir>
-  --sample-id <sample_id>
-```
+## Usage
+![`g4x-helpers redemux --help`](../img/redemux-help.svg)
 
 ## argument descriptions
 ---
@@ -54,8 +44,7 @@ $ g4x-helpers redemux
 
 > Optional sample identifier override used for naming downstream outputs.
 
-!!! note
-    Supply runtime controls such as `--threads` and `--verbose` on the root command:  
-    `g4x-helpers --threads 8 redemux --g4x-data ...`
-
 <br>
+--8<-- "_core/_partials/global_options_note.md"
+<br>
+--8<-- "_core/_partials/end_cap.md"

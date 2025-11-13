@@ -5,18 +5,8 @@
 
 Replaces or updates the segmentation mask in a G4X run and regenerates all downstream single-cell data and `.bin` files.
 
-## usage
----
-``` bash
-$ g4x-helpers resegment
-  --g4x-data /path/to/G4X/output
-  --cell-labels /path/to/new_mask.npz 
-  
-  # ─── optional ───
-  --sample-id <sample_id> 
-  --output <output_dir> 
-  --labels-key <mask_array_name> 
-```
+## Usage
+![`g4x-helpers resegment --help`](../img/resegment-help.svg)
 
 ## argument descriptions
 ---
@@ -49,8 +39,7 @@ $ g4x-helpers resegment
 > By default, cell labels are expected in a column named `label`.  
 > Use this argument to override and select a different column as the label source.
 
-!!! note
-    Runtime controls such as `--threads` and `--verbose` are global options on the `g4x-helpers` command:  
-    `g4x-helpers --threads 8 resegment --g4x-data ...`
-
 <br>
+--8<-- "_core/_partials/global_options_note.md"
+<br>
+--8<-- "_core/_partials/end_cap.md"

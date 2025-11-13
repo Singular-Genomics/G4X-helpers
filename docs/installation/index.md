@@ -8,7 +8,7 @@ Which route to choose depends on your use-case.
 
 <br>
 
-### 1. source installation
+### 1. Source installation
 ---
 
 **Please head to the [source installation](./source.md) section if you want to:**

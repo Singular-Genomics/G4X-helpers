@@ -1,0 +1,5 @@
+terminal_width: 80
+working_dir: "."
+terminal_theme: "SVG_EXPORT_THEME"
+notrim: true
+outputs: []
