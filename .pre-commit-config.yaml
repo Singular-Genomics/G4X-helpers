@@ -31,7 +31,7 @@ repos:
     - id: detect-private-key
     - id: end-of-file-fixer
     - id: trailing-whitespace
-      exclude: ^.*\.(txt|md)$
+      exclude: ^.*\.(txt|md|svg)$
 
 - repo: https://github.com/astral-sh/ruff-pre-commit
   rev: v0.13.1 # Ruff version.
@@ -45,3 +45,11 @@ repos:
     # Run the formatter.
     - id: ruff-format
       name: Format python files (Ruff)
+
+- repo: local
+  hooks:
+    - id: rich-codex
+      name: Run Rich Codex on SVG assets
+      entry: uv run rich-codex --skip-git-checks --no-confirm --clean-img-paths docs/img/*.svg
+      language: system
+      pass_filenames: false

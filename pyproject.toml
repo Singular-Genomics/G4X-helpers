@@ -48,7 +48,11 @@ dev = [
     "pytest ~= 8.4",
     "ruff == 0.13.1",    # pinned to match pre-commit version
 ]
-docs = ["mkdocs ~= 1.6", "mkdocs-material ~= 9.6"]
+docs = [
+    "mkdocs ~= 1.6",
+    "mkdocs-material ~= 9.6",
+    "rich-codex>=1.2.11",
+]
 
 [project.scripts]
 g4x-helpers = "g4x_helpers.cli:cli"
