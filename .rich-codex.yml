@@ -1,4 +1,4 @@
-terminal_width: 80
+terminal_width: 85
 working_dir: "."
 terminal_theme: "SVG_EXPORT_THEME"
 notrim: true
