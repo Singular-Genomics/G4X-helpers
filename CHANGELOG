@@ -1,5 +1,17 @@
 # Changelog
 
+## `v1.0.0` — [2025-11-13]
+
+- docs: add partials for shared options
+- pkg: add rich-codex as docs dependency
+- fix: load_segmentation method now allows custom keys
+- feat: redemux parses transcript panel for input flexibility
+- docs: update for new CLI
+- feat: numpy version agnostic npzGetshape
+- pkg: repr update
+- pkg: implement new cli and re-factor
+- pkg: set python 3.12 as default version
+
 ## `v0.5.2` — [2025-10-01]
 
 - fix: missing tests in publish workflow
