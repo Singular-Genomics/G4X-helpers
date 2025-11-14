@@ -1,0 +1,34 @@
++run_meta.json
++samplesheet.csv
++summary_{sample_id}.html
++*_panel.csv
+
++diagnostics/
+	+transcript_table.parquet
+	...
+
++h_and_e/
+	+eosin.jp2
+	+h_and_e.jp2
+	+nuclear.jp2
+	...
+
++protein/
+	+*.jp2
+	+bead_mask.npz
+	...
+
++rna/
+	+transcript_table.csv.gz
+	-transcript_table.parquet
+	...
+
++segmentation/
+	+segmentation_mask.npz
+	...
+
++single_cell_data/
+	+feature_matrix.h5
+	...
+	
+...
