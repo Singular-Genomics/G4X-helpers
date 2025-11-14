@@ -8,14 +8,13 @@ Updates an existing `.bin` segmentation file with new clustering, embedding, or 
 ## Usage
 ![`g4x-helpers update_bin --help`](../img/update_bin-help.svg)
 
+--8<-- "_core/_partials/global_options_note.md"
 
 ## argument descriptions
 ---
 ### required 
+--8<-- "_core/_partials/arg_g4x_data.md"
 
-#### `--g4x-data`: (*type:* `str`)
-
-> Path to the base directory containing G4X sample output (including the `g4x_viewer` folder with the current `.bin` file).
 
 #### `--metadata`: (*type:* `str`)
 
@@ -23,13 +22,9 @@ Updates an existing `.bin` segmentation file with new clustering, embedding, or 
 
 ### optional 
 
-#### `--output`: (*type:* `str`  *default:* `None`)
+--8<-- "_core/_partials/arg_output.md"
 
-> Directory where the updated viewer assets will be written. If omitted, the existing viewer folder inside `--g4x-data` is updated in place.
-
-#### `--sample-id`: (*type:* `str`  *default:* `None`)
-
-> Optional override for the sample identifier used when naming the output `.bin`.
+--8<-- "_core/_partials/arg_smp_id.md"
 
 #### `--cellid-key`: (*type:* `str`  *default:* `None`)
 
@@ -47,7 +42,5 @@ Updates an existing `.bin` segmentation file with new clustering, embedding, or 
 
 > Prefix for embedding coordinates. The command looks for two columns: `{emb_key}_1` and `{emb_key}_2`. Used to embed cells in UMAP/tSNE/etc. space.
 
-<br>
---8<-- "_core/_partials/global_options_note.md"
 <br>
 --8<-- "_core/_partials/end_cap.md"

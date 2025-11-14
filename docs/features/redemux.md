@@ -8,13 +8,12 @@ Replaces or updates the transcript manifest in a G4X run, reassigns transcripts 
 ## Usage
 ![`g4x-helpers redemux --help`](../img/redemux-help.svg)
 
+--8<-- "_core/_partials/global_options_note.md"
+
 ## argument descriptions
 ---
 ### required
-#### `--g4x-data`: (*type:* `str`)
-
-> Path to the G4X sample output folder (the base directory for the run).  
-> This directory must contain the required files such as `run_meta.json`, transcript panel, and feature tables.
+--8<-- "_core/_partials/arg_g4x_data.md"
 
 #### `--manifest`: (*type:* `str`)
 
@@ -34,17 +33,9 @@ Replaces or updates the transcript manifest in a G4X run, reassigns transcripts 
 > Number of transcripts to process per batch during demultiplexing.  
 > Larger batch sizes may improve performance but increase memory usage.
 
-#### `--output`: (*type:* `str`  *default:* `None`)
+--8<-- "_core/_partials/arg_output.md"
 
-> Output directory where the re-demuxed files will be written.  
-> - If not provided, files in the `--g4x-data` directory will be updated **in place**.  
-> - If provided, the directory will be created (if it does not exist) and symlinked to the original run files (excluding specific diagnostic files).
+--8<-- "_core/_partials/arg_smp_id.md"
 
-#### `--sample-id`: (*type:* `str`  *default:* `None`)
-
-> Optional sample identifier override used for naming downstream outputs.
-
-<br>
---8<-- "_core/_partials/global_options_note.md"
 <br>
 --8<-- "_core/_partials/end_cap.md"
