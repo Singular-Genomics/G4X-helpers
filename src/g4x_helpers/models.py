@@ -71,14 +71,14 @@ class G4Xoutput:
         self.set_meta_attrs()
 
         if self.transcript_panel:
-            transcript_panel = pd.read_csv(self.data_dir / 'transcript_panel.csv', index_col=0, header=0)
-            self.transcript_panel_dict = transcript_panel.to_dict()['panel_type']
-            self.genes = list(self.transcript_panel_dict.keys())
+            transcript_panel = pl.read_csv(self.data_dir / 'transcript_panel.csv').unique('gene_name').sort('gene_name')
+            self.transcript_panel_dict = dict(zip(transcript_panel['gene_name'], transcript_panel['panel_type']))
+            self.genes = transcript_panel['gene_name'].to_list()
 
         if self.protein_panel:
-            protein_panel = pd.read_csv(self.data_dir / 'protein_panel.csv', index_col=0, header=0)
-            self.protein_panel_dict = protein_panel.to_dict()['panel_type']
-            self.proteins = list(self.protein_panel_dict.keys())
+            protein_panel = pl.read_csv(self.data_dir / 'protein_panel.csv').sort('target')
+            self.protein_panel_dict = dict(zip(protein_panel['target'], protein_panel['panel_type']))
+            self.proteins = protein_panel['target'].to_list()
 
     # region dunder
     def __repr__(self):
@@ -89,24 +89,32 @@ class G4Xoutput:
 
         shp = (np.array(self.shape) * 0.3125) / 1000
 
-        # repr_string += f'Sample: {self.sample_id} of {mac_run_id}, {self.fc}\n'
-        # repr_string += f'imaged area: ({shp[1]:.2f} x {shp[0]:.2f}) mm\n'
-        # repr_string += f'software version: {self.software_version}\n\n'
-
         repr_string += f'{"Sample ID":<{gap}} - {self.sample_id} of {mac_run_id}, {self.fc}\n'
         repr_string += f'{"imaged area":<{gap}} - ({shp[1]:.2f} x {shp[0]:.2f}) mm\n'
         repr_string += f'{"software version":<{gap}} - {self.software_version}\n\n'
 
-        d = 8
+        panels = [
+            ('Transcript panel', len(self.genes), 'genes', self.genes),
+            ('Protein panel', len(self.proteins), 'proteins', self.proteins),
+        ]
+
+        # Step 1: compute lengths of "<count> <label>"
+        pre_bracket_lengths = [
+            len(str(count)) + 2 + len(label)  # e.g., "128 genes"
+            for (_, count, label, _) in panels
+        ]
+
+        # Step 2: max width to align the `[`
+        max_pre = max(pre_bracket_lengths)
+
+        def format_panel(title, count, label, items):
+            return f'{title:<{gap}} - {count} {label:<{max_pre - len(str(count)) - 1}}[{", ".join(items[0:5])} ... ]\n'
+
         if self.includes_transcript:
-            # repr_string += f'Transcript panel with {len(self.genes)} genes\t[{", ".join(self.genes[0:5])} ... ]\n'
-            repr_string += (
-                f'{"Transcript panel":<{gap}} - {len(self.genes)} {"genes":<{d}}[{", ".join(self.genes[0:5])} ... ]\n'
-            )
+            repr_string += format_panel(*panels[0])
 
         if self.includes_protein:
-            # repr_string += f'Protein panel with {len(self.proteins)} proteins\t[{", ".join(self.proteins[0:5])} ... ]\n'
-            repr_string += f'{"Protein panel":<{gap}} - {len(self.proteins)} {"proteins":<{d + 1}}[{", ".join(self.proteins[0:5])} ... ]\n'
+            repr_string += format_panel(*panels[1])
 
         return repr_string
 
@@ -125,7 +133,7 @@ class G4Xoutput:
 
     @property
     def feature_table_path(self) -> Path:
-        return self.data_dir / 'diagnostics' / 'transcript_table.parquet'
+        return self.data_dir / 'rna' / 'transcript_table.parquet'
 
     @property
     def segmentation_path(self) -> Path:
@@ -225,7 +233,7 @@ class G4Xoutput:
         return self.load_image_by_type('eosin', thumbnail=thumbnail, cached=cached)
 
     def load_segmentation(self, expanded: bool = True, key: str | None = None) -> np.ndarray:
-        from .modules.segmentation import try_load_segmentation
+        from .modules.seg_intersect import try_load_segmentation
 
         arr = np.load(self.segmentation_path)
         available_keys = list(arr.keys())
