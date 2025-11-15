@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+message PointData {
+  repeated double position = 1 [packed = true];
+  string geneName = 2;
+  string cellId = 3;
+}
+
+message TileData {
+  repeated PointData pointsData = 1;
+  uint32 numberOfPoints = 2;
+}
+
+message ColumnData {
+  repeated TileData columnTiles = 1;
+}
+
+message LevelData {
+  repeated ColumnData levelColumns = 1;
+}
+
+message Transcripts {
+  repeated LevelData level = 1;
+}
