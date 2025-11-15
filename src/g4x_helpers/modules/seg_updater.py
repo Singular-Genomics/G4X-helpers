@@ -1,11 +1,12 @@
 import logging
 from pathlib import Path
 
+import matplotlib.colors as mcolors
 import pandas as pd
 from tqdm import tqdm
 
-from ..modules import bin_generation as bg
-from ..modules.g4x_viewer import CellMasksSchema_pb2 as CellMasksSchema
+from .. import utils
+from ..g4x_viewer import CellMasksSchema_pb2 as CellMasksSchema
 from .decorator import workflow
 
 
@@ -30,6 +31,7 @@ def seg_updater(
     logger.info(f'Loading {bin_file}.')
     with open(bin_file, 'rb') as f:
         data = f.read()
+
     cell_masks = CellMasksSchema.CellMasks()
     cell_masks.ParseFromString(data)
 
@@ -68,13 +70,13 @@ def seg_updater(
             .set_index(cluster_key)
             .to_dict()[cluster_color_key]
         )
-        cluster_palette = {str(k): bg.hex2rgb(v) for k, v in cluster_palette.items()}
+        cluster_palette = {str(k): hex2rgb(v) for k, v in cluster_palette.items()}
     else:
         if cluster_key is not None:
             update_cluster_color = True
             logger.debug('Auto-assigning colors to new clustering.')
             cluster_color_key = 'cluster_color'
-            cluster_palette = bg.generate_cluster_palette(metadata[cluster_key].tolist())
+            cluster_palette = utils.generate_cluster_palette(metadata[cluster_key].tolist())
             metadata['cluster_color'] = metadata[cluster_key].astype(str).map(cluster_palette).tolist()
         else:
             update_cluster_color = False
@@ -97,18 +99,20 @@ def seg_updater(
         if current_cellid in metadata.index:
             if update_cluster:
                 cell.clusterId = str(metadata.loc[current_cellid, cluster_key])
-            if update_cluster_color:
-                # clear out the existing color entries:
-                cell.ClearField('color')
-                cell.color.extend(metadata.loc[current_cellid, cluster_color_key])
+
+            # if update_cluster_color and bin_version == 'v2':
+            #     # clear out the existing color entries:
+            #     cell.ClearField('color')
+            #     cell.color.extend(metadata.loc[current_cellid, cluster_color_key])
+
             if update_emb:
                 cell.umapValues.umapX = metadata.loc[current_cellid, f'{emb_key}_1']
                 cell.umapValues.umapY = metadata.loc[current_cellid, f'{emb_key}_2']
         else:
             logger.debug(f'{current_cellid} not found in metadata, not updating data for this cell.')
 
+    # clear the entire colormap list:
     if update_cluster_color:
-        # clear the entire colormap list:
         cell_masks.ClearField('colormap')
         for cluster_id, color in cluster_palette.items():
             entry = CellMasksSchema.ColormapEntry()
@@ -120,3 +124,7 @@ def seg_updater(
     logger.debug(f'Writing updated bin file --> {out_path}')
     with open(out_path, 'wb') as file:
         file.write(cell_masks.SerializeToString())
+
+
+def hex2rgb(hex: str) -> list[int, int, int]:
+    return [int(x * 255) for x in mcolors.to_rgb(hex)]

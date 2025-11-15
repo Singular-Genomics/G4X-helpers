@@ -74,7 +74,7 @@ def resegment(
     logger: logging.Logger,
     **kwargs,
 ) -> None:
-    from .modules import segmentation as seg
+    from .workflows import seg_intersect as seg
 
     cell_labels = utils.validate_path(cell_labels, must_exist=True, is_dir_ok=False, is_file_ok=True)
 
