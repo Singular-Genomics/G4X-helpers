@@ -7,7 +7,7 @@ import sys
 import tarfile
 from pathlib import Path
 
-from .decorator import workflow
+from .workflow import workflow
 
 
 @workflow

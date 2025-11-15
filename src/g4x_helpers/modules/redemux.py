@@ -16,7 +16,7 @@ from tqdm import tqdm
 
 from .. import utils
 from ..modules import demultiplexing as dmx
-from .decorator import workflow
+from .workflow import workflow
 
 if TYPE_CHECKING:
     from ..models import G4Xoutput

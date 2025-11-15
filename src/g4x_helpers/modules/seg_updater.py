@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from .. import utils
 from ..g4x_viewer import CellMasksSchema_pb2 as CellMasksSchema
-from .decorator import workflow
+from .workflow import workflow
 
 
 @workflow
