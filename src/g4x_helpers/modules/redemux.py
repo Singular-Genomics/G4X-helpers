@@ -15,7 +15,6 @@ import polars as pl
 from tqdm import tqdm
 
 from .. import utils
-from ..modules import demultiplexing as dmx
 from .workflow import workflow
 
 if TYPE_CHECKING:
@@ -63,18 +62,18 @@ def redemux(
 
     ## update metadata and transcript panel file
     logger.info('Updating metadata and transcript panel file.')
-    dmx.update_metadata_and_tx_file(g4x_obj, manifest, out_dir)
+    update_metadata_and_tx_file(g4x_obj, manifest, out_dir)
 
     ## load the new manifest file that we will demux against
     logger.info('Loading manifest file.')
-    manifest, probe_dict = dmx.parse_input_manifest(manifest)
+    manifest, probe_dict = parse_input_manifest(manifest)
 
     logger.info('Performing re-demuxing.')
-    dmx.batched_demuxing(g4x_obj, manifest, probe_dict, batch_dir, batch_size)
+    batched_demuxing(g4x_obj, manifest, probe_dict, batch_dir, batch_size)
 
     ## concatenate results into final csv and parquet
     logger.info('Writing updated transcript table.')
-    dmx.concatenate_and_cleanup(batch_dir, out_dir)
+    concatenate_and_cleanup(batch_dir, out_dir)
 
 
 def one_hot_encode_str_array(seqs: list[str], seq_len: int) -> np.ndarray:
