@@ -34,7 +34,7 @@ repos:
       exclude: ^.*\.(txt|md|svg)$
 
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.13.1 # Ruff version.
+  rev: v0.14.5 # Ruff version.
   hooks:
 
     # Run the linter.
