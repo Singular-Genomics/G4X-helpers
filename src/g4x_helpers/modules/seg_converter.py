@@ -17,7 +17,7 @@ from skimage.morphology import dilation, disk, erosion
 
 from .. import utils
 from ..g4x_viewer import CellMasksSchema_pb2 as CellMasksSchema
-from .decorator import workflow
+from .workflow import workflow
 
 DEFAULT_COLOR = [int(191), int(191), int(191)]
 
