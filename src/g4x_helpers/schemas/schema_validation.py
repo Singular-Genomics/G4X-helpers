@@ -1,12 +1,19 @@
+import importlib.resources as resources
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import polars as pl
 from anndata import read_h5ad
-
-from . import validator
+from pathschema import validate
 
 if TYPE_CHECKING:
     from ..models import G4Xoutput
+
+# register schemas
+path = resources.files('g4x_helpers.schemas')
+schemas = {}
+for cont in path.iterdir():
+    schemas[cont.name.removesuffix('.txt')] = cont
 
 col_rename = {
     'x_coord_shift': 'y_pixel_coordinate',
@@ -41,12 +48,8 @@ def check_and_convert_sample(smp: 'G4Xoutput'):
 
 
 def infer_schema_version(smp: 'G4Xoutput'):
-    is_v1 = validator.validate_g4x_data(
-        path=smp.data_dir, schema_name='v1', report=False, formats={'sample_id': smp.sample_id}
-    )
-    is_v2 = validator.validate_g4x_data(
-        path=smp.data_dir, schema_name='v2', report=False, formats={'sample_id': smp.sample_id}
-    )
+    is_v1 = validate_g4x_data(path=smp.data_dir, schema_name='v1', report=False, formats={'sample_id': smp.sample_id})
+    is_v2 = validate_g4x_data(path=smp.data_dir, schema_name='v2', report=False, formats={'sample_id': smp.sample_id})
 
     if is_v1 and is_v2:
         result = 'ambiguous'
@@ -125,3 +128,64 @@ def convert_v1_to_v2(smp: 'G4Xoutput', delete_old: bool = False):
 
     if delete_old:
         (smp.data_dir / 'diagnostics' / 'transcript_table.parquet').unlink()
+
+
+def _print_details(path, result, errors_only=True):
+    gap = 21
+    for err_path, errors in result.errors_by_path.items():
+        err_path = Path(err_path)
+
+        relative = err_path.relative_to(path)
+
+        if not errors_only:
+            if len(errors) == 0:
+                relative = 'root' if str(relative) == '.' else relative
+                print(f'{"path valid":<{gap}} - {relative}')
+
+        for err in errors:
+            if err.startswith('Missing required file'):
+                err_full = err
+                err = 'Missing required file'
+                relative = relative / err_full.removeprefix('Missing required file ')
+
+            print(f'{err:<{gap}} - {relative}')
+
+
+def validate_g4x_data(
+    path,
+    schema_name: str,
+    formats: dict | None = None,
+    report: str | None = 'short',
+):
+    path = Path(path)
+
+    if formats is None:
+        formats = {'sample_id': 'A01'}
+
+    with open(schemas[schema_name], 'r') as f:
+        schema = f.read()
+
+    schema = schema.format(**formats)
+    result = validate(path, schema)
+
+    ok = not result.has_error()
+
+    # store callables, not results
+    reports = {
+        True: {
+            'short': lambda: _print_details(path, result, errors_only=True),
+            'long': lambda: _print_details(path, result, errors_only=False),
+        },
+        False: {
+            'short': lambda: _print_details(path, result, errors_only=True),
+            'long': lambda: _print_details(path, result, errors_only=False),
+        },
+    }
+
+    if report:
+        try:
+            reports[ok][report]()  # <-- call the function
+        except KeyError:
+            raise ValueError(f'Unknown report type: {report!r}')
+
+    return ok
