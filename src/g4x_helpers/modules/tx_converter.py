@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import matplotlib.pyplot as plt
 import polars as pl
 
-from .decorator import workflow
+from .workflow import workflow
 
 if TYPE_CHECKING:
     from ..models import G4Xoutput

@@ -19,7 +19,7 @@ from skimage.measure._regionprops import RegionProperties
 from tqdm import tqdm
 
 from .. import utils
-from .decorator import workflow
+from .workflow import workflow
 
 if TYPE_CHECKING:
     from geopandas.geodataframe import GeoDataFrame
