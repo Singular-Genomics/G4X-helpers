@@ -1,6 +1,5 @@
 import json
 import os
-from collections.abc import Iterator
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -253,18 +252,6 @@ class G4Xoutput:
         self, *, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
     ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
         return self._load_table(self.transcript_table_path, return_polars, lazy, columns)
-
-    def stream_features(self, batch_size: int, columns: str | list[str] | None = None) -> Iterator[pl.DataFrame]:
-        df = pl.scan_parquet(self.feature_table_path)
-        if columns:
-            df = df.select(columns)
-        offset = 0
-        while True:
-            batch = df.slice(offset, batch_size).collect()
-            if batch.is_empty():
-                break
-            yield batch
-            offset += batch_size
 
     def list_content(self, subdir=None):
         if subdir is None:
