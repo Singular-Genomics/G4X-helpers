@@ -1,0 +1,515 @@
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+import geopandas
+import numpy as np
+import polars as pl
+import scanpy as sc
+import shapely.affinity
+import skimage.measure
+from anndata import AnnData
+from geopandas import GeoDataFrame
+from rasterio.features import rasterize
+from rasterio.transform import Affine
+from shapely.geometry import Polygon
+from skimage.measure._regionprops import RegionProperties
+from tqdm import tqdm
+
+from .. import utils
+from .redemux import parse_input_manifest
+from .workflow import workflow
+
+if TYPE_CHECKING:
+    from geopandas.geodataframe import GeoDataFrame
+
+    from g4x_helpers.models import G4Xoutput
+
+SUPPORTED_MASK_FILETYPES = {'.npy', '.npz', '.geojson'}
+
+
+@workflow
+def resegment(
+    g4x_obj: 'G4Xoutput',
+    labels: np.ndarray | GeoDataFrame | None,
+    out_dir: Path,
+    *,
+    labels_key: str | None = None,
+    create_source: bool = True,
+    skip_protein_extraction: bool = False,
+    signal_list: list[str] | None = None,
+    logger: logging.Logger,
+):
+    if create_source:
+        mask = g4x_obj.load_segmentation(expanded=True)
+    else:
+        mask = try_load_segmentation(cell_labels=labels, expected_shape=g4x_obj.shape, labels_key=labels_key)
+        if isinstance(labels, GeoDataFrame):
+            logger.info('Rasterizing provided GeoDataFrame.')
+            mask = rasterize_polygons(gdf=labels, target_shape=g4x_obj.shape)
+
+    logger.info('Creating cell_by_gene table.')
+    if create_source:
+        cell_x_gene = create_cell_x_gene(
+            sample=g4x_obj,
+            mask=mask,
+            nucleus_mask=g4x_obj.load_segmentation(expanded=False),
+            out_path=out_dir / 'cell_by_transcript.csv',
+            write_tx_table=False,
+            return_output=True,
+        )
+    else:
+        cell_x_gene = create_cell_x_gene(
+            sample=g4x_obj,
+            mask=mask,
+            nucleus_mask=None,
+            out_path=out_dir / 'cell_by_transcript.csv',
+            write_tx_table=False,
+            return_output=True,
+        )
+
+    if skip_protein_extraction:
+        logger.warning('Skipping protein extraction. Will try existing cell_by_protein table.')
+        cell_x_protein = None
+    else:
+        logger.info('Creating cell_by_protein table.')
+        if signal_list is None:
+            logger.info('Processing all channels.')
+            signal_list = ['nuclear', 'eosin'] + g4x_obj.proteins
+        else:
+            logger.info(f'Processing channels: {signal_list}')
+
+        cell_x_protein = create_cell_x_protein(
+            sample=g4x_obj,
+            mask=mask,
+            out_path=out_dir / 'cell_by_protein.csv',
+            signal_list=signal_list,
+            cached=False,
+            return_output=True,
+        )
+
+    logger.info('Creating adata and metadata.')
+    cell_metadata = create_cell_metadata(g4x_obj, cell_x_protein=cell_x_protein, create_source=create_source)
+
+    create_adata(
+        sample=g4x_obj,
+        cell_x_gene=cell_x_gene,
+        cell_metadata=cell_metadata,
+        out_path=out_dir / 'feature_matrix.h5',
+        write_metadata=True,
+        return_output=False,
+    )
+
+
+def try_load_segmentation(
+    cell_labels: Path, expected_shape: tuple[int], labels_key: str | None = None
+) -> np.ndarray | geopandas.GeoDataFrame:
+    ## load new segmentation
+    cell_labels = Path(cell_labels)
+    suffix = cell_labels.suffix.lower()
+
+    if cell_labels.suffix not in SUPPORTED_MASK_FILETYPES:
+        raise ValueError(f'{cell_labels.suffix} is not a supported file type.')
+
+    if suffix == '.npz':
+        with np.load(cell_labels) as labels:
+            available_keys = list(labels.keys())
+
+            if labels_key:  # if a key is specified
+                if labels_key not in labels:
+                    raise KeyError(f"Key '{labels_key}' not found in .npz; available keys: {available_keys}")
+                seg = labels[labels_key]
+
+            else:  # if no key specified,
+                if len(labels) == 1:  # and only one key is available, use that key
+                    seg = labels[available_keys[0]]
+                else:  # and multiple keys are available, raise an error
+                    if len(labels) > 1:
+                        raise ValueError(
+                            f"Multiple keys found in .npz: {available_keys}.\nPlease specify a key using 'labels_key'"
+                        )
+                    seg = labels
+
+    elif suffix == '.npy':
+        # .npy: directly returns the array, no context manager available
+        if labels_key is not None:
+            print('file is .npy, ignoring provided labels_key.')
+        seg = np.load(cell_labels)
+
+    elif suffix == '.geojson':
+        seg = geopandas.read_file(cell_labels)
+
+        if labels_key is not None:
+            if labels_key not in seg.columns:
+                raise KeyError(f"Column '{labels_key}' not found in GeoJSON; available columns: {seg.columns.tolist()}")
+
+            # ensure that a coliumn named 'label' exists
+            seg['label'] = seg[labels_key]
+
+        else:
+            if 'label' not in seg.columns:
+                raise ValueError(
+                    "No column named 'label' found in GeoJSON. Please specify which column to use for labels via labels_key."
+                )
+
+    # only validate shape for numpy arrays
+    if isinstance(seg, np.ndarray):
+        assert seg.shape == expected_shape, (
+            f'provided mask shape {seg.shape} does not match G4X sample shape {expected_shape}'
+        )
+
+    return seg
+
+
+def get_cell_ids(sample_id: str, mask) -> pl.DataFrame:
+    print('Getting cell-IDs from segmentation mask.')
+    seg_ids = np.unique(mask[mask != 0])
+    cell_ids = (
+        pl.Series(name='segmentation_label', values=seg_ids[seg_ids != 0])
+        .to_frame()
+        .with_columns((f'{sample_id}-' + pl.col('segmentation_label').cast(pl.String)).alias('label'))
+        .select(['label', 'segmentation_label'])
+    )
+    return cell_ids
+
+
+def get_mask_properties(cell_ids: pl.DataFrame, mask: np.ndarray) -> pl.DataFrame:
+    print('Getting regionprops.')
+    props = skimage.measure.regionprops(mask)
+
+    prop_dict = []
+    # Loop through each region to get the area and centroid, with a progress bar
+    for prop in tqdm(props, desc='Extracting mask properties'):
+        label = prop.label  # The label (mask id)
+        area = prop.area  # Area: count of pixels
+        centroid = prop.centroid  # Centroid: (row, col)
+
+        # assuming coordinate order: 'yx':
+        cell_y, cell_x = centroid
+
+        px_to_um_area = 0.3125**2
+
+        prop_dict.append(
+            {
+                'segmentation_label': label,
+                'area_um': area * px_to_um_area,
+                'cell_x': cell_x,
+                'cell_y': cell_y,
+            }
+        )
+    schema = {
+        'segmentation_label': pl.Int32,
+        'area_um': pl.Float32,
+        'cell_x': pl.Float32,
+        'cell_y': pl.Float32,
+    }
+    prop_dict_df = pl.DataFrame(prop_dict, schema=schema)
+
+    prop_dict_df = cell_ids.join(prop_dict_df, on='segmentation_label', how='left')
+    return prop_dict_df
+
+
+def create_cell_metadata(sample, cell_x_protein: pl.DataFrame | None = None, create_source: bool = False):
+    if create_source:
+        cell_props = build_g4x_cell_properties(sample)
+    else:
+        custom_mask = try_load_segmentation(
+            cell_labels=sample.segmentation_path, expected_shape=sample.shape, labels_key='nuclei_exp'
+        )
+        cell_props = build_custom_cell_properties(sample, custom_mask)
+
+    if cell_x_protein is None:
+        cxp_path = sample.data_dir / 'single_cell_data' / 'cell_by_protein.csv.gz'
+        cxp_short = Path(cxp_path.parent.name) / cxp_path.name
+        print(f'Cell_x_protein table not provided, loading from: {cxp_short}')
+        cell_x_protein = pl.read_csv(cxp_path)
+        mergeable = cell_x_protein['label'].sort().equals(cell_props['label'].sort())
+        if not mergeable:
+            raise ValueError(
+                f'Cell labels in {cxp_path} do not match those in cell properties. Please provide cell_x_protein DataFrame directly.'
+            )
+
+    cell_metadata = cell_props.join(cell_x_protein, on='label')
+    return cell_metadata
+
+
+def build_g4x_cell_properties(smp: G4Xoutput) -> pl.DataFrame:
+    mask = smp.load_segmentation(expanded=True)
+    cell_ids = get_cell_ids(smp.sample_id, mask)
+    cell_props_expanded = get_mask_properties(cell_ids, mask)
+
+    mask = smp.load_segmentation(expanded=False)
+    cell_props_nuc = get_mask_properties(cell_ids, mask)
+    del mask
+
+    df = cell_props_nuc.rename({'area_um': 'nuclei_area_um'})
+    df_exp = cell_props_expanded.rename({'area_um': 'nuclei_expanded_area_um'}).drop(
+        ['segmentation_label', 'cell_x', 'cell_y']
+    )
+
+    segmentation_props = df.join(df_exp, on='label').select(
+        ['label', 'segmentation_label', 'cell_x', 'cell_y', 'nuclei_area_um', 'nuclei_expanded_area_um']
+    )
+
+    return segmentation_props
+
+
+def build_custom_cell_properties(smp: G4Xoutput, mask: np.ndarray) -> pl.DataFrame:
+    cell_ids = get_cell_ids(smp.sample_id, mask)
+    cell_props = get_mask_properties(cell_ids, mask)
+    del mask
+
+    segmentation_props = cell_props.select(['label', 'segmentation_label', 'cell_x', 'cell_y', 'area_um'])
+
+    return segmentation_props
+
+
+def create_cell_x_gene(
+    sample,
+    mask,
+    out_path: str,
+    nucleus_mask: np.ndarray | None = None,
+    write_tx_table: bool = False,
+    return_output: bool = False,
+) -> pl.DataFrame:
+    tx_table = sample.transcript_table_path
+    reads = pl.scan_csv(tx_table)
+
+    print('Assigning transcripts to segmentation labels.')
+    coord_order = ['y_pixel_coordinate', 'x_pixel_coordinate']
+    tx_coords = reads.select(coord_order).collect().to_numpy().astype(int)
+    cell_ids = mask[tx_coords[:, 0], tx_coords[:, 1]]
+
+    if nucleus_mask is not None:
+        print('Assigning transcripts to nucleus labels.')
+        nuc_ids = nucleus_mask[tx_coords[:, 0], tx_coords[:, 1]]
+        reads = reads.with_columns(pl.lit(nuc_ids).alias('in_nucleus'))
+
+    if nucleus_mask is None:
+        if 'in_nucleus' in reads.collect_schema().names():
+            reads = reads.drop('in_nucleus')
+
+    reads = reads.with_columns(pl.lit(cell_ids).alias('segmentation_label'))
+    # reads = reads.with_columns((f'{sample.sample_id}-' + pl.col('segmentation_label').cast(pl.String)).alias('cell_id'))
+
+    if write_tx_table:
+        print('Writing transcript table with segmentation labels.')
+        csv_name = tx_table.with_name(tx_table.name.removesuffix('.gz'))
+        reads.rename({'segmentation_label': 'cell_id'}).sink_csv(csv_name)
+        utils.gzip_file(csv_name, remove_original=True)
+
+    print('Creating cell x gene matrix.')
+    cell_by_gene = (
+        reads.filter(pl.col('segmentation_label') != 0)
+        .group_by('segmentation_label', 'gene_name')
+        .agg(pl.len().alias('counts'))
+        .sort('gene_name')
+        .collect()
+        .pivot(on='gene_name', values='counts', index='segmentation_label')
+    )
+
+    print('Adding missing cells with zero counts.')
+    cell_ids = get_cell_ids(sample.sample_id, mask)
+    cell_by_gene = (
+        cell_ids.join(cell_by_gene, on='segmentation_label', how='left')  # .select('segmentation_label')
+        .fill_null(0)
+        .drop('segmentation_label')
+    )
+
+    print('Adding missing genes with zero counts.')
+    zero_count_probes = (
+        parse_input_manifest(file_path=sample.data_dir / 'transcript_panel.csv')
+        .unique('gene_name')
+        .filter(~pl.col('gene_name').is_in(cell_by_gene.columns))['gene_name']
+        .to_list()
+    )
+
+    for probe in zero_count_probes:
+        cell_by_gene = cell_by_gene.with_columns(pl.lit(None, dtype=pl.UInt32).alias(probe))
+
+    ordered = [cell_by_gene.columns[0]] + sorted(cell_by_gene.columns[1:])
+    cell_by_gene = cell_by_gene.select(ordered).fill_null(0)
+
+    print(f'Writing cell x gene matrix to {out_path}.')
+    cell_by_gene.write_csv(out_path)
+    utils.gzip_file(out_path, remove_original=True)
+
+    if return_output:
+        return cell_by_gene
+
+
+def create_adata(
+    sample,
+    cell_x_gene: pl.DataFrame,
+    cell_metadata: pl.DataFrame,
+    out_path: str,
+    write_metadata: bool = False,
+    return_output: bool = False,
+) -> AnnData:
+    X = cell_x_gene.drop('label').to_numpy().astype(np.uint16)
+
+    obs_df = cell_metadata.to_pandas()  # .set_index('label')
+    obs_df.index = obs_df.index.astype(str)
+
+    gene_ids = pl.Series(name='gene_id', values=cell_x_gene.columns[1:])
+    var_df = pl.DataFrame(gene_ids).with_columns(pl.lit('tx').alias('modality'))
+
+    panel_type = (
+        parse_input_manifest(sample.data_dir / 'transcript_panel.csv')
+        .unique('gene_name')
+        .select('gene_name', 'probe_type')
+        .rename({'gene_name': 'gene_id'})
+    )
+
+    var_df = var_df.join(
+        panel_type,
+        on='gene_id',
+        how='left',
+    ).to_pandas()
+    var_df.index = var_df.index.astype(str)
+
+    adata = AnnData(X=X, obs=obs_df, var=var_df)
+    adata.obs = adata.obs.rename(columns={'label': 'cell_id'})  # if you still want this
+
+    sc.pp.calculate_qc_metrics(adata, inplace=True, percent_top=None)
+
+    adata.write_h5ad(out_path)
+
+    if write_metadata:
+        print('Writing cell metadata table.')
+        meta_name = out_path.parent / 'cell_metadata.csv'
+        adata.obs.rename(columns={'cell_id': 'label'}).set_index('label').to_csv(meta_name)
+        utils.gzip_file(meta_name, remove_original=True)
+
+    if return_output:
+        return adata
+
+
+def create_cell_x_protein(
+    sample,  #
+    mask: np.ndarray,
+    out_path: str,
+    signal_list: list[str] | None = None,
+    cached: bool = False,
+    return_output: bool = False,
+) -> pl.DataFrame | pl.LazyFrame:
+    if signal_list is None:
+        signal_list = ['nuclear', 'eosin'] + sample.proteins
+
+    print(f'Creating cell x protein matrix for {len(signal_list)} signals.')
+
+    channel_name_map = {protein: protein for protein in sample.proteins}
+    channel_name_map['nuclear'] = 'nuclearstain'
+    channel_name_map['eosin'] = 'cytoplasmicstain'
+
+    bead_mask = sample.load_bead_mask()
+    bead_mask_flat = bead_mask.ravel() if bead_mask is not None else None
+    mask_flat = mask.ravel()
+
+    cell_x_protein = get_cell_ids(sample.sample_id, mask).drop('segmentation_label')
+
+    for signal_name in tqdm(signal_list, desc='Extracting protein signal'):
+        if signal_name not in ['nuclear', 'eosin']:
+            image_type = 'protein'
+            protein = signal_name
+        else:
+            image_type = signal_name
+            protein = None
+
+        signal_img = sample.load_image_by_type(image_type, thumbnail=False, protein=protein, cached=cached)
+
+        ch_label = f'{channel_name_map[signal_name]}_intensity_mean'
+
+        intensities = image_mask_intensity_extraction(
+            signal_img,
+            mask_flat=mask_flat,
+            bead_mask_flat=bead_mask_flat,
+        )
+
+        cell_x_protein = cell_x_protein.with_columns(pl.Series(name=ch_label, values=intensities))
+
+    print(f'Writing cell x protein matrix to {out_path}.')
+    cell_x_protein.write_csv(out_path)
+    utils.gzip_file(out_path, remove_original=True)
+
+    if return_output:
+        return cell_x_protein
+
+
+def image_mask_intensity_extraction(
+    img: np.ndarray,
+    mask_flat: np.ndarray,
+    bead_mask_flat: np.ndarray | None = None,
+) -> pl.DataFrame | pl.LazyFrame:
+    img_flat = img.ravel()
+
+    ## optional masking with beads
+    if bead_mask_flat is not None:
+        bead_mask_flat = ~bead_mask_flat
+        mask_flat = mask_flat[bead_mask_flat]
+        img_flat = img_flat[bead_mask_flat]
+
+    # intensity_means = np.bincount(mask_flat, weights=img_flat)[1:] / np.bincount(mask_flat)[1:]
+    counts = np.bincount(mask_flat)[1:]
+    sums = np.bincount(mask_flat, weights=img_flat)[1:]
+
+    # Avoid division by zero:
+    intensity_means = np.divide(sums, counts, out=np.zeros_like(sums), where=counts != 0)
+    return intensity_means
+
+
+def vectorize_mask(mask: np.ndarray, nudge: bool = True) -> GeoDataFrame:
+    if mask.max() == 0:
+        return GeoDataFrame(geometry=[])
+
+    regions = skimage.measure.regionprops(mask)
+
+    geoms = []
+    labels = []
+    # Wrap the iteration in tqdm to show progress
+    for region in tqdm(regions, desc='Vectorizing regions'):
+        polys = region_props_to_polygons(region)
+        geoms.extend(polys)
+        # add the region label once per polygon
+        labels.extend([region.label] * len(polys))
+
+    gdf = GeoDataFrame({'label': labels}, geometry=geoms)
+
+    if nudge:
+        # GeoSeries.translate works elementwise
+        gdf['geometry'] = gdf['geometry'].translate(xoff=-0.5, yoff=-0.5)
+
+    return gdf
+
+
+def region_props_to_polygons(region_props: RegionProperties) -> list[Polygon]:
+    mask = np.pad(region_props.image, 1)
+    contours = skimage.measure.find_contours(mask, 0.5)
+
+    # shapes with <= 3 vertices, i.e. lines, can't be converted into a polygon
+    polygons = [Polygon(contour[:, [1, 0]]) for contour in contours if contour.shape[0] >= 4]
+
+    yoff, xoff, *_ = region_props.bbox
+    return [shapely.affinity.translate(poly, xoff, yoff) for poly in polygons]
+
+
+def rasterize_polygons(gdf: GeoDataFrame, target_shape: tuple) -> np.ndarray:
+    height, width = target_shape
+    transform = Affine.identity()
+
+    # wrap the zip in tqdm; total=len(gdf) gives a proper progress bar
+    wrapped = tqdm(zip(gdf.geometry, gdf['label']), total=len(gdf), desc='Rasterizing polygons')
+    # feed that wrapped iterator into rasterize
+    shapes = ((geom, int(lbl)) for geom, lbl in wrapped)
+
+    label_array = rasterize(
+        shapes=shapes,
+        out_shape=(height, width),
+        transform=transform,
+        fill=0,  # background value
+        dtype='int32',
+    )
+
+    return label_array
