@@ -142,6 +142,10 @@ class G4Xoutput:
     def feature_mtx_path(self) -> Path:
         return self.data_dir / 'single_cell_data' / 'feature_matrix.h5'
 
+    @property
+    def bead_mask_path(self) -> Path:
+        return self.data_dir / 'protein' / 'bead_mask.npz'
+
     def set_meta_attrs(self):
         static_attrs = [
             'platform',
@@ -241,6 +245,9 @@ class G4Xoutput:
             key = 'nuclei_exp' if expanded else 'nuclei'
 
         return try_load_segmentation(cell_labels=self.segmentation_path, expected_shape=self.shape, labels_key=key)
+
+    def load_bead_mask(self) -> np.ndarray:
+        return np.load(self.bead_mask_path)['bead_mask']
 
     # TODO: this is not used anywhere, consider removing. it's also broken
     def load_feature_table(
