@@ -154,6 +154,22 @@ def verbose_to_log_level(verbose: int) -> int:
     return mapping.get(verbose, logging.DEBUG)
 
 
+class TruncatingFormatter(logging.Formatter):
+    def __init__(self, *args, name_max=20, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.name_max = name_max
+
+    def format(self, record):
+        if len(record.name) > self.name_max:
+            end = self.name_max - len('...' + 'XX')
+            record.name = record.name[:end] + '...' + record.name[-2:]
+        # else:
+        #     fill = '.' * (self.name_max - len(record.name))
+        #     record.name = record.name + fill
+
+        return super().format(record)
+
+
 def setup_logger(
     logger_name: str,
     *,
@@ -204,9 +220,11 @@ def setup_logger(
     logger.setLevel(logging.DEBUG)
 
     if format is None:
-        format = '[%(asctime)s | %(name)s | %(levelname)s: %(message)s'
+        # format = '[%(asctime)s | %(name)s | %(levelname)s: %(message)s'
+        format = '%(asctime)s | %(name)-12s | %(levelname)7s - %(message)s'
 
-    formatter = logging.Formatter(format, datefmt='%Y-%m-%d %H:%M:%S')
+    # formatter = logging.Formatter(format, datefmt='%Y-%m-%d %H:%M:%S')
+    formatter = TruncatingFormatter(format, name_max=12, datefmt='%H:%M:%S')
 
     ## optionally clear existing handlers
     if clear_handlers:
