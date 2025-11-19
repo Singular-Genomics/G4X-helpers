@@ -132,7 +132,7 @@ class G4Xoutput:
 
     @property
     def feature_table_path(self) -> Path:
-        return self.data_dir / 'rna' / 'transcript_table.parquet'
+        return self.data_dir / 'rna' / 'raw_features.parquet'
 
     @property
     def segmentation_path(self) -> Path:
