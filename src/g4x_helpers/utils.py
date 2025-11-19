@@ -10,6 +10,8 @@ from datetime import datetime
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
+import polars as pl
 import rich_click as click
 from matplotlib.pyplot import get_cmap
 from rich.console import Console
@@ -57,6 +59,9 @@ def validate_path(path_str, must_exist=True, is_dir_ok=True, is_file_ok=True, re
             raise ValueError(f'Expected a file but got a directory: {path}')
         if path.is_file() and not is_file_ok:
             raise ValueError(f'Expected a directory but got a file: {path}')
+
+    if not path.exists() and not must_exist and not is_file_ok:
+        path.mkdir(parents=True, exist_ok=True)
 
     return path
 
@@ -117,6 +122,17 @@ def gzip_file(outfile: str | Path, remove_original: bool = False) -> None:
             shutil.copyfileobj(f_in, f_out)
     if remove_original:
         os.remove(outfile)
+
+
+def write_csv_gz(df, path, keep_uncompressed: bool = False):
+    if isinstance(df, pl.LazyFrame):
+        df.sink_csv(path)
+    if isinstance(df, pl.DataFrame):
+        df.write_csv(path)
+    if isinstance(df, pd.DataFrame):
+        df.to_csv(path, index=False)
+
+    gzip_file(path, remove_original=not keep_uncompressed)
 
 
 def create_custom_out(
