@@ -9,7 +9,7 @@ from ..utils import setup_logger
 def workflow(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        func_name = func.__name__.removesuffix('_workflow')
+        func_name = func.__name__.removesuffix('_core')
         logger = kwargs.pop('logger', None)
         if logger is None:
             logger = setup_logger(logger_name=func_name, file_logger=False)

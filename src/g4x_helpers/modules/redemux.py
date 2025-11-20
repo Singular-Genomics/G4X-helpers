@@ -37,7 +37,7 @@ PROBE_PATTERN = r'^(.*?)-([ACGT]{2,30})-([^-]+)$'
 
 
 @workflow
-def redemux_workflow(
+def redemux_core(
     g4x_obj: 'G4Xoutput',
     manifest: Path,
     out_dir: Path,
