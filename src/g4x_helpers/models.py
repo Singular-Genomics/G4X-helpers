@@ -236,7 +236,7 @@ class G4Xoutput:
         return self.load_image_by_type('eosin', thumbnail=thumbnail, cached=cached)
 
     def load_segmentation(self, expanded: bool = True, key: str | None = None) -> np.ndarray:
-        from .modules.seg_intersect import try_load_segmentation
+        from .modules.resegment import try_load_segmentation
 
         arr = np.load(self.segmentation_path)
         available_keys = list(arr.keys())

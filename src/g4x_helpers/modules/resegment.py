@@ -27,11 +27,9 @@ if TYPE_CHECKING:
 
     from g4x_helpers.models import G4Xoutput
 
-SUPPORTED_MASK_FILETYPES = {'.npy', '.npz', '.geojson'}
-
 
 @workflow
-def resegment_workflow(
+def resegment_core(
     g4x_obj: 'G4Xoutput',
     labels: np.ndarray | GeoDataFrame | None,
     out_dir: Path,
@@ -63,10 +61,10 @@ def resegment_workflow(
     logger.info('Creating cell_by_transcript table.')
     if create_source:
         cell_x_gene, tx_table = create_cell_x_gene(
-            sample=g4x_obj, mask=mask, nucleus_mask=g4x_obj.load_segmentation(expanded=False)
+            g4x_obj=g4x_obj, mask=mask, nucleus_mask=g4x_obj.load_segmentation(expanded=False)
         )
     else:
-        cell_x_gene, tx_table = create_cell_x_gene(sample=g4x_obj, mask=mask, nucleus_mask=None)
+        cell_x_gene, tx_table = create_cell_x_gene(g4x_obj=g4x_obj, mask=mask, nucleus_mask=None)
 
     logger.info(f'Writing cell_by_transcript matrix to {cell_x_gene_out}.')
     utils.write_csv_gz(df=cell_x_gene, path=cell_x_gene_out)
@@ -86,7 +84,7 @@ def resegment_workflow(
             logger.info(f'Processing channels: {signal_list}')
 
         cell_x_protein = create_cell_x_protein(
-            sample=g4x_obj,
+            g4x_obj=g4x_obj,
             mask=mask,
             signal_list=signal_list,
             cached=False,
@@ -99,7 +97,7 @@ def resegment_workflow(
     cell_metadata_pre = create_cell_metadata(g4x_obj, cell_x_protein=cell_x_protein, create_source=create_source)
 
     adata = create_adata(
-        sample=g4x_obj,
+        g4x_obj=g4x_obj,
         cell_x_gene=cell_x_gene,
         cell_metadata=cell_metadata_pre,
     )
@@ -113,6 +111,7 @@ def resegment_workflow(
 
 
 def try_load_segmentation(cell_labels: str, expected_shape: tuple[int], labels_key: str | None = None) -> np.ndarray:
+    SUPPORTED_MASK_FILETYPES = {'.npy', '.npz', '.geojson'}
     ## load new segmentation
     cell_labels = utils.validate_path(cell_labels, must_exist=True, is_dir_ok=False, is_file_ok=True)
     suffix = cell_labels.suffix.lower()
@@ -217,17 +216,17 @@ def get_mask_properties(cell_ids: pl.DataFrame, mask: np.ndarray) -> pl.DataFram
     return prop_dict_df
 
 
-def create_cell_metadata(sample, cell_x_protein: pl.DataFrame | None = None, create_source: bool = False):
+def create_cell_metadata(g4x_obj: G4Xoutput, cell_x_protein: pl.DataFrame | None = None, create_source: bool = False):
     if create_source:
-        cell_props = build_g4x_cell_properties(sample)
+        cell_props = build_g4x_cell_properties(g4x_obj)
     else:
         custom_mask = try_load_segmentation(
-            cell_labels=sample.segmentation_path, expected_shape=sample.shape, labels_key='nuclei_exp'
+            cell_labels=g4x_obj.segmentation_path, expected_shape=g4x_obj.shape, labels_key='nuclei_exp'
         )
-        cell_props = build_custom_cell_properties(sample, custom_mask)
+        cell_props = build_custom_cell_properties(g4x_obj, custom_mask)
 
     if cell_x_protein is None:
-        cxp_path = sample.data_dir / 'single_cell_data' / 'cell_by_protein.csv.gz'
+        cxp_path = g4x_obj.data_dir / 'single_cell_data' / 'cell_by_protein.csv.gz'
         cxp_short = Path(cxp_path.parent.name) / cxp_path.name
         print(f'Cell_x_protein table not provided, loading from: {cxp_short}')
         cell_x_protein = pl.read_csv(cxp_path)
@@ -241,12 +240,12 @@ def create_cell_metadata(sample, cell_x_protein: pl.DataFrame | None = None, cre
     return cell_metadata
 
 
-def build_g4x_cell_properties(smp: G4Xoutput) -> pl.DataFrame:
-    mask = smp.load_segmentation(expanded=True)
-    cell_ids = get_cell_ids(smp.sample_id, mask)
+def build_g4x_cell_properties(g4x_obj: G4Xoutput) -> pl.DataFrame:
+    mask = g4x_obj.load_segmentation(expanded=True)
+    cell_ids = get_cell_ids(g4x_obj.sample_id, mask)
     cell_props_expanded = get_mask_properties(cell_ids, mask)
 
-    mask = smp.load_segmentation(expanded=False)
+    mask = g4x_obj.load_segmentation(expanded=False)
     cell_props_nuc = get_mask_properties(cell_ids, mask)
     del mask
 
@@ -262,8 +261,8 @@ def build_g4x_cell_properties(smp: G4Xoutput) -> pl.DataFrame:
     return segmentation_props
 
 
-def build_custom_cell_properties(smp: G4Xoutput, mask: np.ndarray) -> pl.DataFrame:
-    cell_ids = get_cell_ids(smp.sample_id, mask)
+def build_custom_cell_properties(g4x_obj: G4Xoutput, mask: np.ndarray) -> pl.DataFrame:
+    cell_ids = get_cell_ids(g4x_obj.sample_id, mask)
     cell_props = get_mask_properties(cell_ids, mask)
     del mask
 
@@ -273,11 +272,11 @@ def build_custom_cell_properties(smp: G4Xoutput, mask: np.ndarray) -> pl.DataFra
 
 
 def create_cell_x_gene(
-    sample,
-    mask,
+    g4x_obj: G4Xoutput,
+    mask: np.ndarray,
     nucleus_mask: np.ndarray | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
-    tx_table = sample.transcript_table_path
+    tx_table = g4x_obj.transcript_table_path
     reads = pl.scan_csv(tx_table)
 
     print('Assigning transcripts to segmentation labels.')
@@ -295,7 +294,7 @@ def create_cell_x_gene(
             reads = reads.drop('in_nucleus')
 
     reads = reads.with_columns(pl.lit(cell_ids).alias('segmentation_label')).with_columns(
-        cell_id=(sample.sample_id + '-' + pl.col('segmentation_label').cast(pl.Utf8))
+        cell_id=(g4x_obj.sample_id + '-' + pl.col('segmentation_label').cast(pl.Utf8))
     )
 
     print('Creating cell x gene matrix.')
@@ -309,7 +308,7 @@ def create_cell_x_gene(
     )
 
     print('Adding missing cells with zero counts.')
-    cell_ids = get_cell_ids(sample.sample_id, mask)
+    cell_ids = get_cell_ids(g4x_obj.sample_id, mask)
     cell_by_gene = (
         cell_ids.join(cell_by_gene, on='segmentation_label', how='left')  # .select('segmentation_label')
         .fill_null(0)
@@ -318,7 +317,7 @@ def create_cell_x_gene(
 
     print('Adding missing genes with zero counts.')
     zero_count_probes = (
-        parse_input_manifest(file_path=sample.data_dir / 'transcript_panel.csv')
+        parse_input_manifest(file_path=g4x_obj.data_dir / 'transcript_panel.csv')
         .unique('gene_name')
         .filter(~pl.col('gene_name').is_in(cell_by_gene.columns))['gene_name']
         .to_list()
@@ -333,8 +332,52 @@ def create_cell_x_gene(
     return cell_by_gene, reads.drop('segmentation_label')
 
 
+def create_cell_x_protein(
+    g4x_obj: G4Xoutput,
+    mask: np.ndarray,
+    signal_list: list[str] | None = None,
+    cached: bool = False,
+) -> pl.DataFrame | pl.LazyFrame:
+    if signal_list is None:
+        signal_list = ['nuclear', 'eosin'] + g4x_obj.proteins
+
+    print(f'Creating cell x protein matrix for {len(signal_list)} signals.')
+
+    channel_name_map = {protein: protein for protein in g4x_obj.proteins}
+    channel_name_map['nuclear'] = 'nuclearstain'
+    channel_name_map['eosin'] = 'cytoplasmicstain'
+
+    bead_mask = g4x_obj.load_bead_mask()
+    bead_mask_flat = bead_mask.ravel() if bead_mask is not None else None
+    mask_flat = mask.ravel()
+
+    cell_x_protein = get_cell_ids(g4x_obj.sample_id, mask).drop('segmentation_label')
+
+    for signal_name in tqdm(signal_list, desc='Extracting protein signal'):
+        if signal_name not in ['nuclear', 'eosin']:
+            image_type = 'protein'
+            protein = signal_name
+        else:
+            image_type = signal_name
+            protein = None
+
+        signal_img = g4x_obj.load_image_by_type(image_type, thumbnail=False, protein=protein, cached=cached)
+
+        ch_label = f'{channel_name_map[signal_name]}_intensity_mean'
+
+        intensities = image_mask_intensity_extraction(
+            signal_img,
+            mask_flat=mask_flat,
+            bead_mask_flat=bead_mask_flat,
+        )
+
+        cell_x_protein = cell_x_protein.with_columns(pl.Series(name=ch_label, values=intensities))
+
+    return cell_x_protein
+
+
 def create_adata(
-    sample,
+    g4x_obj: G4Xoutput,
     cell_x_gene: pl.DataFrame,
     cell_metadata: pl.DataFrame,
 ) -> AnnData:
@@ -347,7 +390,7 @@ def create_adata(
     var_df = pl.DataFrame(gene_ids).with_columns(pl.lit('tx').alias('modality'))
 
     panel_type = (
-        parse_input_manifest(sample.data_dir / 'transcript_panel.csv')
+        parse_input_manifest(g4x_obj.data_dir / 'transcript_panel.csv')
         .unique('gene_name')
         .select('gene_name', 'probe_type')
         .rename({'gene_name': 'gene_id'})
@@ -366,50 +409,6 @@ def create_adata(
     sc.pp.calculate_qc_metrics(adata, inplace=True, percent_top=None)
 
     return adata
-
-
-def create_cell_x_protein(
-    sample,  #
-    mask: np.ndarray,
-    signal_list: list[str] | None = None,
-    cached: bool = False,
-) -> pl.DataFrame | pl.LazyFrame:
-    if signal_list is None:
-        signal_list = ['nuclear', 'eosin'] + sample.proteins
-
-    print(f'Creating cell x protein matrix for {len(signal_list)} signals.')
-
-    channel_name_map = {protein: protein for protein in sample.proteins}
-    channel_name_map['nuclear'] = 'nuclearstain'
-    channel_name_map['eosin'] = 'cytoplasmicstain'
-
-    bead_mask = sample.load_bead_mask()
-    bead_mask_flat = bead_mask.ravel() if bead_mask is not None else None
-    mask_flat = mask.ravel()
-
-    cell_x_protein = get_cell_ids(sample.sample_id, mask).drop('segmentation_label')
-
-    for signal_name in tqdm(signal_list, desc='Extracting protein signal'):
-        if signal_name not in ['nuclear', 'eosin']:
-            image_type = 'protein'
-            protein = signal_name
-        else:
-            image_type = signal_name
-            protein = None
-
-        signal_img = sample.load_image_by_type(image_type, thumbnail=False, protein=protein, cached=cached)
-
-        ch_label = f'{channel_name_map[signal_name]}_intensity_mean'
-
-        intensities = image_mask_intensity_extraction(
-            signal_img,
-            mask_flat=mask_flat,
-            bead_mask_flat=bead_mask_flat,
-        )
-
-        cell_x_protein = cell_x_protein.with_columns(pl.Series(name=ch_label, values=intensities))
-
-    return cell_x_protein
 
 
 def image_mask_intensity_extraction(

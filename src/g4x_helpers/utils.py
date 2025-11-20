@@ -13,7 +13,6 @@ import numpy as np
 import pandas as pd
 import polars as pl
 import rich_click as click
-from matplotlib.pyplot import get_cmap
 from rich.console import Console
 
 console = Console()
@@ -100,8 +99,6 @@ def initialize_sample(
 
 # region file operations
 def npzGetShape(npz_path, key):
-    import numpy as np
-
     with np.load(npz_path, mmap_mode='r') as data:
         if key not in data:
             raise KeyError(f'{key} not in archive')
@@ -304,53 +301,3 @@ def symlink_original_files(g4x_obj, out_dir: Path | str) -> None:
             if dst_file.exists():
                 dst_file.unlink()
             dst_file.symlink_to((Path(root) / f).resolve())
-
-
-def generate_cluster_palette(clusters: list, max_colors: int = 256) -> dict:
-    """
-    Generate a color palette mapping for cluster labels.
-
-    This function assigns RGB colors to unique cluster labels using a matplotlib colormap.
-    Clusters labeled as "-1" are assigned a default gray color `[191, 191, 191]`.
-
-    The colormap used depends on the number of clusters:
-        - `tab10` for ≤10 clusters
-        - `tab20` for ≤20 clusters
-        - `hsv` for more than 20 clusters, capped by `max_colors`
-
-    Parameters
-    ----------
-    clusters : list
-        A list of cluster identifiers (strings or integers). The special label '-1' is excluded
-        from color mapping and handled separately.
-    max_colors : int, optional
-        Maximum number of colors to use in the HSV colormap. Only used if there are more than
-        20 unique clusters. Default is 256.
-
-    Returns
-    -------
-    dict
-        A dictionary mapping each cluster ID (as a string) to a list of three integers
-        representing an RGB color in the range [0, 255].
-
-    Examples
-    --------
-    >>> generate_cluster_palette(['0', '1', '2', '-1'])
-    {'0': [31, 119, 180], '1': [255, 127, 14], '2': [44, 160, 44], '-1': [191, 191, 191]}
-    """
-    unique_clusters = [c for c in np.unique(clusters) if c != '-1']
-    n_clusters = len(unique_clusters)
-
-    if n_clusters <= 10:
-        base_cmap = get_cmap('tab10')
-    elif n_clusters <= 20:
-        base_cmap = get_cmap('tab20')
-    else:
-        base_cmap = get_cmap('hsv', min(max_colors, n_clusters))
-
-    cluster_palette = {
-        str(cluster): [int(255 * c) for c in base_cmap(i / n_clusters)[:3]] for i, cluster in enumerate(unique_clusters)
-    }
-    cluster_palette['-1'] = [int(191), int(191), int(191)]
-
-    return cluster_palette
