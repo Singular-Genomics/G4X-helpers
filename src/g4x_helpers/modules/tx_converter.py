@@ -12,7 +12,9 @@ from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 import polars as pl
+from tqdm import tqdm
 
+from ..g4x_viewer import TranscriptsSchema_pb2 as TranscriptsSchema
 from .workflow import workflow
 
 if TYPE_CHECKING:
@@ -22,7 +24,7 @@ mp.set_start_method('spawn', force=True)
 
 
 @workflow
-def tx_converter(
+def tx_converter_core(
     g4x_obj: 'G4Xoutput',
     out_path: Path,
     *,
@@ -39,6 +41,7 @@ def tx_converter(
         MIN_TILE_SIZE = 1028
     else:
         MIN_TILE_SIZE = 512
+
     out_dir = g4x_obj.data_dir / 'g4x_viewer_temp'
     os.makedirs(out_dir, exist_ok=True)
 
@@ -69,6 +72,7 @@ def tx_converter(
     min_zoom_tiles_y = math.ceil(num_tiles_y / (pow(2, NUMBER_OF_LEVELS - 1)))
 
     logger.info(f"""
+
         Final configurations for parsing:
             Image resolution: {IMAGE_RESOLUTION[0]} x {IMAGE_RESOLUTION[1]}
             Number of max zoom tiles: X = {num_tiles_x} | Y = {num_tiles_y}
@@ -80,7 +84,8 @@ def tx_converter(
     logger.info('Parsing and classifying tiles...')
 
     pq_args = []
-    for level_index in reversed(range(NUMBER_OF_LEVELS + 1)):
+    for level_index in tqdm(reversed(range(NUMBER_OF_LEVELS + 1)), desc='Parsing and classifying tiles...'):
+        # for level_index in reversed(range(NUMBER_OF_LEVELS + 1)):
         ## subsampling factor
         sampling_factor = sampling_fraction ** (NUMBER_OF_LEVELS - level_index)
 
@@ -101,16 +106,17 @@ def tx_converter(
             os.makedirs(tileOutputDirPath, exist_ok=True)
             pq_args.append([tileOutputDirPath, y_num_of_tiles, scaling_factor])
 
-            _ = (
+            (
                 df.filter(
                     ((pl.col('tile_x_coord') // scaling_factor) == tile_x_index),
                 )
-                .select(['position', 'color', tx_column, 'cell_id', 'tile_y_coord'])
+                .select(['position', tx_column, 'cell_id', 'tile_y_coord'])
                 .collect()
                 .sample(fraction=sampling_factor)
                 .write_parquet(tileOutputDirPath / 'tmp.parquet')
             )
 
+    logger.info('Processing transcripts')
     ctx = mp.get_context('spawn')
     with ctx.Pool(processes=n_threads) as pool:
         pool.starmap(_process_x, pq_args)
@@ -118,7 +124,7 @@ def tx_converter(
     logger.info('Tarring up.')
     if out_path.exists() or out_path.is_symlink():
         out_path.unlink()
-    _ = create_tar_from_directory(out_dir, out_path)
+    create_tar_from_directory(out_dir, out_path)
     shutil.rmtree(out_dir, ignore_errors=True)
 
 
@@ -180,10 +186,8 @@ def save_configuration_file(
 
 
 def _process_x(tileOutputDirPath: Path, y_num_of_tiles: int, scaling_factor: int) -> None:
-    from ..modules.g4x_viewer import MetadataSchema_pb2 as MetadataSchema
-
     for tile_y_index in range(y_num_of_tiles):
-        outputTileData = MetadataSchema.TileData()
+        outputTileData = TranscriptsSchema.TileData()
 
         df_current = (
             pl.scan_parquet(tileOutputDirPath / 'tmp.parquet')
@@ -193,10 +197,9 @@ def _process_x(tileOutputDirPath: Path, y_num_of_tiles: int, scaling_factor: int
         )
         # Iterate over rows directly
         ## this can potentially be done lazily with this PR: https://github.com/pola-rs/polars/pull/23980
-        for position, color, gene, cell_id in df_current.iter_rows():
+        for position, gene, cell_id in df_current.iter_rows():
             outputPointData = outputTileData.pointsData.add()
             _ = outputPointData.position.extend(position)
-            _ = outputPointData.color.extend(color)
             outputPointData.geneName = gene
             outputPointData.cellId = str(cell_id)
 
