@@ -45,18 +45,10 @@ def redemux_core(
     batch_size: int = 1_000_000,
     logger: logging.Logger,
 ) -> None:
-    batch_dir = out_dir / 'demux_batches'
-    g4x_viewer_dir = out_dir / 'g4x_viewer'
-    rna_dir = out_dir / 'rna'
-    tx_table_out = rna_dir / 'transcript_table.csv'
-
-    ## preflight checks
     logger.info('Validating input paths.')
+    out_tree = utils.OutSchema(out_dir, subdirs=['g4x_viewer', 'rna', 'demux_batches'])
     manifest = utils.validate_path(manifest, must_exist=True, is_dir_ok=False, is_file_ok=True)
-    out_dir = utils.validate_path(out_dir, must_exist=False, is_dir_ok=True, is_file_ok=False)
-    rna_dir = utils.validate_path(rna_dir, must_exist=False, is_dir_ok=True, is_file_ok=False)
-    g4x_viewer_dir = utils.validate_path(g4x_viewer_dir, must_exist=False, is_dir_ok=True, is_file_ok=False)
-    batch_dir = utils.validate_path(batch_dir, must_exist=False, is_dir_ok=True, is_file_ok=False)
+    tx_table_out = out_tree.rna / 'transcript_table.csv'
 
     ## update metadata and transcript panel file
     logger.info('Updating metadata and transcript panel file.')
@@ -66,7 +58,7 @@ def redemux_core(
     tx_table = create_transcript_table(
         manifest=manifest,
         feature_table=g4x_obj.feature_table_path,
-        batch_dir=batch_dir,
+        batch_dir=out_tree.demux_batches,
         batch_size=batch_size,
     )
 
@@ -75,7 +67,7 @@ def redemux_core(
     utils.write_csv_gz(tx_table, tx_table_out)
 
     logger.info('Cleaning up temporary files.')
-    shutil.rmtree(batch_dir)
+    shutil.rmtree(out_tree.demux_batches)
 
 
 def create_transcript_table(
