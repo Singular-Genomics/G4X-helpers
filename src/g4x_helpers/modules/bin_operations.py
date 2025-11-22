@@ -1,7 +1,6 @@
 import logging
 import multiprocessing
 from collections import deque
-from operator import itemgetter
 from pathlib import Path
 
 import numpy as np
@@ -32,7 +31,6 @@ def new_bin_core(
     metadata: str | Path | None = None,
     cluster_key: str | None = None,
     emb_key: str | None = None,
-    protein_list: list[str] | None = None,
     n_threads: int = 4,
     logger: logging.Logger | None = None,
 ) -> None:
@@ -46,19 +44,19 @@ def new_bin_core(
 
     logger.info('Creating G4X-viewer bin file.')
 
-    viewer_dir = out_dir / 'g4x_viewer'
-    viewer_dir = utils.validate_path(viewer_dir, must_exist=False, is_dir_ok=True, is_file_ok=False)
-    out_file = viewer_dir / f'{g4x_obj.sample_id}_segmentation.bin'
+    out_tree = utils.OutSchema(out_dir, subdirs=['g4x_viewer'])
+    out_file = out_tree.g4x_viewer / f'{g4x_obj.sample_id}_segmentation.bin'
 
     adata = g4x_obj.load_adata(load_clustering=True, remove_nontargeting=False)
 
-    adata.obs[cluster_key] = adata.obs[cluster_key].astype(str)
-    cells = adata.obs.sample(150000).index
-    adata.obs.loc[cells, cluster_key] = np.nan
-    adata.obs.loc[~adata.obs.index.isin(cells), cluster_key] = 'keep_no_emb'
+    ### some testing code to simulate missing data
+    # adata.obs[cluster_key] = adata.obs[cluster_key].astype(str)
+    # cells = adata.obs.sample(150000).index
+    # adata.obs.loc[cells, cluster_key] = np.nan
+    # adata.obs.loc[~adata.obs.index.isin(cells), cluster_key] = 'keep_no_emb'
 
-    adata.obs.loc[cells, f'{emb_key}_1'] = np.nan
-    adata.obs.loc[cells, f'{emb_key}_2'] = np.nan
+    # adata.obs.loc[cells, f'{emb_key}_1'] = np.nan
+    # adata.obs.loc[cells, f'{emb_key}_2'] = np.nan
 
     logger.info('Loading clustering information.')
     obs_df = prepare_metadata(
@@ -85,21 +83,22 @@ def new_bin_core(
         entry.color.extend(color)
         cell_seg_out.colormap.append(entry)
 
-    if protein_list:
-        protein_col_pos = []
-        for prot in protein_list:
-            protein_col_pos.append(int(np.argwhere([x == prot for x in obs_df.columns])) + 1)
-            obs_df[prot] = obs_df[prot].fillna(0).astype(int)
-        get_prot_vals = itemgetter(*protein_col_pos)
+    protein_values = None
+    if g4x_obj.includes_protein:
+        protein_names = g4x_obj.proteins
+        protein_list = [prot + '_intensity_mean' for prot in protein_names]
 
-    ## refine polygons
+        cell_seg_out.metadata.proteinNames.extend(protein_names)
+
+        obs_df = obs_df.with_columns([pl.col(prot).fill_null(0).cast(pl.Int64) for prot in protein_list])
+        protein_values = obs_df.select(protein_list).to_numpy()
+
     logger.info('Refining polygons.')
     with multiprocessing.Pool(processes=n_threads) as pool:
         polygons = pool.starmap(refine_polygon, pq_args)
 
     logger.info('Adding individual cells.')
     for i, row in enumerate(tqdm(obs_df.iter_rows(named=True), total=obs_df.height, desc='Adding individual cells.')):
-        # for i, row in enumerate(obs_df.iter_rows(named=True)):
         output_mask_data = cell_seg_out.cellMasks.add()
         cell_polygon_pts = [sub_coord for coord in polygons[i] for sub_coord in coord[::-1]]
 
@@ -120,8 +119,8 @@ def new_bin_core(
         output_mask_data.nonzeroGeneIndices.extend(indices.tolist())
         output_mask_data.nonzeroGeneValues.extend(values.astype(int).tolist())
 
-        if protein_list:
-            output_mask_data.proteinValues.extend(get_prot_vals(row))
+        if protein_values is not None:
+            output_mask_data.proteinValues.extend(protein_values[i].astype(int).tolist())
 
     ## write to file
     with open(out_file, 'wb') as file:
@@ -266,12 +265,23 @@ def add_singlecell_info(obs_df, adata, cell_ids, emb_key):
 
     obs_df = obs_df.cast({area_select: pl.Int32}).rename({area_select: 'area'})
 
-    # add_umap_coordinates
-    if emb_key:
+    def add_umap_coordinates(obs_df, emb_key):
         obs_df = obs_df.with_columns(umap_0=obs_df[f'{emb_key}_1'], umap_1=obs_df[f'{emb_key}_2'])
         obs_df = obs_df.with_columns(pl.col('umap_0').fill_null(float('nan')), pl.col('umap_1').fill_null(float('nan')))
+        return obs_df
+
+    if emb_key:
+        obs_df = add_umap_coordinates(obs_df, emb_key)
     else:
-        obs_df = obs_df.with_columns(umap_0=float('nan'), umap_1=float('nan'))
+        emb_keys = [c[:-2] for c in obs_df.columns if c.startswith('X_umap')]
+        if len(emb_keys) == 0:
+            print('No embedding key available, UMAP coordinates will be set to NaN.')
+            obs_df = obs_df.with_columns(umap_0=float('nan'), umap_1=float('nan'))
+
+        else:
+            emb_key = emb_keys[0]
+            obs_df = add_umap_coordinates(obs_df, emb_key)
+            print(f'No embedding key provided. Using: {emb_key}')
 
     return obs_df, gene_names, gex
 
