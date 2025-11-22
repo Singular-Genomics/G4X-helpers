@@ -40,17 +40,13 @@ def resegment_core(
     signal_list: list[str] | None = None,
     logger: logging.Logger,
 ):
-    single_cell_dir = out_dir / 'single_cell_data'
-    rna_dir = out_dir / 'rna'
+    out_tree = utils.OutSchema(out_dir, subdirs=['single_cell_data', 'rna'])
 
-    single_cell_dir = utils.validate_path(single_cell_dir, must_exist=False, is_dir_ok=True, is_file_ok=False)
-    rna_dir = utils.validate_path(rna_dir, must_exist=False, is_dir_ok=True, is_file_ok=False)
-
-    cell_x_gene_out = single_cell_dir / 'cell_by_transcript.csv'
-    cell_x_protein_out = single_cell_dir / 'cell_by_protein.csv'
-    cell_metadata_out = single_cell_dir / 'cell_metadata.csv'
-    feature_matrix_out = single_cell_dir / 'feature_matrix.h5'
-    tx_table_out = rna_dir / 'transcript_table.csv'
+    cell_x_gene_out = out_tree.single_cell_data / 'cell_by_transcript.csv'
+    cell_x_protein_out = out_tree.single_cell_data / 'cell_by_protein.csv'
+    cell_metadata_out = out_tree.single_cell_data / 'cell_metadata.csv'
+    feature_matrix_out = out_tree.single_cell_data / 'feature_matrix.h5'
+    tx_table_out = out_tree.rna / 'transcript_table.csv'
 
     logger.info('Loading segmentation mask.')
     if create_source:
