@@ -108,6 +108,7 @@ def initialize_sample(
     return sample, output
 
 
+# TODO revert this and find solution for all python versions
 # region file operations
 def npzGetShape(npz_path, key):
     with np.load(npz_path, mmap_mode='r') as data:
@@ -124,10 +125,12 @@ def delete_existing(outfile: str | Path) -> None:
 
 def gzip_file(outfile: str | Path, remove_original: bool = False) -> None:
     outfile = Path(outfile)
+
     delete_existing(outfile.with_suffix('.csv.gz'))
     with open(outfile, 'rb') as f_in:
         with gzip.open(outfile.with_suffix('.csv.gz'), 'wb') as f_out:
             shutil.copyfileobj(f_in, f_out)
+
     if remove_original:
         os.remove(outfile)
 
