@@ -6,6 +6,8 @@ import polars as pl
 from anndata import read_h5ad
 from pathschema import validate
 
+from .. import utils
+
 if TYPE_CHECKING:
     from ..models import G4Xoutput
 
@@ -16,21 +18,17 @@ for cont in path.iterdir():
     schemas[cont.name.removesuffix('.txt')] = cont
 
 col_rename = {
+    'TXUID': 'TXUID',
+    'sequence_to_demux': 'sequence',
+    'meanQS': 'confidence_score',
     'x_coord_shift': 'y_pixel_coordinate',
     'y_coord_shift': 'x_pixel_coordinate',
     'z': 'z_level',
-    'demuxed': 'demuxed',
-    'transcript': 'probe_name',
-    'transcript_condensed': 'gene_name',
-    'meanQS': 'confidence_score',
-    'cell_id': 'cell_id',
-    'sequence_to_demux': 'sequence',
-    'TXUID': 'TXUID',
 }
 
-new_feature_table = 'rna/transcript_table_new.parquet'
+new_feature_table = 'rna/raw_features.parquet'
 new_feature_matrix = 'single_cell_data/feature_matrix_new.h5'
-new_cell_metadata = 'single_cell_data/cell_metadata_new.csv.gz'
+new_cell_metadata = 'single_cell_data/cell_metadata_new.csv'
 new_transcript_panel = 'transcript_panel_new.csv'
 
 
@@ -84,26 +82,27 @@ def confirm_v1_schema(smp: 'G4Xoutput') -> bool:
 
 
 def convert_v1_to_v2(smp: 'G4Xoutput', delete_old: bool = False):
-    new_feature_table = smp.data_dir / 'rna/transcript_table_new.parquet'
-    new_feature_matrix = smp.data_dir / 'single_cell_data/feature_matrix_new.h5'
-    new_cell_metadata = smp.data_dir / 'single_cell_data/cell_metadata_new.csv.gz'
+    old_feature_table = smp.data_dir / 'diagnostics' / 'transcript_table.parquet'
 
-    print('Migrating transcript_table.parquet schema: v1 -> v2')
-
-    (
-        pl.scan_parquet(smp.data_dir / 'diagnostics' / 'transcript_table.parquet')
+    print('Migrating raw_features.parquet schema: v1 -> v2')
+    raw_features = (
+        pl.scan_parquet(old_feature_table)
         .rename(col_rename)
+        .select(col_rename.values())
         .sink_parquet(new_feature_table)
     )
 
     print('Building new transcript panel csv from migrated transcript table')
-    df = (
-        pl.read_parquet(new_feature_table)
-        .filter(pl.col('probe_name') != 'UNDETERMINED')
+
+    (
+        raw_features.filter(pl.col('probe_name') != 'UNDETERMINED')
         .unique('probe_name')
         .sort('probe_name')
+        .select('probe_name', 'gene_name')
+        .sink_csv(smp.data_dir / new_transcript_panel)
     )
-    df.select('probe_name', 'gene_name').write_csv(smp.data_dir / new_transcript_panel)
+
+    del raw_features
 
     print('Migrating feature_matrix.h5 and cell_metadata.csv.gz schema: v1 -> v2')
     adata = smp.load_adata(remove_nontargeting=False, load_clustering=False)
@@ -123,11 +122,11 @@ def convert_v1_to_v2(smp: 'G4Xoutput', delete_old: bool = False):
         columns={'nuclei_area': 'nuclei_area_um', 'nuclei_expanded_area': 'nuclei_expanded_area_um'}
     )
 
-    adata.write_h5ad(new_feature_matrix)
-    adata.obs.to_csv(new_cell_metadata)
+    adata.write_h5ad(smp.data_dir / new_feature_matrix)
+    utils.write_csv_gz(adata.obs, smp.data_dir / new_cell_metadata)
 
     if delete_old:
-        (smp.data_dir / 'diagnostics' / 'transcript_table.parquet').unlink()
+        old_feature_table.unlink()
 
 
 def _print_details(path, result, errors_only=True):

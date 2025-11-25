@@ -11,7 +11,7 @@ from .workflow import workflow
 
 
 @workflow
-def tar_viewer(
+def tar_viewer_core(
     viewer_dir: Path,
     out_dir: Path,
     *,
