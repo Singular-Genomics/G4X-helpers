@@ -20,7 +20,7 @@ diagnostics/
 
 +rna/
 	+transcript_table.csv.gz
-	+transcript_table.parquet
+	+raw_features.parquet
 
 +segmentation/
 	+segmentation_mask.npz
