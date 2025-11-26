@@ -9,7 +9,6 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import polars as pl
 import rich_click as click
@@ -29,25 +28,6 @@ class OutSchema:
             p = self.out_dir / subdir
             p.mkdir(exist_ok=True, parents=True)
             setattr(self, subdir, p)
-
-
-def validate_data_dir(data_dir, resolve_path=False) -> Path:
-    """check that expected outputs are present."""
-
-    data_dir = validate_path(path_str=data_dir, must_exist=True, is_file_ok=False, resolve_path=resolve_path)
-
-    # TODO: add more required files to check for
-    required_paths = [
-        'run_meta.json',
-        'single_cell_data/feature_matrix.h5',
-        'segmentation/segmentation_mask.npz',
-        'rna/transcript_table.csv.gz',
-    ]
-
-    for p in required_paths:
-        validate_path(data_dir / p, must_exist=True, is_dir_ok=False, is_file_ok=True)
-
-    return data_dir
 
 
 @contextmanager
@@ -106,15 +86,6 @@ def initialize_sample(
         output = sample.data_dir
 
     return sample, output
-
-
-# TODO revert this and find solution for all python versions
-# region file operations
-def npzGetShape(npz_path, key):
-    with np.load(npz_path, mmap_mode='r') as data:
-        if key not in data:
-            raise KeyError(f'{key} not in archive')
-        return data[key].shape
 
 
 def delete_existing(outfile: str | Path) -> None:

@@ -13,7 +13,7 @@ import tifffile
 from anndata import AnnData, read_h5ad
 from matplotlib.pyplot import imread
 
-from . import utils
+from .schemas.validate import validate_g4x_data
 
 
 @dataclass()
@@ -59,10 +59,14 @@ class G4Xoutput:
     sample_id: str | None = None
 
     def __post_init__(self):
-        self.data_dir = utils.validate_data_dir(self.data_dir, resolve_path=True)
+        self.data_dir = Path(self.data_dir)
 
         if self.sample_id is None:
             self.sample_id = self.data_dir.name
+
+        self.data_dir = validate_g4x_data(
+            self.data_dir, schema_name='base_schema', formats={'sample_id': self.sample_id}
+        )
 
         with open(self.data_dir / 'run_meta.json', 'r') as f:
             self.run_meta = json.load(f)
