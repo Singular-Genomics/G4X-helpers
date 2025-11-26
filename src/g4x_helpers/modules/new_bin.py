@@ -13,16 +13,15 @@ from skimage.measure import approximate_polygon
 from skimage.morphology import dilation, disk, erosion
 from tqdm import tqdm
 
-from .. import utils
 from ..g4x_viewer import CellMasksSchema_pb2 as CellMasksSchema
 from ..models import G4Xoutput
 from .resegment import get_cell_ids
-from .update_bin import DEFAULT_COLOR, hex2rgb
-from .workflow import workflow
+from .update_bin import DEFAULT_COLOR, hex2rgb, update_colormap
+from .workflow import OutSchema, workflow
 
 
 @workflow
-def new_bin_core(
+def init_bin_file(
     g4x_obj: G4Xoutput,
     out_dir: str | Path,
     seg_mask: np.ndarray | None = None,
@@ -30,7 +29,7 @@ def new_bin_core(
     n_threads: int = 4,
     logger: logging.Logger | None = None,
 ) -> None:
-    out_tree = utils.OutSchema(out_dir, subdirs=['g4x_viewer'])
+    out_tree = OutSchema(out_dir, subdirs=['g4x_viewer'])
     out_file = out_tree.g4x_viewer / f'{g4x_obj.sample_id}_segmentation.bin'
 
     adata = g4x_obj.load_adata(load_clustering=True, remove_nontargeting=False)
@@ -185,15 +184,6 @@ def add_singlecell_info(obs_df: pl.DataFrame, adata, cell_ids: list[str]):
     obs_df = obs_df.cast({area_select: pl.Int32}).rename({area_select: 'area'})
 
     return obs_df, gene_names, gex
-
-
-def update_colormap(cell_masks: CellMasksSchema.CellMasks, cluster_palette: dict[str, list[int]]) -> None:
-    cell_masks.ClearField('colormap')
-    for cluster_id, color in cluster_palette.items():
-        entry = CellMasksSchema.ColormapEntry()
-        entry.clusterId = cluster_id
-        entry.color.extend(color)
-        cell_masks.colormap.append(entry)
 
 
 def refine_polygon(

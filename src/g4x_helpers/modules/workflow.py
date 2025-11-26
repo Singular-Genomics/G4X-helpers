@@ -3,7 +3,7 @@ import logging
 import shutil
 import sys
 
-from ..utils import setup_logger
+from ..utils import setup_logger, validate_path
 
 
 def workflow(func):
@@ -65,3 +65,14 @@ class LoggerWriter:
         if self._buffer.strip():
             self.logger.log(self.level, self._buffer.strip())
         self._buffer = ''
+
+
+class OutSchema:
+    def __init__(self, out_dir, subdirs=[]):
+        self.out_dir = validate_path(out_dir, must_exist=False, is_dir_ok=True, is_file_ok=False, resolve_path=False)
+        self.subdirs = subdirs
+
+        for subdir in self.subdirs:
+            p = self.out_dir / subdir
+            p.mkdir(exist_ok=True, parents=True)
+            setattr(self, subdir, p)

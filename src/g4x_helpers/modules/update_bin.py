@@ -4,12 +4,11 @@ from pathlib import Path
 import matplotlib.colors as mcolors
 import numpy as np
 import polars as pl
-from google.protobuf.message import DecodeError
 from tqdm import tqdm
 
 from ..g4x_viewer import CellMasksSchema_pb2 as CellMasksSchema
 from ..models import G4Xoutput
-from .new_bin import update_colormap
+from ..schemas.validate import read_bin_file
 from .workflow import workflow
 
 DEFAULT_COLOR = '#BFBFBF'
@@ -39,7 +38,7 @@ sg_palette = [
 
 
 @workflow
-def seg_updater_core(
+def edit_bin_file(
     g4x_obj: G4Xoutput,
     bin_file: Path,
     *,
@@ -51,6 +50,7 @@ def seg_updater_core(
     bin_out: Path | None = None,
     logger: logging.Logger,
 ) -> None:
+    logger.info(f'Reading bin file: {bin_file}')
     cell_masks = read_bin_file(bin_file)
 
     update_clusters = update_emb = False
@@ -176,19 +176,6 @@ def seg_updater_core(
         file.write(cell_masks.SerializeToString())
 
 
-def read_bin_file(bin_file: Path) -> CellMasksSchema.CellMasks:
-    with open(bin_file, 'rb') as f:
-        data = f.read()
-
-    cell_masks = CellMasksSchema.CellMasks()
-    try:
-        cell_masks.ParseFromString(data)
-        return cell_masks
-    except DecodeError:
-        print('Failed to parse bin file with current schema. It may need to be updated.')
-        return None
-
-
 def check_key(obs_df: pl.DataFrame, key_name: str, key: str = None) -> None:
     if key not in obs_df.columns:
         raise KeyError(f'{key_name} "{key}" not found in metadata columns.')
@@ -289,3 +276,12 @@ def generate_cluster_palette(clusters: list, max_colors: int = 256) -> dict:
     cluster_palette['-1'] = hex2rgb(DEFAULT_COLOR)
 
     return cluster_palette
+
+
+def update_colormap(cell_masks: CellMasksSchema.CellMasks, cluster_palette: dict[str, list[int]]) -> None:
+    cell_masks.ClearField('colormap')
+    for cluster_id, color in cluster_palette.items():
+        entry = CellMasksSchema.ColormapEntry()
+        entry.clusterId = cluster_id
+        entry.color.extend(color)
+        cell_masks.colormap.append(entry)

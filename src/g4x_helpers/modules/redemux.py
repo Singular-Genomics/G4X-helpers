@@ -12,7 +12,7 @@ import polars as pl
 from tqdm import tqdm
 
 from .. import utils
-from .workflow import workflow
+from .workflow import OutSchema, workflow
 
 if TYPE_CHECKING:
     from ..models import G4Xoutput
@@ -37,7 +37,7 @@ PROBE_PATTERN = r'^(.*?)-([ACGT]{2,30})-([^-]+)$'
 
 
 @workflow
-def redemux_core(
+def create_tx_table(
     g4x_obj: 'G4Xoutput',
     manifest: Path,
     out_dir: Path,
@@ -46,7 +46,7 @@ def redemux_core(
     logger: logging.Logger,
 ) -> None:
     logger.info('Validating input paths.')
-    out_tree = utils.OutSchema(out_dir, subdirs=['g4x_viewer', 'rna', 'demux_batches'])
+    out_tree = OutSchema(out_dir, subdirs=['g4x_viewer', 'rna', 'demux_batches'])
     manifest = utils.validate_path(manifest, must_exist=True, is_dir_ok=False, is_file_ok=True)
     tx_table_out = out_tree.rna / 'transcript_table.csv'
 
@@ -54,35 +54,26 @@ def redemux_core(
     logger.info('Updating metadata and transcript panel file.')
     update_metadata_and_tx_file(g4x_obj, manifest, out_dir)
 
+    logger.info('Parsing input transcript manifest.')
+    manifest = parse_input_manifest(file_path=manifest)
+
     logger.info('Running batched re-demuxing.')
-    tx_table = create_transcript_table(
+    batched_demuxing(
+        feature_table_path=g4x_obj.feature_table_path,
         manifest=manifest,
-        feature_table=g4x_obj.feature_table_path,
         batch_dir=out_tree.demux_batches,
         batch_size=batch_size,
     )
 
-    ## concatenate results into final csv and parquet
+    logger.info('Compiling transcript table.')
+    tx_table = pl.scan_parquet(list(out_tree.demux_batches.glob('*.parquet')))
+    tx_table = tx_table.filter(pl.col('demuxed')).drop('demuxed')
+
     logger.info('Writing updated transcript table.')
     utils.write_csv_gz(tx_table, tx_table_out)
 
     logger.info('Cleaning up temporary files.')
     shutil.rmtree(out_tree.demux_batches)
-
-
-def create_transcript_table(
-    manifest: str,
-    feature_table: Path,
-    batch_dir: Path,
-    batch_size: int = 1_000_000,
-):
-    manifest = parse_input_manifest(file_path=manifest)
-    batched_demuxing(feature_table_path=feature_table, manifest=manifest, batch_dir=batch_dir, batch_size=batch_size)
-
-    tx_table = pl.scan_parquet(list(batch_dir.glob('*.parquet')))
-    tx_table = tx_table.filter(pl.col('demuxed')).drop('demuxed')
-
-    return tx_table
 
 
 def parse_input_manifest(file_path: Path) -> pl.DataFrame:
