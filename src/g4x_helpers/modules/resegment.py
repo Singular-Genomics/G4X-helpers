@@ -20,7 +20,7 @@ from tqdm import tqdm
 
 from .. import utils
 from .redemux import parse_input_manifest
-from .workflow import workflow
+from .workflow import OutSchema, workflow
 
 if TYPE_CHECKING:
     from geopandas.geodataframe import GeoDataFrame
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 
 @workflow
-def resegment_core(
+def intersect_segmentation(
     g4x_obj: 'G4Xoutput',
     labels: np.ndarray | GeoDataFrame | None,
     out_dir: Path,
@@ -40,7 +40,7 @@ def resegment_core(
     signal_list: list[str] | None = None,
     logger: logging.Logger,
 ):
-    out_tree = utils.OutSchema(out_dir, subdirs=['single_cell_data', 'rna'])
+    out_tree = OutSchema(out_dir, subdirs=['single_cell_data', 'rna'])
 
     cell_x_gene_out = out_tree.single_cell_data / 'cell_by_transcript.csv'
     cell_x_protein_out = out_tree.single_cell_data / 'cell_by_protein.csv'

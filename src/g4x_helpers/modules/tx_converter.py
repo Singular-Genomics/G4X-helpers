@@ -24,7 +24,7 @@ mp.set_start_method('spawn', force=True)
 
 
 @workflow
-def tx_converter_core(
+def create_tar_file(
     g4x_obj: 'G4Xoutput',
     out_path: Path,
     *,

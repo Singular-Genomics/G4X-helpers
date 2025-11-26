@@ -19,17 +19,6 @@ console = Console()
 DEFAULT_THREADS = max(1, (os.cpu_count() // 2 or 4))
 
 
-class OutSchema:
-    def __init__(self, out_dir, subdirs=[]):
-        self.out_dir = validate_path(out_dir, must_exist=False, is_dir_ok=True, is_file_ok=False, resolve_path=False)
-        self.subdirs = subdirs
-
-        for subdir in self.subdirs:
-            p = self.out_dir / subdir
-            p.mkdir(exist_ok=True, parents=True)
-            setattr(self, subdir, p)
-
-
 @contextmanager
 def _spinner(message: str):
     with console.status(message, spinner='dots', spinner_style='red'):
