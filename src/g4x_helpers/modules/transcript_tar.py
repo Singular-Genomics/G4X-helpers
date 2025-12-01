@@ -24,7 +24,7 @@ mp.set_start_method('spawn', force=True)
 
 
 @workflow
-def create_tar_file(
+def create_tx_tarfile(
     g4x_obj: 'G4Xoutput',
     out_path: Path,
     *,

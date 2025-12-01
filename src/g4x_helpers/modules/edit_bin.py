@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import matplotlib.colors as mcolors
 import numpy as np
@@ -7,9 +8,12 @@ import polars as pl
 from tqdm import tqdm
 
 from ..g4x_viewer import CellMasksSchema_pb2 as CellMasksSchema
-from ..models import G4Xoutput
 from ..schemas.validate import read_bin_file
 from .workflow import workflow
+
+if TYPE_CHECKING:
+    from ..models import G4Xoutput
+
 
 DEFAULT_COLOR = '#BFBFBF'
 
@@ -39,7 +43,7 @@ sg_palette = [
 
 @workflow
 def edit_bin_file(
-    g4x_obj: G4Xoutput,
+    g4x_obj: 'G4Xoutput',
     bin_file: Path,
     *,
     metadata: Path | None = None,
