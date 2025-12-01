@@ -30,14 +30,13 @@ if TYPE_CHECKING:
 @workflow
 def apply_segmentation(
     g4x_obj: 'G4Xoutput',
-    labels: np.ndarray | GeoDataFrame | None,
+    labels: np.ndarray,
     out_dir: Path,
     *,
-    labels_key: str | None = None,
-    create_source: bool = True,
     skip_protein_extraction: bool = False,
     signal_list: list[str] | None = None,
     logger: logging.Logger,
+    **kwargs,
 ):
     out_tree = OutSchema(out_dir, subdirs=['single_cell_data', 'rna'])
 
@@ -47,24 +46,16 @@ def apply_segmentation(
     feature_matrix_out = out_tree.single_cell_data / 'feature_matrix.h5'
     tx_table_out = out_tree.rna / 'transcript_table.csv'
 
-    logger.info('Loading segmentation mask.')
-    if create_source:
-        mask = g4x_obj.load_segmentation(expanded=True)
-    else:
-        mask = try_load_segmentation(cell_labels=labels, expected_shape=g4x_obj.shape, labels_key=labels_key)
+    create_source = kwargs.get('create_source', False)
+    nuc_mask = g4x_obj.load_segmentation(expanded=False) if create_source else None
 
     logger.info('Creating cell_by_transcript table.')
-    if create_source:
-        cell_x_gene, tx_table = create_cell_x_gene(
-            g4x_obj=g4x_obj, mask=mask, nucleus_mask=g4x_obj.load_segmentation(expanded=False)
-        )
-    else:
-        cell_x_gene, tx_table = create_cell_x_gene(g4x_obj=g4x_obj, mask=mask, nucleus_mask=None)
+    cell_x_gene, tx_table = create_cell_x_gene(g4x_obj=g4x_obj, mask=labels, nucleus_mask=nuc_mask)
 
-    logger.info(f'Writing cell_by_transcript matrix to {cell_x_gene_out}.')
+    logger.info(f'Writing cell_by_transcript matrix to: {cell_x_gene_out.relative_to(out_dir)}.')
     utils.write_csv_gz(df=cell_x_gene, path=cell_x_gene_out)
 
-    logger.info(f'Writing transcript table after adding cell-ids to {tx_table_out}.')
+    logger.info(f'Writing transcript table after adding cell-ids to: {tx_table_out.relative_to(out_dir)}.')
     utils.write_csv_gz(df=tx_table, path=tx_table_out)
 
     if skip_protein_extraction:
@@ -80,12 +71,12 @@ def apply_segmentation(
 
         cell_x_protein = create_cell_x_protein(
             g4x_obj=g4x_obj,
-            mask=mask,
+            mask=labels,
             signal_list=signal_list,
             cached=False,
         )
 
-        logger.info(f'Writing cell_by_protein matrix to {cell_x_protein_out}.')
+        logger.info(f'Writing cell_by_protein matrix to: {cell_x_protein_out.relative_to(out_dir)}.')
         utils.write_csv_gz(df=cell_x_protein, path=cell_x_protein_out)
 
     logger.info('Creating adata and metadata.')
@@ -97,10 +88,10 @@ def apply_segmentation(
         cell_metadata=cell_metadata_pre,
     )
 
-    logger.info(f'Writing adata to {feature_matrix_out}.')
+    logger.info(f'Writing adata to: {feature_matrix_out.relative_to(out_dir)}.')
     adata.write_h5ad(feature_matrix_out)
 
-    logger.info(f'Writing cell metadata table to {cell_metadata_out}.')
+    logger.info(f'Writing cell metadata table to: {cell_metadata_out.relative_to(out_dir)}.')
     cell_metadata = adata.obs.rename(columns={'cell_id': 'label'}).set_index('label')
     utils.write_csv_gz(df=cell_metadata, path=cell_metadata_out)
 

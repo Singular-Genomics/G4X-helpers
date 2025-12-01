@@ -25,28 +25,28 @@ for cont in path.iterdir():
 
 @workflow
 def migrate_g4x_data(
-    sample_base: Path,
+    data_dir: Path,
     sample_id: str,
     logger: logging.Logger,
 ):
     logger.info('Migrating to latest G4X-data schema')
 
-    backup_size = total_size_gb(files_to_migrate, sample_id=sample_id, base_path=sample_base)
+    backup_size = total_size_gb(files_to_migrate, sample_id=sample_id, base_path=data_dir)
     logger.info(f'Creating backup of {backup_size:.2f} GB before proceeding')
 
     logger.info('Updating file locations')
-    migrate_sample_files(sample_base, sample_id=sample_id)
+    migrate_sample_files(data_dir, sample_id=sample_id)
 
     logger.info('Validating results...')
     valid_schema = validate.validate_g4x_data(
-        path=sample_base, schema_name='base_schema', formats={'sample_id': sample_id}, report=False
+        path=data_dir, schema_name='base_schema', formats={'sample_id': sample_id}, report=False
     )
 
     if not valid_schema:
         logger.error('Migration failed to produce correct G4X-data schema.')
     else:
         logger.info('Successfully updated file locations! Checking file structures...')
-        if not validate.validate_file_schemas(sample_base):
+        if not validate.validate_file_schemas(data_dir):
             logger.info('Some file structures need to be updated.')
             update_files = True
         else:
@@ -54,40 +54,40 @@ def migrate_g4x_data(
             logger.info('File structures are up to date! Migration complete.')
 
     if update_files:
-        parquet_lf, parquet_shema = validate.infer_parquet_schema(sample_base)
+        parquet_lf, parquet_shema = validate.infer_parquet_schema(data_dir)
         logger.info(f'parquet schema is: {parquet_shema}')
 
-        tx_panel_df, tx_panel_schema = validate.infer_tx_panel_schema(sample_base)
+        tx_panel_df, tx_panel_schema = validate.infer_tx_panel_schema(data_dir)
         logger.info(f'tx_panel schema is: {tx_panel_schema}')
 
-        bin_file_schema = validate.infer_bin_schema(sample_base)
+        bin_file_schema = validate.infer_bin_schema(data_dir)
         logger.info(f'bin file schema is: {bin_file_schema}')
 
-        adata, adata_schema = validate.infer_adata_schema(sample_base)
+        adata, adata_schema = validate.infer_adata_schema(data_dir)
         logger.info(f'anndata schema is: {adata_schema}')
 
         if tx_panel_schema != 'valid' and tx_panel_schema != 'unknown':
             logger.info('Building new transcript_panel.csv from migrated transcript table')
             tx_panel = tx_panel_from_parquet(parquet_lf, tx_panel_df)
-            tx_panel.write_csv(sample_base / 'transcript_panel.csv')
+            tx_panel.write_csv(data_dir / 'transcript_panel.csv')
 
         if parquet_shema != 'valid' and parquet_shema != 'unknown':
             logger.info('Bringing parquet file in correct order')
-            write_parquet_in_order(parquet_lf, sample_base)
+            write_parquet_in_order(parquet_lf, data_dir)
 
         if adata_schema != 'valid' and adata_schema != 'unknown':
             logger.info('Bringing anndata file in correct order')
-            write_adata_in_order(adata, sample_base)
+            write_adata_in_order(adata, data_dir)
 
         if bin_file_schema != 'valid' and bin_file_schema != 'unknown':
-            smp = G4Xoutput(sample_base)
-            init_bin_file(g4x_obj=smp, out_dir=sample_base, logger=logger)
+            smp = G4Xoutput(data_dir)
+            init_bin_file(g4x_obj=smp, out_dir=data_dir, logger=logger)
             edit_bin_file(
-                g4x_obj=smp, bin_file=sample_base / 'g4x_viewer' / f'{sample_id}_segmentation.bin', logger=logger
+                g4x_obj=smp, bin_file=data_dir / 'g4x_viewer' / f'{sample_id}_segmentation.bin', logger=logger
             )
 
         logger.info('Re-validating file structures...')
-        if not validate.validate_file_schemas(sample_base):
+        if not validate.validate_file_schemas(data_dir):
             raise RuntimeError('Migration failed to produce correct file structures.')
         else:
             logger.info('File structures are up to date! Migration complete.')
@@ -158,7 +158,7 @@ def migrate_sample_files(sample_base, sample_id):
     if backup_dir.exists() and any(backup_dir.iterdir()):
         raise RuntimeError(
             'Non-empty backup directory detected. Will not proceed with migration to avoid overwriting existing backups. \n'
-            'Please restore from backup via "g4x-helpers migrate --restore" or remove the backup directory before migrating again.'
+            'Please restore from backup via "g4x-helpers migrate --restore" or remove the backup directory if not needed.'
         )
     else:
         moved_files = {}
