@@ -19,7 +19,6 @@ from skimage.measure._regionprops import RegionProperties
 from tqdm import tqdm
 
 from .. import utils
-from .redemux import parse_input_manifest
 from .workflow import OutSchema, workflow
 
 if TYPE_CHECKING:
@@ -29,7 +28,7 @@ if TYPE_CHECKING:
 
 
 @workflow
-def intersect_segmentation(
+def apply_segmentation(
     g4x_obj: 'G4Xoutput',
     labels: np.ndarray | GeoDataFrame | None,
     out_dir: Path,
@@ -313,7 +312,7 @@ def create_cell_x_gene(
 
     print('Adding missing genes with zero counts.')
     zero_count_probes = (
-        parse_input_manifest(file_path=g4x_obj.data_dir / 'transcript_panel.csv')
+        utils.parse_input_manifest(file_path=g4x_obj.data_dir / 'transcript_panel.csv')
         .unique('gene_name')
         .filter(~pl.col('gene_name').is_in(cell_by_gene.columns))['gene_name']
         .to_list()
@@ -386,7 +385,7 @@ def create_adata(
     var_df = pl.DataFrame(gene_ids).with_columns(pl.lit('tx').alias('modality'))
 
     panel_type = (
-        parse_input_manifest(g4x_obj.data_dir / 'transcript_panel.csv')
+        utils.parse_input_manifest(g4x_obj.data_dir / 'transcript_panel.csv')
         .unique('gene_name')
         .select('gene_name', 'probe_type')
         .rename({'gene_name': 'gene_id'})

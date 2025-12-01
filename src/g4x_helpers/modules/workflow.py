@@ -1,6 +1,5 @@
 import functools
 import logging
-import shutil
 import sys
 
 from ..utils import setup_logger, validate_path
@@ -9,14 +8,14 @@ from ..utils import setup_logger, validate_path
 def workflow(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        func_name = func.__name__.removesuffix('_core')
+        wflow_name = func.__name__.removesuffix('_core')
         logger = kwargs.pop('logger', None)
         if logger is None:
-            logger = setup_logger(logger_name=func_name, file_logger=False)
+            logger = setup_logger(logger_name=wflow_name, file_logger=False)
             logger.info('No logger provided, using default logger (stream only).')
 
         logger.info('-' * 10)
-        logger.info(f'Initializing {func_name} workflow.')
+        logger.info(f'Initializing {wflow_name} workflow.')
 
         # Save the original stdout so we can restore it later
         original_stdout = sys.stdout
@@ -25,15 +24,11 @@ def workflow(func):
         try:
             result = func(*args, logger=logger, **kwargs)
         except Exception as e:
-            # Delete out_dir on failure, but only if present
-            out_dir = kwargs.get('out_dir')
-            if out_dir is not None:
-                logger.error(f"Exception occurred — deleting out_dir '{out_dir}'.")
-                shutil.rmtree(out_dir, ignore_errors=True)
-            # Re-raise so caller sees the exception
-            raise RuntimeError(f'Error during {func_name} workflow: {e}') from e
+            msg = f'Exception occurred during {wflow_name} workflow: \n\n{e}'
+            logger.error(msg)
+            raise RuntimeError(msg) from e
         else:
-            logger.info(f'Completed {func_name} workflow.')
+            logger.info(f'Completed {wflow_name} workflow.')
             return result
         finally:
             # Always restore stdout

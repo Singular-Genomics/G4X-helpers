@@ -27,13 +27,13 @@ def package_viewer_dir(
 
     sample_id = bin_path.stem
 
-    ome_tiff_path = viewer_dir / f'{sample_id}.ome.tiff'
-    assert ome_tiff_path.is_file(), 'ome.tiff file does not exist.'
+    ome_tiff_path = viewer_dir / f'{sample_id}_multiplex.ome.tiff'
+    assert ome_tiff_path.is_file(), 'multiplex.ome.tiff file does not exist.'
 
     run_meta_path = viewer_dir / f'{sample_id}_run_metadata.json'
     assert run_meta_path.is_file(), 'run_metadata.json file does not exist.'
 
-    tx_path = viewer_dir / f'{sample_id}.tar'
+    tx_path = viewer_dir / f'{sample_id}_transcripts.tar'
     # assert tx_path.is_file(), 'transcript tar file does not exist.'
 
     # --- H&E paths
