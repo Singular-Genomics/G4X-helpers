@@ -12,6 +12,7 @@ _LAZY_ATTRS = {
     'resegment': ('.main_features', 'resegment'),
     'tar_viewer': ('.main_features', 'tar_viewer'),
     'update_bin': ('.main_features', 'update_bin'),
+    'migrate': ('.main_features', 'migrate'),
     'G4Xoutput': ('.models', 'G4Xoutput'),
 }
 
