@@ -13,7 +13,8 @@ import tifffile
 from anndata import AnnData, read_h5ad
 from matplotlib.pyplot import imread
 
-from .schemas.validate import validate_g4x_data
+from . import utils
+from .schemas import validate
 
 
 @dataclass()
@@ -62,11 +63,7 @@ class G4Xoutput:
         self.data_dir = Path(self.data_dir)
 
         if self.sample_id is None:
-            self.sample_id = self.data_dir.name
-
-        self.data_dir = validate_g4x_data(
-            self.data_dir, schema_name='base_schema', formats={'sample_id': self.sample_id}
-        )
+            self.sample_id = self.infer_sample_id()
 
         with open(self.data_dir / 'run_meta.json', 'r') as f:
             self.run_meta = json.load(f)
@@ -74,9 +71,17 @@ class G4Xoutput:
         self.set_meta_attrs()
 
         if self.transcript_panel:
-            transcript_panel = pl.read_csv(self.data_dir / 'transcript_panel.csv').unique('gene_name').sort('gene_name')
-            self.transcript_panel_dict = dict(zip(transcript_panel['gene_name'], transcript_panel['panel_type']))
-            self.genes = transcript_panel['gene_name'].to_list()
+            try:
+                transcript_panel = (
+                    utils.parse_input_manifest(self.data_dir / 'transcript_panel.csv')
+                    .unique('gene_name')
+                    .sort('gene_name')
+                )
+                self.transcript_panel_dict = dict(zip(transcript_panel['gene_name'], transcript_panel['panel_type']))
+                self.genes = transcript_panel['gene_name'].to_list()
+            except Exception:
+                self.transcript_panel_dict = {}
+                self.genes = []
 
         if self.protein_panel:
             protein_panel = pl.read_csv(self.data_dir / 'protein_panel.csv').sort('target')
@@ -168,6 +173,25 @@ class G4Xoutput:
 
         self.shape = glymur.Jp2k(self.data_dir / 'h_and_e' / 'nuclear.jp2').shape
 
+    def infer_sample_id(self) -> str:
+        summs = list(self.data_dir.glob('summary_*.html'))
+
+        failure = 'Could not determine sample_id:'
+        if len(summs) == 0:
+            raise validate.ValidationError(f'{failure} "summary_{{sample_id}}.html" missing')
+        elif len(summs) > 1:
+            raise validate.ValidationError(f'{failure} Multiple "summary_{{sample_id}}.html" files found')
+        else:
+            summary_file = summs[0]
+            sample_id = summary_file.stem.split('_')[-1]
+        return sample_id
+
+    def validate(self, details: bool = False) -> None:
+        report_style = 'short' if details else False
+        _ = validate.validate_g4x_data(
+            self.data_dir, schema_name='base_schema', formats={'sample_id': self.sample_id}, report=report_style
+        )
+
     # region methods
     def load_adata(self, *, remove_nontargeting: bool = True, load_clustering: bool = True) -> AnnData:
         adata = read_h5ad(self.feature_mtx_path)
@@ -240,7 +264,7 @@ class G4Xoutput:
         return self.load_image_by_type('eosin', thumbnail=thumbnail, cached=cached)
 
     def load_segmentation(self, expanded: bool = True, key: str | None = None) -> np.ndarray:
-        from .modules.resegment import try_load_segmentation
+        from .modules.segment import try_load_segmentation
 
         arr = np.load(self.segmentation_path)
         available_keys = list(arr.keys())

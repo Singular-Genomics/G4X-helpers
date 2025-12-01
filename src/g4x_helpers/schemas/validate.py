@@ -7,11 +7,11 @@ import polars as pl
 from google.protobuf.message import DecodeError
 from pathschema import validate
 
+from .. import utils
 from ..g4x_viewer import CellMasksSchema_pb2 as CellMasksSchema
-from ..modules.redemux import PROBE_PATTERN
-from .migration import files_to_migrate
+from .constants import files_to_migrate
 
-probe_re = re.compile(PROBE_PATTERN)
+probe_re = re.compile(utils.PROBE_PATTERN)
 
 # register schemas
 path = resources.files('g4x_helpers.schemas')
@@ -81,6 +81,21 @@ def validate_g4x_data(
     return path
 
 
+def infer_sample_id(data_dir) -> str:
+    data_dir = Path(data_dir)
+    summs = list(data_dir.glob('summary_*.html'))
+
+    failure = 'Could not determine sample_id:'
+    if len(summs) == 0:
+        raise ValidationError(f'{failure} "summary_{{sample_id}}.html" missing')
+    elif len(summs) > 1:
+        raise ValidationError(f'{failure} Multiple "summary_{{sample_id}}.html" files found')
+    else:
+        summary_file = summs[0]
+        sample_id = summary_file.stem.split('_')[-1]
+    return sample_id
+
+
 def _print_details(path, result, errors_only=True):
     gap = 21
     for err_path, errors in result.errors_by_path.items():
@@ -109,10 +124,10 @@ def validate_file_schemas(sample_base):
     bin_file_schema = infer_bin_schema(sample_base)
 
     if parquet_shema == tx_panel_schema == adata_schema == bin_file_schema == 'valid':
-        print('All files conform to latest G4X-data schema!')
+        # print('All files conform to latest G4X-data schema!')
         return True
     else:
-        print('Some files do not conform to latest G4X-data schema:')
+        # print('Some files do not conform to latest G4X-data schema:')
         return False
 
 
@@ -249,10 +264,10 @@ def read_bin_file(bin_file: Path) -> CellMasksSchema.CellMasks:
     with open(bin_file, 'rb') as f:
         data = f.read()
 
-    print('Parsing bin file with current schema.')
+    # print('Parsing bin file with current schema.')
     cell_masks = CellMasksSchema.CellMasks()
     try:
-        print('Attempting to parse bin file.')
+        # print('Attempting to parse bin file.')
         cell_masks.ParseFromString(data)
         return cell_masks
     except DecodeError:

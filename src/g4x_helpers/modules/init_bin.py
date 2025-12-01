@@ -2,6 +2,7 @@ import logging
 import multiprocessing
 from collections import deque
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import polars as pl
@@ -14,15 +15,17 @@ from skimage.morphology import dilation, disk, erosion
 from tqdm import tqdm
 
 from ..g4x_viewer import CellMasksSchema_pb2 as CellMasksSchema
-from ..models import G4Xoutput
-from .resegment import get_cell_ids
-from .update_bin import DEFAULT_COLOR, hex2rgb, update_colormap
+from .edit_bin import DEFAULT_COLOR, hex2rgb, update_colormap
+from .segment import get_cell_ids
 from .workflow import OutSchema, workflow
+
+if TYPE_CHECKING:
+    from ..models import G4Xoutput
 
 
 @workflow
 def init_bin_file(
-    g4x_obj: G4Xoutput,
+    g4x_obj: 'G4Xoutput',
     out_dir: str | Path,
     seg_mask: np.ndarray | None = None,
     *,

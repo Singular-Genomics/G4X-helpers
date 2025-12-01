@@ -17,6 +17,16 @@ from rich.console import Console
 console = Console()
 
 DEFAULT_THREADS = max(1, (os.cpu_count() // 2 or 4))
+PROBE_PATTERN = r'^(.*?)-([ACGT]{2,30})-([^-]+)$'
+
+primer_read_map = {
+    'SP1': 1,
+    'm7a': 2,
+    'm9a': 3,
+    'm6a': 4,
+    'm8a': 5,
+    'm3a': 6,
+}
 
 
 @contextmanager
@@ -208,10 +218,10 @@ def setup_logger(
 
     if format is None:
         # format = '[%(asctime)s | %(name)s | %(levelname)s: %(message)s'
-        format = '%(asctime)s | %(name)-12s | %(levelname)7s - %(message)s'
+        format = '%(asctime)s | %(name)-16s | %(levelname)7s - %(message)s'
 
     # formatter = logging.Formatter(format, datefmt='%Y-%m-%d %H:%M:%S')
-    formatter = TruncatingFormatter(format, name_max=12, datefmt='%H:%M:%S')
+    formatter = TruncatingFormatter(format, name_max=16, datefmt='%H:%M:%S')
 
     ## optionally clear existing handlers
     if clear_handlers:
@@ -275,3 +285,73 @@ def symlink_original_files(g4x_obj, out_dir: Path | str) -> None:
             if dst_file.exists():
                 dst_file.unlink()
             dst_file.symlink_to((Path(root) / f).resolve())
+
+
+def parse_input_manifest(file_path: Path, verbose: bool = False) -> pl.DataFrame:
+    """
+    Parse strings in `df[col]` of the form '<prefix>-<15mer>-<primer>'
+    and add columns: gene_name, sequence, primer, primer_code, read.
+    Rows that don't match the pattern get nulls in the new columns.
+    """
+    # print(f'Parsing transcript manifest: {file_path.name}')
+    df = pl.read_csv(file_path)
+
+    col = 'probe_name'
+    if col not in df.columns:
+        raise ValueError(f"transcript manifest must contain column '{col}'")
+
+    parsed = df.with_columns(
+        [
+            pl.col(col).str.extract(PROBE_PATTERN, 1).alias('gene_name'),
+            pl.col(col).str.extract(PROBE_PATTERN, 2).alias('sequence'),
+            pl.col(col).str.extract(PROBE_PATTERN, 3).alias('primer'),
+        ]
+    )
+
+    null_count = parsed.null_count()['sequence'][0]
+    if null_count > 0:
+        if verbose:
+            print(f'{null_count} probes with invalid sequence format will be ignored:')
+            null_seqs = parsed.filter(pl.col('sequence').is_null())['probe_name'].to_list()
+            for ns in null_seqs:
+                print(f'- {ns}')
+
+    if 'panel_type' in df.columns:
+        parsed = parsed.drop('panel_type')
+
+    if 'read' in df.columns:
+        if verbose:
+            print("Using 'read' column provided by input manifest.")
+        parsed = parsed.drop('read')
+    else:
+        plist = parsed['primer'].unique().to_list()
+        ign_primer = [p for p in plist if p not in primer_read_map]
+        if len(ign_primer) > 0:
+            if verbose:
+                print('Warning: the following primer names are not known and will be ignored:')
+                for ip in ign_primer:
+                    print(f'- {ip}')
+        parsed = parsed.filter(pl.col('primer').is_in(primer_read_map.keys())).with_columns(
+            pl.col('primer').replace(primer_read_map).cast(pl.Int8).alias('read')
+        )
+
+    if 'gene_name' in df.columns:
+        if verbose:
+            print("Using 'gene_name' column provided by input manifest.")
+        parsed = parsed.drop('gene_name')
+
+    manifest = parsed.join(df, on=col, how='left')
+
+    manifest = manifest.with_columns(
+        probe_type=(
+            pl.when(pl.col('gene_name').str.to_lowercase() == 'gdna')
+            .then(pl.lit('GCP'))
+            .when(pl.col('gene_name').str.starts_with('NCS-'))
+            .then(pl.lit('NCS'))
+            .when(pl.col('gene_name').str.starts_with('NCP-'))
+            .then(pl.lit('NCP'))
+            .otherwise(pl.lit('targeting'))
+        )
+    )
+
+    return manifest

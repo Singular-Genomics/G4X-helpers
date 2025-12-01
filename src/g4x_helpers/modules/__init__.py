@@ -1,15 +1,15 @@
-from .new_bin import init_bin_file
-from .package_viewer import package_viewer_dir
-from .redemux import create_tx_table
-from .resegment import intersect_segmentation
-from .tx_converter import create_tar_file
-from .update_bin import edit_bin_file
+from .demux import demux_raw_features
+from .edit_bin import edit_bin_file
+from .init_bin import init_bin_file
+from .segment import apply_segmentation
+from .transcript_tar import create_tx_tarfile
+from .viewer_dir import package_viewer_dir
 
 __all__ = [
     'init_bin_file',
-    'create_tx_table',
-    'intersect_segmentation',
+    'demux_raw_features',
+    'apply_segmentation',
     'edit_bin_file',
-    'create_tar_file',
+    'create_tx_tarfile',
     'package_viewer_dir',
 ]
