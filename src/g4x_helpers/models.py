@@ -151,7 +151,7 @@ class G4Xoutput:
         for k in static_attrs:
             setattr(self, k, self.run_meta.get(k, None))
 
-        self.shape = utils.npzGetShape(self.segmentation_path, 'nuclei')
+        self.shape = glymur.Jp2k(self.data_dir / 'h_and_e' / 'nuclear.jp2').shape
 
     # region methods
     def load_adata(self, *, remove_nontargeting: bool = True, load_clustering: bool = True) -> AnnData:
