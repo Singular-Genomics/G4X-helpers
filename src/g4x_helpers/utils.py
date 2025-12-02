@@ -92,15 +92,6 @@ def initialize_sample(
 
 
 # region file operations
-def npzGetShape(npz_path, key):
-    import numpy as np
-
-    with np.load(npz_path, mmap_mode='r') as data:
-        if key not in data:
-            raise KeyError(f'{key} not in archive')
-        return data[key].shape
-
-
 def delete_existing(outfile: str | Path) -> None:
     outfile = Path(outfile)
     if outfile.exists() or outfile.is_symlink():
