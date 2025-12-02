@@ -1,6 +1,8 @@
 import importlib.resources as resources
+import json
 import logging
 import os
+import re
 import shutil
 from pathlib import Path
 
@@ -46,6 +48,10 @@ def migrate_g4x_data(
         logger.error('Migration failed to produce correct G4X-data schema.')
     else:
         logger.info('Successfully updated file locations! Checking file structures...')
+
+        logger.info('Checking for invalid NaN values in run_meta.json')
+        fix_json_nan(data_dir / 'g4x_viewer' / f'{sample_id}_run_metadata.json')
+
         if not validate.validate_file_schemas(data_dir):
             logger.info('Some file structures need to be updated.')
             update_files = True
@@ -102,6 +108,7 @@ def restore_backup(
     backup_dir = sample_base / 'migration_backup'
     if backup_dir.exists():
         if any(backup_dir.iterdir()):
+            logger.info('Backup found. Restoring files.')
             put_back(sample_base, sample_id)
             shutil.rmtree(backup_dir)
         else:
@@ -180,6 +187,24 @@ def put_back(sample_base, sample_id):
         migrate_file(sample_base, sample_id, str(new_path), old_path, False)
         if f == 'raw_tx_v2':
             (sample_base / files_to_migrate[f][1]).unlink()
+
+
+def fix_json_nan(path: Path) -> bool:
+    with open(path) as f:
+        txt = f.read()
+
+    has_nan = bool(re.search(r'(?<!")\bNaN\b(?!")', txt))
+    if has_nan:
+        print('Found bare NaN. fixing...')
+
+        # Replace bare NaN with "NaN"
+        txt_fixed = txt.replace(' NaN', ' "NaN"').replace(':NaN', ':"NaN"')
+
+        # Parse JSON safely now
+        data = json.loads(txt_fixed)
+
+        with open(path, 'w') as f:
+            json.dump(data, f, indent=2)
 
 
 def tx_panel_from_parquet(parquet_lf, tx_panel_old):

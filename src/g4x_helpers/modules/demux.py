@@ -207,7 +207,8 @@ def one_hot_encode_str_array(seqs: list[str], seq_len: int) -> np.ndarray:
 
 
 def update_metadata_and_tx_file(g4x_obj: 'G4Xoutput', manifest, out_dir):
-    shutil.copy(manifest, out_dir / 'transcript_panel.csv')
+    if not manifest == out_dir / 'transcript_panel.csv':
+        shutil.copy(manifest, out_dir / 'transcript_panel.csv')
 
     panel_name = manifest.name
     timestamp = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'

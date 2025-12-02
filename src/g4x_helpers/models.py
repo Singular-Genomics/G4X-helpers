@@ -183,7 +183,7 @@ class G4Xoutput:
             raise validate.ValidationError(f'{failure} Multiple "summary_{{sample_id}}.html" files found')
         else:
             summary_file = summs[0]
-            sample_id = summary_file.stem.split('_')[-1]
+            sample_id = summary_file.stem.removeprefix('summary_')
         return sample_id
 
     def validate(self, details: bool = False) -> None:

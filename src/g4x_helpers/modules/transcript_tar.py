@@ -42,7 +42,7 @@ def create_tx_tarfile(
     else:
         MIN_TILE_SIZE = 512
 
-    out_dir = g4x_obj.data_dir / 'g4x_viewer_temp'
+    out_dir = out_path.parent / 'g4x_viewer_temp'
     os.makedirs(out_dir, exist_ok=True)
 
     ## get transcript table
