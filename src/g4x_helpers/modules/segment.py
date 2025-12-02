@@ -351,7 +351,7 @@ def create_cell_x_protein(
 
         ch_label = f'{channel_name_map[signal_name]}_intensity_mean'
 
-        intensities = image_mask_intensity_extraction(
+        intensities = image_mask_intensity_extraction_v2(
             signal_img,
             mask_flat=mask_flat,
             bead_mask_flat=bead_mask_flat,
@@ -417,6 +417,37 @@ def image_mask_intensity_extraction(
     # Avoid division by zero:
     intensity_means = np.divide(sums, counts, out=np.zeros_like(sums), where=counts != 0)
     return intensity_means
+
+
+def image_mask_intensity_extraction_v2(
+    img: np.ndarray,
+    mask_flat: np.ndarray,
+    bead_mask_flat: np.ndarray | None = None,
+) -> np.ndarray:
+    img_flat = img.ravel()
+
+    # Optional bead masking
+    if bead_mask_flat is not None:
+        bead_mask_flat = ~bead_mask_flat
+        mask_flat = mask_flat[bead_mask_flat]
+        img_flat = img_flat[bead_mask_flat]
+
+    # Remove zeros and find unique labels
+    mask_nonzero = mask_flat > 0
+    labels = mask_flat[mask_nonzero]
+    pixels = img_flat[mask_nonzero]
+
+    unique_labels, inv = np.unique(labels, return_inverse=True)
+    # `inv` now contains remapped labels 0..n_unique-1
+
+    # Compute sums and counts using remapped labels
+    sums = np.bincount(inv, weights=pixels)
+    counts = np.bincount(inv)
+
+    # Safe divide
+    means = np.divide(sums, counts, out=np.zeros_like(sums), where=counts != 0)
+
+    return means
 
 
 def vectorize_mask(mask: np.ndarray, nudge: bool = True) -> GeoDataFrame:

@@ -14,6 +14,7 @@ from .workflow import workflow
 def package_viewer_dir(
     viewer_dir: Path,
     out_dir: Path,
+    sample_id: str | None = None,
     *,
     logger: logging.Logger,
 ):
@@ -24,8 +25,7 @@ def package_viewer_dir(
     bin_path = list(viewer_dir.glob('*.bin'))
     assert len(bin_path) == 1, 'Either no bin file was found in viewer_dir or multiple bin files were found.'
     bin_path = bin_path[0]
-
-    sample_id = bin_path.stem
+    print(bin_path)
 
     ome_tiff_path = viewer_dir / f'{sample_id}_multiplex.ome.tiff'
     assert ome_tiff_path.is_file(), 'multiplex.ome.tiff file does not exist.'
@@ -110,7 +110,7 @@ def package_viewer_dir(
         if not out_tar.exists():
             out_tar.mkdir(parents=True, exist_ok=True)
 
-        out_tar = out_tar / f'{sample_id}.tar'
+        out_tar = out_tar / f'{sample_id}_viewer.tar'
 
         with tarfile.open(out_tar, 'w') as tar:
             tar.add(viewer_dir, arcname=viewer_dir.name)
@@ -122,6 +122,7 @@ def package_viewer_dir(
     finally:
         logger.info('Restoring moved files...')
         restore_he()
+        (viewer_dir / 'dataset.config.json').unlink(missing_ok=True)
         try:
             atexit.unregister(restore_he)
         except Exception:

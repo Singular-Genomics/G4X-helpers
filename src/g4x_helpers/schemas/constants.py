@@ -8,4 +8,5 @@ files_to_migrate = {
     'tx_panel': ('transcript_panel.csv', 'transcript_panel.csv', True),
     'feat_mtx': ('single_cell_data/feature_matrix.h5', 'single_cell_data/feature_matrix.h5', True),
     'cell_meta': ('single_cell_data/cell_metadata.csv.gz', 'single_cell_data/cell_metadata.csv.gz', True),
+    'run_meta': ('g4x_viewer/{sample_id}_run_metadata.json', 'g4x_viewer/{sample_id}_run_metadata.json', True),
 }

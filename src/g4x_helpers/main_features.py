@@ -88,7 +88,7 @@ def resegment(
         g4x_obj=g4x_obj,
         labels=labels,
         out_dir=out_dir,
-        skip_protein_extraction=True,  ### TODO <<< RMOVE THIS HACK LATER
+        skip_protein_extraction=False,  ### TODO <<< RMOVE THIS HACK LATER
         logger=logger,
     )
 
@@ -98,136 +98,117 @@ def resegment(
     edit_bin.edit_bin_file(g4x_obj=g4x_obj, bin_file=bin_file, logger=logger)
 
 
-# @_base_command
-# def redemux(
-#     g4x_obj: 'G4Xoutput',
-#     out_dir: str,
-#     manifest: str,
-#     *,
-#     batch_size: int = 1_000_000,
-#     n_threads: int = 4,
-#     logger: logging.Logger,
-#     **kwargs,
-# ) -> None:
-#     wflw.redemux(
-#         g4x_obj=g4x_obj,
-#         manifest=manifest,
-#         out_dir=out_dir,
-#         batch_size=batch_size,
-#         logger=logger,
-#     )
+@_base_command
+def redemux(
+    g4x_obj: 'G4Xoutput',
+    out_dir: str,
+    manifest: str,
+    *,
+    batch_size: int = 1_000_000,
+    n_threads: int = 4,
+    logger: logging.Logger,
+    **kwargs,
+) -> None:
+    from g4x_helpers.modules import demux, edit_bin, init_bin, segment, transcript_tar
 
-#     ## now regenerate the secondary files
-#     logger.info('Regenerating downstream files.')
-#     g4x_obj.data_dir = out_dir  ## set base directory to the redemux output folder for downstream steps
+    demux.demux_raw_features(
+        g4x_obj=g4x_obj,
+        manifest=manifest,
+        out_dir=out_dir,
+        batch_size=batch_size,
+        logger=logger,
+    )
 
-#     # resegment with existing segmentation
-#     logger.info('Intersecting with existing cell segmentation.')
-#     adata, mask = wflw.intersect_segmentation(
-#         g4x_obj=g4x_obj,
-#         labels=g4x_obj.load_segmentation(),
-#         out_dir=out_dir,
-#         logger=logger,
-#     )
+    labels = g4x_obj.load_segmentation()
 
-#     view_dir = out_dir / 'g4x_viewer'
-#     view_dir.mkdir(parents=True, exist_ok=True)
+    segment.apply_segmentation(
+        g4x_obj=g4x_obj,
+        labels=labels,
+        out_dir=out_dir,
+        skip_protein_extraction=True,
+        create_source=True,
+        logger=logger,
+    )
 
-#     wflw.seg_converter(
-#         adata=adata,
-#         seg_mask=mask,
-#         out_path=view_dir / f'{g4x_obj.sample_id}.bin',
-#         protein_list=[f'{x}_intensity_mean' for x in g4x_obj.proteins],
-#         n_threads=n_threads,
-#         logger=logger,
-#     )
+    init_bin.init_bin_file(g4x_obj=g4x_obj, out_dir=out_dir, n_threads=n_threads, logger=logger)
 
-#     wflw.tx_converter(
-#         g4x_obj=g4x_obj,
-#         out_path=view_dir / f'{g4x_obj.sample_id}.tar',
-#         n_threads=n_threads,
-#         logger=logger,
-#     )
+    bin_file = out_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_segmentation.bin'
+    edit_bin.edit_bin_file(g4x_obj=g4x_obj, bin_file=bin_file, logger=logger)
+
+    transcript_tar.create_tx_tarfile(
+        g4x_obj=g4x_obj,
+        out_path=out_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_transcripts.tar',
+        n_threads=n_threads,
+        logger=logger,
+    )
 
 
-# @_base_command
-# def update_bin(
-#     g4x_obj: 'G4Xoutput',
-#     out_dir: str,
-#     metadata: str,
-#     *,
-#     bin_file: str | None = None,
-#     cellid_key: str | None = None,
-#     cluster_key: str | None = None,
-#     cluster_color_key: str | None = None,
-#     emb_key: str | None = None,
-#     logger: logging.Logger,
-#     **kwargs,
-# ) -> None:
-#     metadata = utils.validate_path(metadata, must_exist=True, is_dir_ok=False, is_file_ok=True)
+@_base_command
+def update_bin(
+    g4x_obj: 'G4Xoutput',
+    out_dir: str,
+    metadata: str,
+    *,
+    bin_file: str | None = None,
+    cellid_key: str | None = None,
+    cluster_key: str | None = None,
+    clustercolor_key: str | None = None,
+    emb_key: str | None = None,
+    logger: logging.Logger,
+    **kwargs,
+) -> None:
+    from .modules import edit_bin
 
-#     view_dir = out_dir / 'g4x_viewer'
-#     view_dir.mkdir(parents=True, exist_ok=True)
+    metadata = utils.validate_path(metadata, must_exist=True, is_dir_ok=False, is_file_ok=True)
 
-#     wflw.seg_updater(
-#         bin_file=g4x_obj.data_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}.bin' if bin_file is None else bin_file,
-#         metadata_file=metadata,
-#         out_path=view_dir / f'{g4x_obj.sample_id}.bin',
-#         cellid_key=cellid_key,
-#         cluster_key=cluster_key,
-#         cluster_color_key=cluster_color_key,
-#         emb_key=emb_key,
-#         logger=logger,
-#     )
-
-
-# @_base_command
-# def new_bin(
-#     g4x_obj: 'G4Xoutput',  #
-#     out_dir: str,
-#     *,
-#     n_threads: int = 4,
-#     logger: logging.Logger,
-#     **kwargs,
-# ) -> None:
-#     ## set up the data
-#     try:
-#         adata = g4x_obj.load_adata()
-#         emb_key = '_'.join(sorted([x for x in adata.obs.columns if 'X_umap' in x])[0].split('_')[:-1])
-#         cluster_key = sorted([x for x in adata.obs.columns if 'leiden' in x])[0]
-#         logger.info('Successfully loaded adata with clustering information.')
-
-#     except Exception:
-#         adata = g4x_obj.load_adata(load_clustering=False)
-#         emb_key = None
-#         cluster_key = None
-#         logger.info('Clustering information was not found, cell coloring will be random.')
-
-#     view_dir = out_dir / 'g4x_viewer'
-#     view_dir.mkdir(parents=True, exist_ok=True)
-
-#     wflw.seg_converter(
-#         adata=adata,
-#         seg_mask=g4x_obj.load_segmentation(),
-#         out_path=view_dir / f'{g4x_obj.sample_id}.bin',
-#         cluster_key=cluster_key,
-#         emb_key=emb_key,
-#         protein_list=[f'{x}_intensity_mean' for x in g4x_obj.proteins],
-#         n_threads=n_threads,
-#         logger=logger,
-#     )
+    edit_bin.edit_bin_file(
+        g4x_obj=g4x_obj,
+        bin_file=bin_file,
+        metadata=metadata,
+        bin_out=None,
+        cellid_key=cellid_key,
+        cluster_key=cluster_key,
+        clustercolor_key=clustercolor_key,
+        emb_key=emb_key,
+        logger=logger,
+    )
 
 
-# @_base_command
-# def tar_viewer(
-#     g4x_obj: 'G4Xoutput',  #
-#     out_dir: str | None = None,
-#     *,
-#     logger: logging.Logger,
-#     **kwargs,
-# ) -> None:
-#     viewer_dir = g4x_obj.data_dir / 'g4x_viewer'
-#     wflw.tar_viewer(viewer_dir=viewer_dir, out_dir=out_dir, logger=logger)
+@_base_command
+def new_bin(
+    g4x_obj: 'G4Xoutput',  #
+    out_dir: str,
+    *,
+    n_threads: int = 4,
+    logger: logging.Logger,
+    **kwargs,
+) -> None:
+    from .modules import init_bin
+
+    init_bin.init_bin_file(
+        g4x_obj=g4x_obj,
+        out_dir=out_dir,
+        n_threads=n_threads,
+        logger=logger,
+    )
+
+
+@_base_command
+def tar_viewer(
+    g4x_obj: 'G4Xoutput',  #
+    out_dir: str | None = None,
+    *,
+    logger: logging.Logger,
+    **kwargs,
+) -> None:
+    from .modules import viewer_dir
+
+    viewer_dir.package_viewer_dir(
+        viewer_dir=g4x_obj.data_dir / 'g4x_viewer',
+        sample_id=g4x_obj.sample_id,
+        out_dir=out_dir,
+        logger=logger,
+    )
 
 
 @_base_command
