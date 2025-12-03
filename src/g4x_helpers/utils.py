@@ -4,17 +4,11 @@ import gzip
 import logging
 import os
 import shutil
-import traceback
-from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
 import polars as pl
-import rich_click as click
-from rich.console import Console
-
-console = Console()
 
 DEFAULT_THREADS = max(1, (os.cpu_count() // 2 or 4))
 PROBE_PATTERN = r'^(.*?)-([ACGT]{2,30})-([^-]+)$'
@@ -27,12 +21,6 @@ primer_read_map = {
     'm8a': 5,
     'm3a': 6,
 }
-
-
-@contextmanager
-def _spinner(message: str):
-    with console.status(message, spinner='dots', spinner_style='red'):
-        yield
 
 
 def validate_path(path_str, must_exist=True, is_dir_ok=True, is_file_ok=True, resolve_path=False) -> Path:
@@ -49,42 +37,14 @@ def validate_path(path_str, must_exist=True, is_dir_ok=True, is_file_ok=True, re
         if path.is_file() and not is_file_ok:
             raise ValueError(f'Expected a directory but got a file: {path}')
 
-    if not path.exists() and not must_exist and not is_file_ok:
-        path.mkdir(parents=True, exist_ok=True)
+    if not path.exists() and not must_exist:
+        if not is_file_ok:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            parent = path.parent
+            parent.mkdir(parents=True, exist_ok=True)
 
     return path
-
-
-def _fail_message(func_name, e, trace_back=False):
-    click.echo('')
-    click.secho(f'Failed {func_name}:', fg='red', err=True, bold=True)
-    if trace_back:
-        traceback.print_exc()
-    raise click.ClickException(f'{type(e).__name__}: {e}')
-
-
-def initialize_sample(
-    data_dir: str, output: str | None, sample_id: str | None, n_threads: int = DEFAULT_THREADS
-) -> None:
-    msg = f'loading G4X-data from [blue]{data_dir}[/blue]'
-    with _spinner(msg):
-        import glymur
-
-        from .models import G4Xoutput
-
-        glymur.set_option('lib.num_threads', n_threads)
-        try:
-            sample = G4Xoutput(data_dir=data_dir, sample_id=sample_id)
-        except Exception as e:
-            click.echo('\n')
-            click.secho('Failed to load G4X-data:', fg='red', err=True, bold=True)
-            raise click.ClickException(f'{e}')
-
-    if not output:
-        click.secho('No output directory specified. Editing in-place!', fg='blue', bold=True)
-        output = sample.data_dir
-
-    return sample, output
 
 
 def delete_existing(outfile: str | Path) -> None:
@@ -257,13 +217,6 @@ def setup_logger(
         fh.flush()
 
     return logger
-
-
-def print_k_v(item, value, gap=2):
-    value = '<undefined>' if not value else value
-    click.secho(f'{item:<{gap}}', dim=True, nl=False)
-    click.secho('- ', dim=True, nl=False)
-    click.secho(f'{value}', fg='blue', bold=True)
 
 
 def symlink_original_files(g4x_obj, out_dir: Path | str) -> None:
