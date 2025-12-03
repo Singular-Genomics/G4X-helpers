@@ -38,13 +38,14 @@ def apply_segmentation(
     logger: logging.Logger,
     **kwargs,
 ):
-    out_tree = OutSchema(out_dir, subdirs=['single_cell_data', 'rna'])
+    out_tree = OutSchema(out_dir, subdirs=['single_cell_data', 'rna', 'segmentation'])
 
     cell_x_gene_out = out_tree.single_cell_data / 'cell_by_transcript.csv'
     cell_x_protein_out = out_tree.single_cell_data / 'cell_by_protein.csv'
     cell_metadata_out = out_tree.single_cell_data / 'cell_metadata.csv'
     feature_matrix_out = out_tree.single_cell_data / 'feature_matrix.h5'
     tx_table_out = out_tree.rna / 'transcript_table.csv'
+    seg_mask_out = out_tree.segmentation / 'segmentation_mask.npz'
 
     create_source = kwargs.get('create_source', False)
     nuc_mask = g4x_obj.load_segmentation(expanded=False) if create_source else None
@@ -94,6 +95,9 @@ def apply_segmentation(
     logger.info(f'Writing cell metadata table to: {cell_metadata_out.relative_to(out_dir)}.')
     cell_metadata = adata.obs.rename(columns={'cell_id': 'label'}).set_index('label')
     utils.write_csv_gz(df=cell_metadata, path=cell_metadata_out)
+
+    logger.info(f'Writing segmentation mask to: {seg_mask_out.relative_to(out_dir)}.')
+    np.savez(seg_mask_out, cell_labels=labels)
 
 
 def try_load_segmentation(cell_labels: str, expected_shape: tuple[int], labels_key: str | None = None) -> np.ndarray:
