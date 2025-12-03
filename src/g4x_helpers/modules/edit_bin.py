@@ -7,6 +7,7 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
+from .. import utils
 from ..g4x_viewer import CellMasksSchema_pb2 as CellMasksSchema
 from ..schemas.validate import read_bin_file
 from .workflow import workflow
@@ -55,6 +56,14 @@ def edit_bin_file(
     logger: logging.Logger,
 ) -> None:
     logger.info(f'Reading bin file: {bin_file}')
+
+    bin_file = utils.validate_path(bin_file, must_exist=True, is_dir_ok=False, is_file_ok=True)
+
+    if not bin_out:
+        bin_out = bin_file
+    else:
+        bin_out = utils.validate_path(bin_out, must_exist=False, is_dir_ok=False, is_file_ok=True)
+
     cell_masks = read_bin_file(bin_file)
 
     update_clusters = update_emb = False
@@ -170,10 +179,6 @@ def edit_bin_file(
 
     if update_clusters:
         update_colormap(cell_masks, cluster_palette)
-
-    ## Write to file
-    if not bin_out:
-        bin_out = bin_file
 
     logger.debug(f'Writing updated bin file --> {bin_out}')
     with open(bin_out, 'wb') as file:

@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 import rich_click as click
 
 from . import __version__, utils
+from .cli.cli_setup import print_k_v
 
 if TYPE_CHECKING:
     from .models import G4Xoutput
@@ -37,11 +38,11 @@ def _base_command(func):
 
         gap = 12
         click.secho(f'\nStarting: {func_name}\n', bold=True)
-        utils.print_k_v('sample_dir', f'{g4x_obj.data_dir}', gap)
-        utils.print_k_v('out_dir', f'{out_dir}', gap)
-        utils.print_k_v('n_threads', f'{n_threads}', gap)
-        utils.print_k_v('verbosity', f'{verbose}', gap)
-        utils.print_k_v('g4x-helpers', f'v{__version__}', gap)
+        print_k_v('sample_dir', f'{g4x_obj.data_dir}', gap)
+        print_k_v('out_dir', f'{out_dir}', gap)
+        print_k_v('n_threads', f'{n_threads}', gap)
+        print_k_v('verbosity', f'{verbose}', gap)
+        print_k_v('g4x-helpers', f'v{__version__}', gap)
         click.echo('')
 
         if not kwargs.get('logger', None):
@@ -73,11 +74,11 @@ def resegment(
     cell_labels: str,
     *,
     labels_key: str | None = None,
-    n_threads: int = 4,
+    n_threads: int = utils.DEFAULT_THREADS,
     logger: logging.Logger,
     **kwargs,
 ) -> None:
-    from .modules import edit_bin, init_bin, segment
+    from .modules import init_bin, segment
 
     cell_labels = utils.validate_path(cell_labels, must_exist=True, is_dir_ok=False, is_file_ok=True)
 
@@ -88,14 +89,14 @@ def resegment(
         g4x_obj=g4x_obj,
         labels=labels,
         out_dir=out_dir,
-        skip_protein_extraction=False,  ### TODO <<< RMOVE THIS HACK LATER
+        skip_protein_extraction=False,
         logger=logger,
     )
 
     init_bin.init_bin_file(g4x_obj=g4x_obj, out_dir=out_dir, logger=logger, n_threads=n_threads)
 
-    bin_file = out_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_segmentation.bin'
-    edit_bin.edit_bin_file(g4x_obj=g4x_obj, bin_file=bin_file, logger=logger)
+    # bin_file = out_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_segmentation.bin'
+    # edit_bin.edit_bin_file(g4x_obj=g4x_obj, bin_file=bin_file, logger=logger)
 
 
 @_base_command
@@ -105,7 +106,7 @@ def redemux(
     manifest: str,
     *,
     batch_size: int = 1_000_000,
-    n_threads: int = 4,
+    n_threads: int = utils.DEFAULT_THREADS,
     logger: logging.Logger,
     **kwargs,
 ) -> None:
@@ -146,10 +147,10 @@ def redemux(
 @_base_command
 def update_bin(
     g4x_obj: 'G4Xoutput',
-    out_dir: str,
+    bin_file: str,
     metadata: str,
+    out_dir: str,
     *,
-    bin_file: str | None = None,
     cellid_key: str | None = None,
     cluster_key: str | None = None,
     clustercolor_key: str | None = None,
@@ -165,7 +166,7 @@ def update_bin(
         g4x_obj=g4x_obj,
         bin_file=bin_file,
         metadata=metadata,
-        bin_out=None,
+        bin_out=out_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_segmentation.bin',
         cellid_key=cellid_key,
         cluster_key=cluster_key,
         clustercolor_key=clustercolor_key,
@@ -179,7 +180,7 @@ def new_bin(
     g4x_obj: 'G4Xoutput',  #
     out_dir: str,
     *,
-    n_threads: int = 4,
+    n_threads: int = utils.DEFAULT_THREADS,
     logger: logging.Logger,
     **kwargs,
 ) -> None:
@@ -215,13 +216,17 @@ def tar_viewer(
 def migrate(
     g4x_obj: 'G4Xoutput',
     restore: bool = False,
+    n_threads: int = utils.DEFAULT_THREADS,
     *,
     logger: logging.Logger,
     **kwargs,
 ) -> None:
     from .schemas import migration
 
+    print(f'G4X-helpers migration - v{__version__}\n')
     if restore:
-        migration.restore_backup(sample_base=g4x_obj.data_dir, sample_id=g4x_obj.sample_id, logger=logger)
+        migration.restore_backup(data_dir=g4x_obj.data_dir, sample_id=g4x_obj.sample_id, logger=logger)
     else:
-        migration.migrate_g4x_data(data_dir=g4x_obj.data_dir, sample_id=g4x_obj.sample_id, logger=logger)
+        migration.migrate_g4x_data(
+            data_dir=g4x_obj.data_dir, sample_id=g4x_obj.sample_id, n_threads=n_threads, logger=logger
+        )

@@ -10,10 +10,9 @@ import polars as pl
 
 from .. import utils
 from ..models import G4Xoutput
-from ..modules import edit_bin_file, init_bin_file
+from ..modules import create_tx_tarfile, edit_bin_file, init_bin_file
 from ..modules.workflow import workflow
 from . import validate
-from .constants import files_to_migrate
 
 parquet_col_order = ['TXUID', 'sequence', 'confidence_score', 'x_pixel_coordinate', 'y_pixel_coordinate', 'z_level']
 
@@ -25,19 +24,109 @@ for cont in path.iterdir():
     schemas[cont.name.removesuffix('.txt')] = cont
 
 
+migration_targets = [
+    ('g4x_viewer/{sample_id}.bin', 'g4x_viewer/{sample_id}_segmentation.bin', True),
+    ('g4x_viewer/{sample_id}.tar', 'g4x_viewer/{sample_id}_transcripts.tar', True),
+    ('g4x_viewer/{sample_id}.ome.tiff', 'g4x_viewer/{sample_id}_multiplex.ome.tiff', False),
+    ('diagnostics/transcript_table.parquet', 'rna/raw_features.parquet', True),
+    ('rna/transcript_table.parquet', 'rna/raw_features.parquet', True),
+    ('rna/transcript_table.csv.gz', None, True),
+    ('transcript_panel.csv', None, True),
+    ('single_cell_data/feature_matrix.h5', None, True),
+    ('single_cell_data/cell_metadata.csv.gz', None, True),
+    ('g4x_viewer/{sample_id}_run_metadata.json', None, True),
+]
+
+
+class MigrationTarget:
+    def __init__(self, root: str, smp_id: str, source: str, target: str, backup: bool = True):
+        self.root = Path(root)
+
+        target = source if target is None else target
+        source = source.format(sample_id=smp_id)
+        target = target.format(sample_id=smp_id)
+
+        self.is_rename = True if source != target else False
+        self.rename_only = self.is_rename and backup is False
+
+        self.source_file = self.root / source
+        self.target_file = self.root / target
+
+        self.backup = backup
+        self.backup_dir = self.root / 'migration_backup'
+        self.backup_file = self.backup_dir / self.source_file.relative_to(self.root)
+
+        self.source_file_short = self.source_file.relative_to(self.root)
+        self.target_file_short = self.target_file.relative_to(self.root)
+        self.backup_file_short = self.backup_file.relative_to(self.root)
+
+    def check_source_exists(self) -> bool:
+        return self.source_file.exists()
+
+    def check_target_exists(self) -> bool:
+        return self.target_file.exists()
+
+    def check_backup_exists(self) -> bool:
+        return self.backup_file.exists()
+
+    def backup_source(self):
+        if not self.backup:
+            return
+        if self.backup_file.exists():
+            print(f'Backup file "{self.backup_file_short}" already exists. Will not overwrite.')
+            return
+        if self.source_file.exists():
+            self.backup_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(self.source_file, self.backup_file)
+
+    def restore_backup(self):
+        if not self.backup:
+            if self.check_target_exists() and self.is_rename:
+                self.target_file.rename(self.source_file)
+            return
+        if not self.backup_file.exists():
+            print(f'Can not restore file. Backup missing: "{self.backup_file_short}"')
+            return
+        self.target_file.unlink(missing_ok=False)
+        self.backup_file.rename(self.source_file)
+
+    def migrate(self):
+        if not self.source_file.exists():
+            print(f'Source file "{self.source_file_short}" does not exist. Cannot migrate.')
+            return
+        self.source_file.rename(self.target_file)
+
+    def __repr__(self):
+        return f'MigrationTarget: "{self.target_file_short}"'
+
+
 @workflow
 def migrate_g4x_data(
     data_dir: Path,
     sample_id: str,
+    n_threads: int = utils.DEFAULT_THREADS,
+    *,
     logger: logging.Logger,
 ):
     logger.info('Migrating to latest G4X-data schema')
 
-    backup_size = total_size_gb(files_to_migrate, sample_id=sample_id, base_path=data_dir)
+    backup_size = total_size_gb(migration_targets, sample_id=sample_id, base_path=data_dir)
     logger.info(f'Creating backup of {backup_size:.2f} GB before proceeding')
 
     logger.info('Updating file locations')
-    migrate_sample_files(data_dir, sample_id=sample_id)
+    mts = collect_targets(data_dir=data_dir, sample_id=sample_id)
+    if any([mt.check_backup_exists() for mt in mts]):
+        raise RuntimeError(
+            'Non-empty backup directory detected. Will not proceed with migration to avoid overwriting existing backups. \n'
+            'Please restore from backup via "g4x-helpers migrate --restore" or remove the backup directory if not needed.'
+        )
+
+    mt_sources = [mt for mt in mts if mt.check_source_exists()]
+
+    for mt in mt_sources:
+        mt.backup_source()
+        logger.info(f'Migrating: {mt.source_file_short} -> {mt.target_file_short}')
+        mt.migrate()
 
     logger.info('Validating results...')
     valid_schema = validate.validate_g4x_data(
@@ -87,9 +176,16 @@ def migrate_g4x_data(
 
         if bin_file_schema != 'valid' and bin_file_schema != 'unknown':
             smp = G4Xoutput(data_dir)
-            init_bin_file(g4x_obj=smp, out_dir=data_dir, logger=logger)
+            init_bin_file(g4x_obj=smp, out_dir=data_dir, n_threads=n_threads, logger=logger)
             edit_bin_file(
                 g4x_obj=smp, bin_file=data_dir / 'g4x_viewer' / f'{sample_id}_segmentation.bin', logger=logger
+            )
+            logger.info('Re-created bin file with updated schema.')
+            create_tx_tarfile(
+                g4x_obj=smp,
+                out_path=data_dir / 'g4x_viewer' / f'{sample_id}_transcripts.tar',
+                n_threads=n_threads,
+                logger=logger,
             )
 
         logger.info('Re-validating file structures...')
@@ -101,27 +197,37 @@ def migrate_g4x_data(
 
 @workflow
 def restore_backup(
-    sample_base: Path,
+    data_dir: Path,
     sample_id: str,
     logger: logging.Logger,
-) -> None:
-    backup_dir = sample_base / 'migration_backup'
+):
+    backup_dir = Path(data_dir) / 'migration_backup'
     if backup_dir.exists():
-        if any(backup_dir.iterdir()):
-            logger.info('Backup found. Restoring files.')
-            put_back(sample_base, sample_id)
-            shutil.rmtree(backup_dir)
+        mts = collect_targets(data_dir=data_dir, sample_id=sample_id)
+        mt_backups = [mt for mt in mts if mt.check_backup_exists() or mt.rename_only]
+
+        if len(mt_backups) > 0:
+            for mt in mt_backups:
+                logger.info(f'Restoring: {mt.source_file_short}')
+                mt.restore_backup()
         else:
             logger.info('No backed up files found. Nothing to restore.')
-
+        shutil.rmtree(Path(data_dir) / 'migration_backup')
     else:
         logger.info('No backup found. Nothing to restore.')
 
 
-def total_size_gb(files_dict, sample_id=None, base_path='.'):
+def collect_targets(data_dir: Path, sample_id: str):
+    return [
+        MigrationTarget(root=data_dir, smp_id=sample_id, source=mt[0], target=mt[1], backup=mt[2])
+        for mt in migration_targets
+    ]
+
+
+def total_size_gb(files, sample_id=None, base_path='.'):
     total_bytes = 0
 
-    for key, (src, _, include) in files_dict.items():
+    for src, _, include in files:
         if not include:
             continue
 
@@ -137,56 +243,6 @@ def total_size_gb(files_dict, sample_id=None, base_path='.'):
             pass  # skip missing files
 
     return round(total_bytes / (1024**3), 2)
-
-
-def migrate_file(sample_base, sample_id, old_path, new_path, backup):
-    backup_path = sample_base / 'migration_backup'
-    backup_path.mkdir(exist_ok=True, parents=True)
-
-    old_path = old_path.format(sample_id=sample_id)
-    new_path = new_path.format(sample_id=sample_id)
-
-    old_path_full = sample_base / old_path.format(sample_id=sample_id)
-    new_path_full = sample_base / new_path.format(sample_id=sample_id)
-
-    moved = False
-    if old_path_full.exists():
-        print('Moving:', old_path_full.relative_to(sample_base), '->', new_path)
-        if backup:
-            shutil.copy2(old_path_full, backup_path / old_path_full.name)
-
-        shutil.move(old_path_full, new_path_full)
-        moved = True
-    return moved
-
-
-def migrate_sample_files(sample_base, sample_id):
-    backup_dir = sample_base / 'migration_backup'
-    if backup_dir.exists() and any(backup_dir.iterdir()):
-        raise RuntimeError(
-            'Non-empty backup directory detected. Will not proceed with migration to avoid overwriting existing backups. \n'
-            'Please restore from backup via "g4x-helpers migrate --restore" or remove the backup directory if not needed.'
-        )
-    else:
-        moved_files = {}
-        for f, paths in files_to_migrate.items():
-            old_path, new_path, backup = paths
-            moved_files[f] = migrate_file(sample_base, sample_id, old_path, new_path, backup)
-
-
-def put_back(sample_base, sample_id):
-    for f in files_to_migrate:
-        old_path, new_path, has_backup = files_to_migrate[f]
-
-        if has_backup:
-            file_name = Path(old_path).name.format(sample_id=sample_id)
-            new_path = sample_base / 'migration_backup' / file_name
-            if not new_path.exists():
-                continue
-
-        migrate_file(sample_base, sample_id, str(new_path), old_path, False)
-        if f == 'raw_tx_v2':
-            (sample_base / files_to_migrate[f][1]).unlink()
 
 
 def fix_json_nan(path: Path) -> bool:
@@ -234,15 +290,15 @@ def tx_panel_from_parquet(parquet_lf, tx_panel_old):
 
 
 def write_parquet_in_order(parquet_lf, sample_base):
-    raw_features_path = sample_base / files_to_migrate['raw_tx_v3'][1]
+    raw_features_path = sample_base / 'rna' / 'raw_features.parquet'
     tmp_file = raw_features_path.with_name('tmp.parquet')
     parquet_lf.select(parquet_col_order).sink_parquet(tmp_file)
     shutil.move(tmp_file, raw_features_path)
 
 
 def write_adata_in_order(adata, sample_base: Path) -> None:
-    adata_path = sample_base / files_to_migrate['feat_mtx'][1]
-    cell_meta_path = sample_base / files_to_migrate['cell_meta'][1]
+    adata_path = sample_base / 'single_cell_data' / 'feature_matrix.h5'
+    cell_meta_path = sample_base / 'single_cell_data' / 'cell_metadata.csv.gz'
 
     cols = adata.obs.columns
     first_cols = ['nuclearstain_intensity_mean', 'cytoplasmicstain_intensity_mean']

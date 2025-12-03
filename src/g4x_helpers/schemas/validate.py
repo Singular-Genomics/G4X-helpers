@@ -9,7 +9,6 @@ from pathschema import validate
 
 from .. import utils
 from ..g4x_viewer import CellMasksSchema_pb2 as CellMasksSchema
-from .constants import files_to_migrate
 
 probe_re = re.compile(utils.PROBE_PATTERN)
 
@@ -132,7 +131,7 @@ def validate_file_schemas(sample_base):
 
 
 def infer_parquet_schema(sample_base):
-    raw_features_path = sample_base / files_to_migrate['raw_tx_v3'][1]
+    raw_features_path = sample_base / 'rna' / 'raw_features.parquet'
     parquet_lf = pl.scan_parquet(raw_features_path)
     parquet_cols = parquet_lf.collect_schema().names()
 
@@ -193,7 +192,7 @@ def is_valid_probe(s: str) -> bool:
 
 
 def infer_tx_panel_schema(sample_base: Path) -> str:
-    tx_panel_path = sample_base / files_to_migrate['tx_panel'][1]
+    tx_panel_path = sample_base / 'transcript_panel.csv'
     tx_panel_old = pl.read_csv(tx_panel_path)
     tx_panel_cols = tx_panel_old.columns
 
@@ -213,7 +212,7 @@ def infer_tx_panel_schema(sample_base: Path) -> str:
 
 
 def infer_adata_schema(sample_base: Path) -> str:
-    adata_path = sample_base / files_to_migrate['feat_mtx'][1]
+    adata_path = sample_base / 'single_cell_data' / 'feature_matrix.h5'
     adata = ad.read_h5ad(adata_path)
 
     cols = set(adata.obs.columns)
