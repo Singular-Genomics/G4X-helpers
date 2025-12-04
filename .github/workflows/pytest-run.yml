@@ -1,0 +1,23 @@
+name: Run Pytest
+description: Build project and run pytest
+
+on:
+  push:   
+  workflow_dispatch:
+
+jobs:
+  run_pytest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+
+      - name: Setup Project Environment
+        uses: ./.github/actions/setup-project
+        with:
+          docs-submodule-token: ${{ secrets.CORE_DOCS_ASSETS_READ }}
+
+      - name: run pytest
+        run: |
+          uv run pytest

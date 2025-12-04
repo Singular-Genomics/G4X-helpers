@@ -1,0 +1,35 @@
+# .github/workflows/deploy-mkdocs.yml
+name: Deploy mkdocs on new tag
+
+# Trigger on sem-version tag
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - 'test_docs_*'
+  workflow_dispatch:
+
+# gh-pages needs a push, so grant write; read is implied
+permissions:
+  contents: write
+
+concurrency: docs        # auto-cancel superseded runs
+
+jobs:
+  deploy_docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+
+      - name: Setup Project Environment
+        uses: ./.github/actions/setup-project
+        with:
+          docs-submodule-token: ${{ secrets.CORE_DOCS_ASSETS_READ }}
+
+      - name: Deploy to GitHub Pages
+        env:
+          TAG: ${{ github.ref_name }} 
+        run: |
+          uv run --only-group docs mkdocs gh-deploy --force --clean --message "docs: $TAG"

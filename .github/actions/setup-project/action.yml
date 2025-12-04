@@ -1,0 +1,37 @@
+name: Setup docs environment
+description: Checkout repo + submodule, set up project with uv
+
+inputs:
+  docs-submodule-token:
+    description: Token used to fetch docs assets submodule
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Fetch submodule
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 1
+        submodules: recursive
+        token: ${{ inputs.docs-submodule-token }}
+
+    - name: Pull latest changes for submodules
+      shell: bash
+      run: |
+        git submodule update --init --recursive docs/_core
+        cd docs/_core
+        git fetch origin
+        git checkout main
+        git pull origin main
+
+    - name: Re-checkout repo to restore default token
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 1
+        clean: false
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v6
+      with:
+        version-file: pyproject.toml
