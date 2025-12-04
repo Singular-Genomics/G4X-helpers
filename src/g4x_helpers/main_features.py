@@ -1,5 +1,6 @@
 import functools
 import logging
+import sys
 from typing import TYPE_CHECKING
 
 import rich_click as click
@@ -51,7 +52,6 @@ def _base_command(func):
             )
         logger.info(f'Running {func_name} with G4X-helpers v{__version__}')
 
-        # Pass the initialized logger and parameters to the wrapped function
         result = func(
             g4x_obj=g4x_obj,
             out_dir=out_dir,
