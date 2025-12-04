@@ -72,7 +72,7 @@ def in_place_opt(cmd_name: str = ''):
         '-ip',
         '--in-place',
         is_flag=True,
-        help=f'Edit G4X-data in-place if this flag is set.\n\nOtherwise creates a "g4x_helpers_out/{cmd_name}" folder.',
+        help=f'Edit G4X-data in-place if this flag is set.\n\nOtherwise creates a "g4x_helpers/{cmd_name}" folder.',
     )
 
 
