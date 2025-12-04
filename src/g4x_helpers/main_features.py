@@ -1,6 +1,5 @@
 import functools
 import logging
-import sys
 from typing import TYPE_CHECKING
 
 import rich_click as click
