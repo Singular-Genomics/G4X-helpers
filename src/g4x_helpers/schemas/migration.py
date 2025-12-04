@@ -108,7 +108,18 @@ def migrate_g4x_data(
     *,
     logger: logging.Logger,
 ):
-    logger.info('Migrating to latest G4X-data schema')
+    try:
+        valid_schema = validate.validate_g4x_data(
+            path=data_dir, schema_name='base_schema', formats={'sample_id': sample_id}, report=False
+        )
+        valid_files = validate.validate_file_schemas(data_dir)
+        if not valid_schema or not valid_files:
+            raise validate.ValidationError
+
+        logger.info('All validations passed successfully. No migration needed.')
+        return
+    except Exception:
+        logger.info('Migrating to latest G4X-data schema')
 
     backup_size = total_size_gb(migration_targets, sample_id=sample_id, base_path=data_dir)
     logger.info(f'Creating backup of {backup_size:.2f} GB before proceeding')
