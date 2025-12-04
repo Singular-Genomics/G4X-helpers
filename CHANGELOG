@@ -2,7 +2,7 @@
 
 ## `v1.0.2` — [2025-12-03]
 
-- (no changes since last tag)
+- fix: update uv.lock
 
 ## `v1.0.1` — [2025-12-01]
 
@@ -61,7 +61,7 @@
 - `tar_viewer` now requires an out_path
 
 
-## `v0.4.13` – (2025-08-11)
+## `v0.4.13` – [2025-08-11]
 
 #### Docs:
 - changelog now included in docs
