@@ -1,6 +1,11 @@
 name: Setup docs environment
 description: Checkout repo + submodule, set up project with uv
 
+inputs:
+  docs-submodule-token:
+    description: Token used to fetch docs assets submodule
+    required: true
+
 runs:
   using: composite
   steps:
@@ -9,7 +14,7 @@ runs:
       with:
         fetch-depth: 1
         submodules: recursive
-        token: ${{ secrets.CORE_DOCS_ASSETS_READ }}
+        token: ${{ inputs.docs-submodule-token }}
 
     - name: Pull latest changes for submodules
       shell: bash
