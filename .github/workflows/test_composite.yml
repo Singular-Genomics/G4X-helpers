@@ -10,7 +10,7 @@ jobs:
 
     steps:
       - name: Setup docs environment
-        uses: ./.github/workflows/setup_project
+        uses: ./.github/actions/setup-project
 
       - name: run pytest
         run: |
