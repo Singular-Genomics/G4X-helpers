@@ -8,7 +8,7 @@ on:
       - 'test_publish_*'
 
 jobs:
-  Publish:
+  G4X-helpers_PyPI:
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -20,18 +20,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: "Set up Python"
-        uses: actions/setup-python@v5
+      - name: Setup Project Environment
+        uses: ./.github/actions/setup-project
         with:
-          python-version-file: 'pyproject.toml'
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          version-file: "pyproject.toml"
+          docs-submodule-token: ${{ secrets.CORE_DOCS_ASSETS_READ }}
 
       - name: Build
         run: uv build
 
-      - name: Publish
-        run: uv publish
+      # - name: Publish
+      #   run: uv publish

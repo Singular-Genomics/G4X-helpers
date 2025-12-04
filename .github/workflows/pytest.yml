@@ -1,4 +1,5 @@
-name: Test Reusable Project Setup
+name: Run Pytest
+description: Build project and run pytest
 
 on:
   push:   
