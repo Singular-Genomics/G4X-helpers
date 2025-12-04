@@ -13,8 +13,8 @@ def test_cli_help_smoke():
 
     assert result.exit_code == 0, result.output
     assert 'g4x-helpers' in result.output
-    # for feature in features:
-    #     assert f'{feature} ' in result.output
+    for feature in features:
+        assert feature in result.output
 
 
 def test_main_feature_imports():
