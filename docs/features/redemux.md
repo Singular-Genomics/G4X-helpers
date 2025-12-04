@@ -8,24 +8,17 @@ Replaces or updates the transcript manifest in a G4X run, reassigns transcripts 
 ## Usage
 ![`g4x-helpers redemux --help`](../img/redemux-help.svg)
 
---8<-- "_core/_partials/global_options_note.md"
+--8<-- "_partials/global_options_note.md"
 
 ## argument descriptions
 ---
 ### required
---8<-- "_core/_partials/arg_g4x_data.md"
+--8<-- "_partials/arg_g4x_data.md"
 
 #### `--manifest`: (*type:* `str`)
 
 > Path to the new transcript manifest for demuxing.  
-> The manifest must be a **3-column CSV** with the following header:
-> ```
-> target,sequence,read
-> ```
-
-> - **`target`**: The gene or feature identifier to assign.  
-> - **`sequence`**: The nucleotide sequence associated with the target.  
-> - **`read`**: The read index (e.g. `read_1` or `2`) for which the sequence is valid.
+> Must contain a `probe_name` column with entries formatted as `<gene>-<sequence>-<primer>`. Optional `gene_name` or `read` columns are respected if present; otherwise they are derived from `probe_name`. Invalid probe names are ignored.
 
 ### optional
 #### `--batch-size`: (*type:* `int`  *default:* `1,000,000`)
@@ -33,9 +26,7 @@ Replaces or updates the transcript manifest in a G4X run, reassigns transcripts 
 > Number of transcripts to process per batch during demultiplexing.  
 > Larger batch sizes may improve performance but increase memory usage.
 
---8<-- "_core/_partials/arg_output.md"
-
---8<-- "_core/_partials/arg_smp_id.md"
+--8<-- "_partials/arg_in_place.md"
 
 <br>
 --8<-- "_core/_partials/end_cap.md"
