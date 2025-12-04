@@ -1,5 +1,26 @@
 # Changelog
 
+## `[unreleased]` — [2025-12-04]
+
+#### Overview:
+- New "migrate" function to update older datasets to be compatible with the latest G4X-viewer and G4X-helpers versions.
+- Added schema validation to ensure data integrity and compatibility.
+- Implementation of an initial test framework for the package.
+- Re-worked CLI-api to be more modular and easier to extend.
+
+#### Changes:
+- new "in_place" output flag replaces "out_dir" and ensures preditable output behaviour.
+- standardized log location
+- new logging formatter
+- refactor "workflows" into modules
+- adapt G4Xoutput to latest schema
+- refactored stream_features method to redemux module
+- new write_csv_gz method
+- add bead_mask loading to G4Xoutput
+- removed deprecated G4X-viewer schema
+- new dependency: pathschema
+- updates dependencies
+
 ## `v1.0.2` — [2025-12-03]
 
 - fix: update uv.lock
