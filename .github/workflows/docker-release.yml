@@ -1,0 +1,14 @@
+name: Docker release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - 'test_package_*'
+
+jobs:
+  docker-release:
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      push: true
+      ref_name: ${{ github.ref_name }}

@@ -1,10 +1,10 @@
 name: Build Multi-Arch Docker image on new tag
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'          # e.g. v1.2.3
-      - 'test_package_*'
+  # push:
+  #   tags:
+  #     - 'v*.*.*'          # e.g. v1.2.3
+  #     - 'test_package_*'
   workflow_dispatch:
 
 permissions:
@@ -60,7 +60,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up QEMU (needed for cross emulation if any tooling expects amd64, optional here)
+      - name: Set up QEMU (needed for cross emulation if any tooling expects amd64)
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
