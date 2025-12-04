@@ -1,0 +1,12 @@
+name: Docker preflight
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  docker-preflight:
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      push: false
+      ref_name: pr-${{ github.event.pull_request.number }}
