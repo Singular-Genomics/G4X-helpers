@@ -95,7 +95,7 @@ def initialize_sample(
         out_dir = sample.data_dir
         click.secho('Editing in-place!', fg='blue', bold=True)
     else:
-        out_dir = sample.data_dir / 'g4x_helpers_out'
+        out_dir = sample.data_dir / 'g4x_helpers'
 
     return sample, out_dir
 

@@ -45,9 +45,11 @@ def _base_command(func):
         print_k_v('g4x-helpers', f'v{__version__}', gap)
         click.echo('')
 
+        log_dir = g4x_obj.data_dir / 'g4x_helpers' / 'logs'
+        log_dir.mkdir(parents=True, exist_ok=True)
         if not kwargs.get('logger', None):
             logger = utils.setup_logger(
-                logger_name=func_name, out_dir=out_dir / 'logs', stream_level=verbose, file_logger=file_logger
+                logger_name=func_name, out_dir=log_dir, stream_level=verbose, file_logger=file_logger
             )
         logger.info(f'Running {func_name} with G4X-helpers v{__version__}')
 
@@ -222,7 +224,6 @@ def migrate(
 ) -> None:
     from .schemas import migration
 
-    print(f'G4X-helpers migration - v{__version__}\n')
     if restore:
         migration.restore_backup(data_dir=g4x_obj.data_dir, sample_id=g4x_obj.sample_id, logger=logger)
     else:

@@ -37,6 +37,8 @@ migration_targets = [
     ('g4x_viewer/{sample_id}_run_metadata.json', None, True),
 ]
 
+backup_loc = 'g4x_helpers/migration_backup'
+
 
 class MigrationTarget:
     def __init__(self, root: str, smp_id: str, source: str, target: str, backup: bool = True):
@@ -53,7 +55,7 @@ class MigrationTarget:
         self.target_file = self.root / target
 
         self.backup = backup
-        self.backup_dir = self.root / 'migration_backup'
+        self.backup_dir = self.root / backup_loc
         self.backup_file = self.backup_dir / self.source_file.relative_to(self.root)
 
         self.source_file_short = self.source_file.relative_to(self.root)
@@ -212,7 +214,7 @@ def restore_backup(
     sample_id: str,
     logger: logging.Logger,
 ):
-    backup_dir = Path(data_dir) / 'migration_backup'
+    backup_dir = Path(data_dir) / backup_loc
     if backup_dir.exists():
         mts = collect_targets(data_dir=data_dir, sample_id=sample_id)
         mt_backups = [mt for mt in mts if mt.check_backup_exists() or mt.rename_only]
@@ -223,7 +225,7 @@ def restore_backup(
                 mt.restore_backup()
         else:
             logger.info('No backed up files found. Nothing to restore.')
-        shutil.rmtree(Path(data_dir) / 'migration_backup')
+        shutil.rmtree(Path(data_dir) / backup_loc)
     else:
         logger.info('No backup found. Nothing to restore.')
 
