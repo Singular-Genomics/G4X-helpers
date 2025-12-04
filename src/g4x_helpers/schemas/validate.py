@@ -75,9 +75,10 @@ def validate_g4x_data(
     if not ok:
         raise ValidationError(
             'Output does not conform to lastest G4X-data schema. \n'
-            'If your data was generated with a previous version of G4X-software, try running: "g4x-helpers migrate"'
+            'If your data was generated with a previous version of G4X-software, '
+            'you can migrate it to the latest schema with: "g4x-helpers migrate"'
         )
-    return path
+    return True
 
 
 def infer_sample_id(data_dir) -> str:
