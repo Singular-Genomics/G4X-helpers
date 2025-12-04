@@ -28,7 +28,7 @@ click.rich_click.STYLE_REQUIRED_SHORT = 'bold yellow'
 click.rich_click.STYLE_REQUIRED_LONG = 'bold yellow'
 click.rich_click.STYLE_OPTIONS_PANEL_BORDER = 'dim'
 click.rich_click.STYLE_COMMANDS_PANEL_BORDER = 'dim'
-# click.rich_click.COMMANDS_BEFORE_OPTIONS = True
+click.rich_click.COMMANDS_BEFORE_OPTIONS = True
 
 click.rich_click.ARGUMENTS_PANEL_TITLE = 'input'
 

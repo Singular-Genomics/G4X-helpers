@@ -116,7 +116,7 @@ def resegment(ctx, g4x_data, cell_labels, labels_key, in_place):
             verbose=ctx.obj['verbose'],
         )
     except Exception as e:
-        cli_setup._fail_message(func_name, e, trace_back=False)
+        cli_setup._fail_message(func_name, e)
 
 
 ############################################################
@@ -245,7 +245,7 @@ def new_bin(ctx, g4x_data, in_place):
             verbose=ctx.obj['verbose'],
         )
     except Exception as e:
-        cli_setup._fail_message(func_name, e, trace_back=True)
+        cli_setup._fail_message(func_name, e)
 
 
 ############################################################
