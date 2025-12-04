@@ -67,18 +67,21 @@ def g4x_data_opt():
     )
 
 
-def in_place_opt():
+def in_place_opt(cmd_name: str = ''):
     return click.option(
         '-ip',
         '--in-place',
         is_flag=True,
-        help='Edit G4X-data in-place if this flag is set.\n\nOtherwise creates a "g4x_helpers_out" folder.',
+        help=f'Edit G4X-data in-place if this flag is set.\n\nOtherwise creates a "g4x_helpers_out/{cmd_name}" folder.',
     )
 
 
 ############################################################
 # region resegment
-@cli.command(name='resegment', help=hm.RESEG_HELP)
+name = 'resegment'
+
+
+@cli.command(name=name, help=hm.RESEG_HELP)
 @g4x_data_opt()
 @click.option(
     '--cell-labels',
@@ -93,7 +96,7 @@ def in_place_opt():
     default=None,
     help='Key/column in npz/geojson where labels should be taken from (optional, but required for .npz with multiple arrays)',
 )
-@in_place_opt()
+@in_place_opt(name)
 @click.pass_context
 def resegment(ctx, g4x_data, cell_labels, labels_key, in_place):
     func_name = inspect.currentframe().f_code.co_name
@@ -118,7 +121,10 @@ def resegment(ctx, g4x_data, cell_labels, labels_key, in_place):
 
 ############################################################
 # region redemux
-@cli.command(name='redemux', help=hm.REDMX_HELP)
+name = 'redemux'
+
+
+@cli.command(name=name, help=hm.REDMX_HELP)
 @g4x_data_opt()
 @click.option(
     '--manifest',
@@ -133,7 +139,7 @@ def resegment(ctx, g4x_data, cell_labels, labels_key, in_place):
     type=int,
     help='Number of transcripts to process per batch.',
 )
-@in_place_opt()
+@in_place_opt(name)
 @click.pass_context
 def redemux(ctx, g4x_data, manifest, batch_size, in_place):
     func_name = inspect.currentframe().f_code.co_name
@@ -156,7 +162,10 @@ def redemux(ctx, g4x_data, manifest, batch_size, in_place):
 
 ############################################################
 # region update_bin
-@cli.command(name='update_bin', help=hm.UDBIN_HELP)
+name = 'update_bin'
+
+
+@cli.command(name=name, help=hm.UDBIN_HELP)
 @g4x_data_opt()
 @click.option(
     '--metadata',
@@ -188,7 +197,7 @@ def redemux(ctx, g4x_data, manifest, batch_size, in_place):
     type=str,
     help='Column name in metadata containing 2D-embedding coordinates.\n\n Parser will look for {emb_key}_1 and {emb_key}_2.\n\n If not provided, skips updating embedding.',
 )
-@in_place_opt()
+@in_place_opt(name)
 @click.pass_context
 def update_bin(ctx, g4x_data, metadata, cellid_key, cluster_key, cluster_color_key, emb_key, in_place):
     func_name = inspect.currentframe().f_code.co_name
@@ -215,9 +224,12 @@ def update_bin(ctx, g4x_data, metadata, cellid_key, cluster_key, cluster_color_k
 
 ############################################################
 # region new_bin
-@cli.command(name='new_bin', help=hm.NWBIN_HELP)
+name = 'new_bin'
+
+
+@cli.command(name=name, help=hm.NWBIN_HELP)
 @g4x_data_opt()
-@in_place_opt()
+@in_place_opt(name)
 @click.pass_context
 def new_bin(ctx, g4x_data, in_place):
     func_name = inspect.currentframe().f_code.co_name
@@ -238,13 +250,17 @@ def new_bin(ctx, g4x_data, in_place):
 
 ############################################################
 # region tar_viewer
-@cli.command(name='tar_viewer', help=hm.TARVW_HELP)
+name = 'tar_viewer'
+
+
+@cli.command(name=name, help=hm.TARVW_HELP)
 @g4x_data_opt()
+@in_place_opt(name)
 @click.pass_context
-def tar_viewer(ctx, g4x_data):
+def tar_viewer(ctx, g4x_data, in_place):
     func_name = inspect.currentframe().f_code.co_name
 
-    g4x_obj, out_dir = cli_setup.initialize_sample(data_dir=g4x_data, in_place=True, n_threads=ctx.obj['threads'])
+    g4x_obj, out_dir = cli_setup.initialize_sample(data_dir=g4x_data, in_place=in_place, n_threads=ctx.obj['threads'])
     try:
         with cli_setup._spinner(f'Initializing {func_name} process...'):
             from ..main_features import tar_viewer as main_tar_viewer
