@@ -517,8 +517,7 @@ version = "1.0.2"
 source = { editable = "." }
 dependencies = [
     { name = "geopandas" },
-    { name = "glymur", version = "0.14.0.post1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "glymur", version = "0.14.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "glymur" },
     { name = "matplotlib" },
     { name = "pathschema" },
     { name = "polars" },
@@ -548,7 +547,7 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "geopandas", specifier = "~=1.0" },
-    { name = "glymur", specifier = "~=0.12" },
+    { name = "glymur", specifier = "~=0.12,<=0.13.4" },
     { name = "matplotlib", specifier = "~=3.7" },
     { name = "pathschema", specifier = "~=0.2.1" },
     { name = "polars", specifier = "~=1.30" },
@@ -632,38 +631,17 @@ wheels = [
 
 [[package]]
 name = "glymur"
-version = "0.14.0.post1"
+version = "0.13.4"
 source = { registry = "https://pypi.org/simple" }
-resolution-markers = [
-    "python_full_version < '3.11'",
-]
 dependencies = [
-    { name = "imageio", marker = "python_full_version < '3.11'" },
-    { name = "lxml", marker = "python_full_version < '3.11'" },
+    { name = "lxml" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "packaging", marker = "python_full_version < '3.11'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/f8/a2/dceea8a55f5a4ca1d8d020f31e2063610a877879edf2ecb2a9733aa030cf/glymur-0.14.0.post1.tar.gz", hash = "sha256:d2b58cca09e01739dc3e5fc8970618598fac4660fd592d06c1c791c161d406bc", size = 2836689, upload-time = "2025-03-22T19:12:06Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/8c/73/c38a82ece86b2e287483335c57d9ba15f1216f2744cd5fb084b4dfa2caef/glymur-0.14.0.post1-py3-none-any.whl", hash = "sha256:8d0f959d1f91ca161e9318c09c9f1789b167905ed038a495028f54c522e2f07a", size = 2743386, upload-time = "2025-03-22T19:11:52.414Z" },
-]
-
-[[package]]
-name = "glymur"
-version = "0.14.4"
-source = { registry = "https://pypi.org/simple" }
-resolution-markers = [
-    "python_full_version >= '3.12'",
-    "python_full_version == '3.11.*'",
-]
-dependencies = [
-    { name = "lxml", marker = "python_full_version >= '3.11'" },
     { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "pillow", marker = "python_full_version >= '3.11'" },
+    { name = "packaging" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/cb/95/8c98388f51d47e77cd987e8244e45681c00675cf8798b438c585ee4abc64/glymur-0.14.4.tar.gz", hash = "sha256:7815fd6089103a7549b74825b3381e5b3ed8657a8e02646b8d4fef4c9ce06b5c", size = 4582097, upload-time = "2025-10-08T20:09:51.473Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/16/9e/95a764468d9368bb66f08e8e2b85e132dcc37f54a8e0a4606a318960b24f/Glymur-0.13.4.tar.gz", hash = "sha256:4999e9fc9dd0a668d0b7c998d9e3a22fcd316b79fffebb501fcf0e293f24be17", size = 2828254, upload-time = "2024-07-04T20:28:11.317Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/07/7c/5e49c70ee8afa2fb9e3649bae08b3d6d36346af1da8543d73b1ff511c1ac/glymur-0.14.4-py3-none-any.whl", hash = "sha256:e7fb98ddfac277b19e47161403b680979ca6f4757fa3c580924213276d586a00", size = 2744645, upload-time = "2025-10-08T20:09:48.891Z" },
+    { url = "https://files.pythonhosted.org/packages/7f/0c/4a51f1a62f0b8528531f291f29320b92be375f0019fe82d957401d953bc9/Glymur-0.13.4-py3-none-any.whl", hash = "sha256:a1c7bc8d2de98231ad7c57ec086da6967966913ee1629f9e350c624813c34eab", size = 2739058, upload-time = "2024-07-04T20:28:06.127Z" },
 ]
 
 [[package]]

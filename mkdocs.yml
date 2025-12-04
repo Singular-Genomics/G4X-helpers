@@ -9,25 +9,39 @@ site_description: Singular Genomics G4X data documentation site
 repo_name: G4X-helpers
 repo_url: https://github.com/Singular-Genomics/G4X-helpers
 
+theme:
+  features:
+    - navigation.tabs
+
 # region Nav
 nav:
-  - G4X-helpers: index.md
+  - Docs Home: https://docs.singulargenomics.com
 
-  - Installation:
-    - Installation: ./installation/index.md
-    - Source install: ./installation/source.md
-    - Docker setup: ./installation/docker.md
+  - G4X-helpers: #index.md
 
-  - Usage:
-    - usage: usage/index.md
+    - Intro: index.md
 
-  - CLI features:
-    - CLI features: ./features/index.md
-    - resegment: ./features/resegment.md
-    - redemux: ./features/redemux.md
-    - update_bin: ./features/update_bin.md
-    - new_bin: ./features/new_bin.md
-    - tar_viewer: ./features/tar_viewer.md
+    - Installation:
+      - Overview: ./installation/index.md
+      - Source install: ./installation/source.md
+      - Docker setup: ./installation/docker.md
 
-  - Contributing: contributing.md
-  - Changelog: changelog.md
+    #- Usage:
+    - Usage: usage/index.md
+
+    - CLI features:
+      - resegment: ./features/resegment.md
+      - redemux: ./features/redemux.md
+      - update_bin: ./features/update_bin.md
+      - new_bin: ./features/new_bin.md
+      - tar_viewer: ./features/tar_viewer.md
+      - migrate: ./features/migrate.md
+
+    - Contributing: contributing.md
+    - Changelog: changelog.md
+
+  - G4X-viewer: https://docs.singulargenomics.com/G4X-viewer/
+
+  - G4X-data: https://docs.singulargenomics.com/g4x_data/
+
+  - G4X-tutorials: https://docs.singulargenomics.com/g4x_tutorials/
