@@ -1,0 +1,12 @@
+name: Docker preflight
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  docker-preflight:
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      push: false
+      ref_name: pr-${{ github.sha }}
