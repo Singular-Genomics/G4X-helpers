@@ -8,12 +8,12 @@ Updates an existing `.bin` segmentation file with new clustering, embedding, or 
 ## Usage
 ![`g4x-helpers update_bin --help`](../img/update_bin-help.svg)
 
---8<-- "_core/_partials/global_options_note.md"
+--8<-- "_partials/global_options_note.md"
 
 ## argument descriptions
 ---
 ### required 
---8<-- "_core/_partials/arg_g4x_data.md"
+--8<-- "_partials/arg_g4x_data.md"
 
 
 #### `--metadata`: (*type:* `str`)
@@ -22,13 +22,11 @@ Updates an existing `.bin` segmentation file with new clustering, embedding, or 
 
 ### optional 
 
---8<-- "_core/_partials/arg_output.md"
+--8<-- "_partials/arg_in_place.md"
 
---8<-- "_core/_partials/arg_smp_id.md"
+#### `--cellid-key`: (*type:* `str`  *default:* `cell_id`)
 
-#### `--cellid-key`: (*type:* `str`  *default:* `None`)
-
-> Name of the column in the metadata file that contains cell IDs matching those in the `.bin` file. If not provided, the first column in the metadata will be used.
+> Name of the column in the metadata file that contains cell IDs matching those in the `.bin` file. Defaults to `cell_id`.
 
 #### `--cluster-key`: (*type:* `str`  *default:* `None`)
 

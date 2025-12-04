@@ -184,9 +184,11 @@ If your installation of G4X-helpers was successful, the following commands shoul
 
 + `g4x-helpers --help`  
 + `g4x-helpers resegment --help`  
++ `g4x-helpers redemux --help`  
 + `g4x-helpers update_bin --help`  
 + `g4x-helpers new_bin --help`  
 + `g4x-helpers tar_viewer --help`
++ `g4x-helpers migrate --help`  
 
 
 !!!tip

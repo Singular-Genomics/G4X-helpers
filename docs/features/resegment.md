@@ -8,21 +8,18 @@ Replaces or updates the segmentation mask in a G4X run and regenerates all downs
 ## Usage
 ![`g4x-helpers resegment --help`](../img/resegment-help.svg)
 
---8<-- "_core/_partials/global_options_note.md"
+--8<-- "_partials/global_options_note.md"
 
 ## argument descriptions
 ---
 ### required
---8<-- "_core/_partials/arg_g4x_data.md"
+--8<-- "_partials/arg_g4x_data.md"
 
 #### `--cell-labels`: (*type:* `str`)
 
 > Path to the new segmentation mask file. Supported formats include `.npy`, `.npz`, and `.geojson`. This file will be used to replace the existing mask for transcript and protein signal assignment.
 
 ### optional 
---8<-- "_core/_partials/arg_smp_id.md"
-
---8<-- "_core/_partials/arg_output.md"
 
 #### `--labels-key`: (*type:* `str`  *default:* `None`)
 
@@ -34,6 +31,8 @@ Replaces or updates the segmentation mask in a G4X run and regenerates all downs
 > - **If using a `.geojson` file**:  
 > By default, cell labels are expected in a column named `label`.  
 > Use this argument to override and select a different column as the label source.
+
+--8<-- "_partials/arg_in_place.md"
 
 <br>
 --8<-- "_core/_partials/end_cap.md"
