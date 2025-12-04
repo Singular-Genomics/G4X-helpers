@@ -333,4 +333,3 @@ def parse_input_manifest(file_path: Path, verbose: bool = False) -> pl.DataFrame
     )
 
     return manifest
-
