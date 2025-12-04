@@ -9,7 +9,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Checkout repo with submodule
+    - name: Fetch submodule
       uses: actions/checkout@v5
       with:
         fetch-depth: 1
@@ -25,7 +25,7 @@ runs:
         git checkout main
         git pull origin main
 
-    - name: Checkout repo again to restore default GITHUB_TOKEN
+    - name: Re-checkout repo to restore default token
       uses: actions/checkout@v5
       with:
         fetch-depth: 1
