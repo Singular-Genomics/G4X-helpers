@@ -2,7 +2,7 @@ import functools
 import logging
 import sys
 
-from ..utils import setup_logger, validate_path
+from ..utils import LoggerWriter, setup_logger, validate_path
 
 
 def workflow(func):
@@ -35,31 +35,6 @@ def workflow(func):
             sys.stdout = original_stdout
 
     return wrapper
-
-
-class LoggerWriter:
-    def __init__(self, logger, level):
-        self.logger = logger
-        self.level = level
-        self._buffer = ''
-
-    def write(self, message):
-        # stdout writes can be chunked, so we buffer and split on newlines
-        if not isinstance(message, str):
-            message = str(message)
-
-        self._buffer += message
-        while '\n' in self._buffer:
-            line, self._buffer = self._buffer.split('\n', 1)
-            line = line.strip()
-            if line:
-                self.logger.log(self.level, line)
-
-    def flush(self):
-        # Flush any remaining text in the buffer
-        if self._buffer.strip():
-            self.logger.log(self.level, self._buffer.strip())
-        self._buffer = ''
 
 
 class OutSchema:

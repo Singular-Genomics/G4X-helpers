@@ -178,10 +178,10 @@ def setup_logger(
 
     if format is None:
         # format = '[%(asctime)s | %(name)s | %(levelname)s: %(message)s'
-        format = '%(asctime)s | %(name)-16s | %(levelname)7s - %(message)s'
+        format = '%(asctime)s | %(name)s | %(levelname)7s - %(message)s'
 
-    # formatter = logging.Formatter(format, datefmt='%Y-%m-%d %H:%M:%S')
-    formatter = TruncatingFormatter(format, name_max=16, datefmt='%H:%M:%S')
+    formatter = logging.Formatter(format, datefmt='%H:%M:%S')
+    # formatter = TruncatingFormatter(format, name_max=16, datefmt='%H:%M:%S')
 
     ## optionally clear existing handlers
     if clear_handlers:
@@ -217,6 +217,31 @@ def setup_logger(
         fh.flush()
 
     return logger
+
+
+class LoggerWriter:
+    def __init__(self, logger, level):
+        self.logger = logger
+        self.level = level
+        self._buffer = ''
+
+    def write(self, message):
+        # stdout writes can be chunked, so we buffer and split on newlines
+        if not isinstance(message, str):
+            message = str(message)
+
+        self._buffer += message
+        while '\n' in self._buffer:
+            line, self._buffer = self._buffer.split('\n', 1)
+            line = line.strip()
+            if line:
+                self.logger.log(self.level, line)
+
+    def flush(self):
+        # Flush any remaining text in the buffer
+        if self._buffer.strip():
+            self.logger.log(self.level, self._buffer.strip())
+        self._buffer = ''
 
 
 def symlink_original_files(g4x_obj, out_dir: Path | str) -> None:
@@ -308,3 +333,4 @@ def parse_input_manifest(file_path: Path, verbose: bool = False) -> pl.DataFrame
     )
 
     return manifest
+
