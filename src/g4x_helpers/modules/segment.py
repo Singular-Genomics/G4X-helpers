@@ -81,7 +81,9 @@ def apply_segmentation(
         utils.write_csv_gz(df=cell_x_protein, path=cell_x_protein_out)
 
     logger.info('Creating adata and metadata.')
-    cell_metadata_pre = create_cell_metadata(g4x_obj, cell_x_protein=cell_x_protein, create_source=create_source)
+    cell_metadata_pre = create_cell_metadata(
+        g4x_obj, cell_x_protein=cell_x_protein, mask=labels, create_source=create_source
+    )
 
     adata = create_adata(
         g4x_obj=g4x_obj,
@@ -206,14 +208,16 @@ def get_mask_properties(cell_ids: pl.DataFrame, mask: np.ndarray) -> pl.DataFram
     return prop_dict_df
 
 
-def create_cell_metadata(g4x_obj: G4Xoutput, cell_x_protein: pl.DataFrame | None = None, create_source: bool = False):
+def create_cell_metadata(
+    g4x_obj: G4Xoutput,
+    cell_x_protein: pl.DataFrame | None = None,
+    mask: np.ndarray | None = None,
+    create_source: bool = False,
+) -> pl.DataFrame:
     if create_source:
         cell_props = build_g4x_cell_properties(g4x_obj)
     else:
-        custom_mask = try_load_segmentation(
-            cell_labels=g4x_obj.segmentation_path, expected_shape=g4x_obj.shape, labels_key='nuclei_exp'
-        )
-        cell_props = build_custom_cell_properties(g4x_obj, custom_mask)
+        cell_props = build_custom_cell_properties(g4x_obj, mask)
 
     if cell_x_protein is None:
         cxp_path = g4x_obj.data_dir / 'single_cell_data' / 'cell_by_protein.csv.gz'
@@ -337,8 +341,9 @@ def create_cell_x_protein(
     channel_name_map['nuclear'] = 'nuclearstain'
     channel_name_map['eosin'] = 'cytoplasmicstain'
 
-    bead_mask = g4x_obj.load_bead_mask()
-    bead_mask_flat = bead_mask.ravel() if bead_mask is not None else None
+    # TODO return here when bead masking is implemented
+    # bead_mask = g4x_obj.load_bead_mask()
+    # bead_mask_flat = bead_mask.ravel() if bead_mask is not None else None
     mask_flat = mask.ravel()
 
     cell_x_protein = get_cell_ids(g4x_obj.sample_id, mask).drop('segmentation_label')
@@ -358,7 +363,7 @@ def create_cell_x_protein(
         intensities = image_mask_intensity_extraction_v2(
             signal_img,
             mask_flat=mask_flat,
-            bead_mask_flat=bead_mask_flat,
+            bead_mask_flat=None,
         )
 
         cell_x_protein = cell_x_protein.with_columns(pl.Series(name=ch_label, values=intensities))
@@ -401,26 +406,26 @@ def create_adata(
     return adata
 
 
-def image_mask_intensity_extraction(
-    img: np.ndarray,
-    mask_flat: np.ndarray,
-    bead_mask_flat: np.ndarray | None = None,
-) -> pl.DataFrame | pl.LazyFrame:
-    img_flat = img.ravel()
+# def image_mask_intensity_extraction(
+#     img: np.ndarray,
+#     mask_flat: np.ndarray,
+#     bead_mask_flat: np.ndarray | None = None,
+# ) -> pl.DataFrame | pl.LazyFrame:
+#     img_flat = img.ravel()
 
-    ## optional masking with beads
-    if bead_mask_flat is not None:
-        bead_mask_flat = ~bead_mask_flat
-        mask_flat = mask_flat[bead_mask_flat]
-        img_flat = img_flat[bead_mask_flat]
+#     ## optional masking with beads
+#     if bead_mask_flat is not None:
+#         bead_mask_flat = ~bead_mask_flat
+#         mask_flat = mask_flat[bead_mask_flat]
+#         img_flat = img_flat[bead_mask_flat]
 
-    # intensity_means = np.bincount(mask_flat, weights=img_flat)[1:] / np.bincount(mask_flat)[1:]
-    counts = np.bincount(mask_flat)[1:]
-    sums = np.bincount(mask_flat, weights=img_flat)[1:]
+#     # intensity_means = np.bincount(mask_flat, weights=img_flat)[1:] / np.bincount(mask_flat)[1:]
+#     counts = np.bincount(mask_flat)[1:]
+#     sums = np.bincount(mask_flat, weights=img_flat)[1:]
 
-    # Avoid division by zero:
-    intensity_means = np.divide(sums, counts, out=np.zeros_like(sums), where=counts != 0)
-    return intensity_means
+#     # Avoid division by zero:
+#     intensity_means = np.divide(sums, counts, out=np.zeros_like(sums), where=counts != 0)
+#     return intensity_means
 
 
 def image_mask_intensity_extraction_v2(
