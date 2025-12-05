@@ -127,8 +127,8 @@ def redemux(
         g4x_obj=g4x_obj,
         labels=labels,
         out_dir=out_dir,
-        skip_protein_extraction=True,
-        create_source=True,
+        skip_protein_extraction=False,
+        create_source=False,
         logger=logger,
     )
 
