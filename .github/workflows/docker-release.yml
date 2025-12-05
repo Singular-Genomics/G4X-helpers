@@ -5,10 +5,12 @@ on:
     tags:
       - 'v*.*.*'
       - 'test_package_*'
+  workflow_dispatch:
 
 jobs:
   docker-release:
     uses: ./.github/workflows/docker-build.yml
+    secrets: inherit
     with:
       push: true
       ref_name: ${{ github.ref_name }}
