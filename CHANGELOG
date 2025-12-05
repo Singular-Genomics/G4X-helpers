@@ -1,6 +1,6 @@
 # Changelog
 
-## `[unreleased]` — [2025-12-04]
+## `v2.0.0` — [2025-12-04]
 
 #### Overview:
 - New "migrate" function to update older datasets to be compatible with the latest G4X-viewer and G4X-helpers versions.
@@ -9,7 +9,7 @@
 - Re-worked CLI-api to be more modular and easier to extend.
 
 #### Changes:
-- new "in_place" output flag replaces "out_dir" and ensures preditable output behaviour.
+- new "in_place" output flag replaces "out_dir" and ensures predictable output behavior.
 - standardized log location
 - new logging formatter
 - refactor "workflows" into modules
@@ -21,6 +21,7 @@
 - new dependency: pathschema
 - updates dependencies
 - update docs content and match structure to main site
+- update changelog
 
 ## `v1.0.2` — [2025-12-03]
 
