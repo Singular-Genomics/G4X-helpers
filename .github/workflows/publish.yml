@@ -6,6 +6,7 @@ on:
     tags:
       - v*  # e.g. v0.1.0
       - 'test_publish_*'
+  workflow_dispatch:
 
 jobs:
   G4X-helpers_PyPI:
