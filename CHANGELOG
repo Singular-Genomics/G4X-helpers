@@ -1,10 +1,10 @@
 # Changelog
 
-## `v2.0.1` — [2025-12-04]
+## [2025-12-04] — `v2.0.1`
 
 - fix: docker release auth issue
 
-## `v2.0.0` — [2025-12-04]
+## [2025-12-04] — `v2.0.0`
 
 #### Overview:
 - New "migrate" function to update older datasets to be compatible with the latest G4X-viewer and G4X-helpers versions.
@@ -27,15 +27,15 @@
 - update docs content and match structure to main site
 - update changelog
 
-## `v1.0.2` — [2025-12-03]
+## [2025-12-03] — `v1.0.2`
 
 - fix: update uv.lock
 
-## `v1.0.1` — [2025-12-01]
+## [2025-12-01] — `v1.0.1`
 
 - fix: get_shape fast via glymur
 
-## `v1.0.0` — [2025-11-13]
+## [2025-11-13] — `v1.0.0`
 
 - docs: add partials for shared options
 - pkg: add rich-codex as docs dependency
@@ -47,16 +47,16 @@
 - pkg: implement new cli and re-factor
 - pkg: set python 3.12 as default version
 
-## `v0.5.2` — [2025-10-01]
+## [2025-10-01] — `v0.5.2`
 
 - fix: missing tests in publish workflow
 
-## `v0.5.1` — [2025-10-01]
+## [2025-10-01] — `v0.5.1`
 
 - pkg: added PyPI publish workflow
 - fix: README logo link
 
-## `v0.5.0` — [2025-10-01]
+## [2025-10-01] — `v0.5.0`
 
 - docs: formatting
 - docs: spell check
@@ -79,7 +79,7 @@
 - pkg: opening python requirements to include 3.11
 - pkg: removed bump-my-version and replacing with uv-ship
 
-## `v0.4.14` — [2025-08-12]
+##  [2025-08-12] — `v0.4.14`
 
 #### Fixes:
 - `tar_viewer` will now exit leaving the source folder unchanged
@@ -88,7 +88,7 @@
 - `tar_viewer` now requires an out_path
 
 
-## `v0.4.13` – [2025-08-11]
+## [2025-08-11] — `v0.4.13`
 
 #### Docs:
 - changelog now included in docs
@@ -101,7 +101,7 @@
 - set required `uv` version
 
 
-## `v0.4.12` — [2025-07-25]
+##  [2025-07-25] — `v0.4.12`
 
 #### Docs:
 - Added Documentation for G4X-helpers and G4X-output
@@ -124,28 +124,12 @@
 - Cleaned up README.md
 
 
-## `v0.2.4` - `v0.4.11` (unreleased)
+## [unreleased changes]
 
 - Release preparation
 - Add Dockerfile
 - Update dependency information
-
-
-## `v0.2.3` — [2025-06-25]
-
 - Add tar_viewer tool to tar up a G4X-viewer folder for the single-file upload option.
-
-
-## `v0.2.2` — [2025-06-24]
-
 - Add new_bin tool to more quickly generate a new bin file
-
-
-## `v0.2.1` — [2025-06-02]
-
 - Bug fixes for MVP functionality
-
-
-## `v0.2.0` — [2025-05-16]
-
 - Add CLI tools for re-segmentation and updating bin files with clustering/embedding information
