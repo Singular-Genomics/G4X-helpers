@@ -8,15 +8,8 @@ With [G4X-helpers](https://github.com/Singular-Genomics/G4X-helpers) we provide 
 #### On these pages you can:
 
 + learn how to [install](./installation/index.md) G4X-helpers on your system
++ find a description of [CLI features](./features/index.md) 
 + get started with [using](./usage/index.md) the command line interface (CLI)
-+ find detailed descriptions of the main features:
-
-    - [resegment](./features/resegment.md) : reprocess G4X-output with a new segmentation 
-    - [redemux](./features/redemux.md) : reprocess G4X-output with a new transcript manifest 
-    - [update_bin](./features/update_bin.md) : update G4X-viewer `.bin` file with new metadata
-    - [new_bin](./features/new_bin.md) : generate G4X-viewer `.bin` files from sample output
-    - [tar_viewer](./features/tar_viewer.md) : package G4X-viewer folder for distribution
-    - [migrate](./features/migrate.md) : migrate legacy runs to the latest G4X-data schema and viewer format
 
 <br>
 
