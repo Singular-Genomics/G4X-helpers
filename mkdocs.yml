@@ -2,7 +2,6 @@
 INHERIT: docs/_core/core.mkdocs.yml
 
 # region Site
-site_name: G4X-helpers
 site_url: https://docs.singulargenomics.com/G4X-helpers/
 site_description: Singular Genomics G4X data documentation site
 
