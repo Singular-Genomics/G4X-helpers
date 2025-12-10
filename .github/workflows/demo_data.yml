@@ -33,3 +33,4 @@ jobs:
           mkdir -p demo_data
           tar -xf demo_data.tar -C demo_data
           rm demo_data.tar
+          ls -lh demo_data
