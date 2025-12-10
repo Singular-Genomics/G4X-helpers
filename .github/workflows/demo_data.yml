@@ -27,11 +27,11 @@ jobs:
           jq -r '.datasets[] | select(.id=="demo_data_1x1") | "\(.dataChecksum)  \(.objectKey)"' datasets/config.json > datasets/demo_data.md5
           md5sum -c datasets/demo_data.md5
           rm ./datasets/config.json ./datasets/demo_data.md5
+          mv datasets demo_data
       
       - name: Extract demo data
         run: |
-          cd ./tests/datasets
-          mkdir -p demo_data
-          tar -xf demo_data.tar -C demo_data
+          cd ./tests/demo_data
+          tar -xf demo_data.tar
           rm demo_data.tar
           ls -lh demo_data
