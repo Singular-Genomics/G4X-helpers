@@ -28,6 +28,7 @@ jobs:
           md5sum -c datasets/demo_data.md5
           rm ./datasets/config.json ./datasets/demo_data.md5
           mv datasets demo_data
+          ls -lh
       
       - name: Extract demo data
         run: |
