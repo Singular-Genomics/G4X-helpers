@@ -19,21 +19,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.BFX_AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-1
 
-      - name: Download file from S3
+      - name: Download test dataset
         run: |
-          cd ./tests/
-          aws s3 cp s3://sg-data-portal-public/datasets/demo_data.tar datasets/demo_data.tar --no-progress
-          aws s3 cp s3://sg-data-portal-public/configs/datasets.json datasets/config.json
-          jq -r '.datasets[] | select(.id=="demo_data_1x1") | "\(.dataChecksum)  \(.objectKey)"' datasets/config.json > datasets/demo_data.md5
-          md5sum -c datasets/demo_data.md5
-          rm ./datasets/config.json ./datasets/demo_data.md5
-          mv datasets demo_data
-          ls -lh
-      
-      - name: Extract demo data
-        run: |
-          ls -lh tests
-          cd ./tests/demo_data
-          tar -xf demo_data.tar
-          rm demo_data.tar
-          ls -lh .
+          bash ./tests/get_demo_data.sh

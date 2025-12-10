@@ -15,4 +15,4 @@ build/
 *.ipynb
 
 tests/datasets/**
-tests/demo_data/**
+tests/test_data/**
