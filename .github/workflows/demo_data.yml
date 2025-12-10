@@ -1,0 +1,25 @@
+name: Download Demo Data from S3
+
+on:
+  push:
+  workflow_dispatch:  # run manually; you can also use push, pull_request, etc.
+
+jobs:
+  download-from-s3:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v5
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.BFX_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.BFX_AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-1
+
+      - name: Download file from S3
+        run: |
+
+          aws s3 cp s3://sg-data-portal-public/datasets/demo_data.tar demo_data.tar
