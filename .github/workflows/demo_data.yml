@@ -36,4 +36,4 @@ jobs:
           cd ./tests/demo_data
           tar -xf demo_data.tar
           rm demo_data.tar
-          ls -lh demo_data
+          ls -lh .
