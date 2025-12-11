@@ -27,4 +27,4 @@ jobs:
           docs-submodule-token: ${{ secrets.CORE_DOCS_ASSETS_READ }}
 
       - name: Publish
-        run: uv publish
+        run: uv publish --dry-run

@@ -41,4 +41,3 @@ runs:
       run: |
         uv sync
         uv build
-        uv publish --dry-run
