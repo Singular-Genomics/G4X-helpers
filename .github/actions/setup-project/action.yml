@@ -9,9 +9,7 @@ inputs:
 
 runs:
   using: composite
-  defaults:
-    run:
-      shell: bash
+
   steps:      
     - name: Fetch submodule
       if: ${{ inputs.docs-submodule-token != '' }} # Only run if a token was passed
@@ -23,6 +21,7 @@ runs:
 
     - name: Pull latest changes for submodules
       if: ${{ inputs.docs-submodule-token != '' }}
+      shell: bash
       run: |
         git submodule update --init --recursive docs/_core
         cd docs/_core
@@ -42,9 +41,11 @@ runs:
         version-file: pyproject.toml
 
     - name: uv sync
+      shell: bash
       run: |
         uv sync
     
     - name: uv build
+      shell: bash
       run: |
         uv build
