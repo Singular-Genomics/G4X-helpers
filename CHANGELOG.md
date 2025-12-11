@@ -1,6 +1,6 @@
 # Changelog
 
-## `v2.0.2` — [2025-12-09]
+## [2025-12-09] — `v2.0.2`
 
 - docs: update to match global layout
 - pkg: pre-commit
