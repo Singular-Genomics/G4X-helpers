@@ -1,5 +1,5 @@
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -10,7 +10,7 @@ def ensure_test_data():
     Make sure the test data archive is present and extracted before CLI tests run.
     Downloads once (if missing) via get_test_data.sh, then extracts with untar_test_data.sh.
     """
-    tests_dir = Path(__file__).parent
+    tests_dir = Path('./tests').resolve()
     test_tar = tests_dir / 'datasets' / 'test_data.tar'
 
     if not test_tar.exists():
