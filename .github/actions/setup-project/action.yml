@@ -40,3 +40,6 @@ runs:
       shell: bash
       run: |
         uv sync
+    
+    - name: Build
+      run: uv build
