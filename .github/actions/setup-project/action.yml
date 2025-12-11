@@ -35,3 +35,7 @@ runs:
       uses: astral-sh/setup-uv@v6
       with:
         version-file: pyproject.toml
+    
+    - name: uv sync
+      run: |
+        uv sync
