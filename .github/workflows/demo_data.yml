@@ -1,7 +1,7 @@
 name: Download Demo Data from S3
 
 on:
-  push:
+  # push:
   workflow_dispatch:  # run manually; you can also use push, pull_request, etc.
 
 jobs:
