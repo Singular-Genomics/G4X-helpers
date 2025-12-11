@@ -12,6 +12,11 @@ jobs:
       - name: Check out repo
         uses: actions/checkout@v5
 
+      - name: Setup Project Environment
+        uses: ./.github/actions/setup-project
+        with:
+          docs-submodule-token: ${{ secrets.CORE_DOCS_ASSETS_READ }}
+      
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
