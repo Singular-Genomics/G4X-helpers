@@ -21,8 +21,8 @@ rm -rf datasets
 
 mkdir -p datasets
 
-echo "Downloading datasets.json from S3 (public, unsigned)..."
-aws s3 cp "${CONFIGS_PREFIX}/datasets.json" "datasets/config.json" --no-sign-request
+echo "Downloading datasets.json from S3..."
+aws s3 cp "${CONFIGS_PREFIX}/datasets.json" "datasets/config.json"
 
 echo "Collecting MD5 checksum for dataset ${DATASET_ID}..."
 jq -r \
@@ -32,8 +32,8 @@ jq -r \
 file_key=$(awk '{print $2}' datasets/test_data.md5)
 basename=${file_key##*/}
 
-echo "Downloading ${basename} from S3 (public, unsigned)..."
-aws s3 cp "${S3_BUCKET_ROOT}/${file_key}" ${file_key} --no-progress --no-sign-request
+echo "Downloading ${basename} from S3..."
+aws s3 cp "${S3_BUCKET_ROOT}/${file_key}" ${file_key} --no-progress
 
 echo "Verifying MD5 checksum..."
 md5sum -c datasets/test_data.md5
