@@ -5,20 +5,19 @@
 
 This tool will create a new `.bin` segmentation file compatible with the G4X-viewer using the processed output from a G4X run. This is typically only needed to update older outputs to newer versions of the `.bin` format.
 
+---
 
 ## Usage
 ![`g4x-helpers new_bin --help`](../img/new_bin-help.svg)
 
 --8<-- "_partials/global_options_note.md"
 
-## argument descriptions
+## Arguments
 ---
 ### required
 --8<-- "_partials/arg_g4x_data.md"
 
-
 ### optional 
-
 --8<-- "_partials/arg_in_place.md"
 
 <br>
