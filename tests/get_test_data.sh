@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # Usage note:
-# ./tests/get_demo_data.sh                       # downloads the default demo_data_1x1 dataset
-# ./tests/get_demo_data.sh another_dataset_id    # downloads a different dataset by ID
+# ./tests/get_test_data.sh                       # downloads the default demo_data_1x1 dataset
+# ./tests/get_test_data.sh another_dataset_id    # downloads a different dataset by ID
 
 set -euo pipefail
 
@@ -17,7 +17,7 @@ S3_BUCKET_ROOT="s3://sg-data-portal-public"
 CONFIGS_PREFIX="${S3_BUCKET_ROOT}/configs"
 
 # Clean up from previous runs (optional; drop if you want to keep old data)
-rm -rf test_data datasets
+rm -rf datasets
 
 mkdir -p datasets
 
@@ -40,13 +40,4 @@ md5sum -c datasets/test_data.md5
 
 # Clean up config and checksum file
 rm datasets/config.json datasets/test_data.md5
-
-# Match original layout: rename datasets -> test_data
-mv datasets test_data
-
-echo "Extracting ${basename}..."
-cd test_data
-tar -xf "${basename}"
-rm "${basename}"
-echo "Contents of ./tests/test_data:"
-ls -lh .
+mv "datasets/${basename}" datasets/test_data.tar

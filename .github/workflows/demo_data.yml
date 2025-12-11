@@ -21,4 +21,6 @@ jobs:
 
       - name: Download test dataset
         run: |
-          bash ./tests/get_demo_data.sh
+          bash ./tests/get_test_data.sh
+          bash ./tests/untar_test_data.sh
+          bash ./tests/test_cli_features.sh
