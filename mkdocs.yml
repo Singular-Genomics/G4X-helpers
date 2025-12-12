@@ -18,16 +18,14 @@ theme:
 nav:
   - Docs Home: https://docs.singulargenomics.com
 
-  - G4X-helpers: #index.md
-
-    - Intro: index.md
+  - G4X-helpers: 
+    - index.md
 
     - Installation:
-      - ./installation/index.md
-      - Source install: ./installation/source.md
-      - Docker setup: ./installation/docker.md
+      - installation/index.md
+      - Source install: installation/source.md
+      - Docker setup: installation/docker.md
 
-    #- Usage:
     - Usage: usage/index.md
 
     - CLI features:
