@@ -6,9 +6,11 @@
 
 set -euo pipefail
 
-# Resolve to the directory where this script lives (./tests)
+# Resolve to the directory where this script lives and then move to tests/
 SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-cd "$SCRIPT_DIR"
+TESTS_DIR="${SCRIPT_DIR%/*}"
+
+cd "$TESTS_DIR"
 
 # Configurable dataset ID (defaults to demo_data_1x1)
 DATASET_ID="${1:-demo_data_1x1}"
@@ -16,9 +18,8 @@ DATASET_ID="${1:-demo_data_1x1}"
 S3_BUCKET_ROOT="s3://sg-data-portal-public"
 CONFIGS_PREFIX="${S3_BUCKET_ROOT}/configs"
 
-# Clean up from previous runs (optional; drop if you want to keep old data)
+# Clean up from previous runs (should be optional)
 rm -rf datasets
-
 mkdir -p datasets
 
 echo "Downloading datasets.json from S3..."

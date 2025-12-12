@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Resolve to the directory where this script lives (./tests)
+# Resolve to the directory where this script lives and then move to tests/
 SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-cd "$SCRIPT_DIR/datasets"
+TESTS_DIR="${SCRIPT_DIR%/*}"
+
+cd "$TESTS_DIR/datasets"
+
 rm -r test_data || true
 mkdir -p test_data
 

@@ -27,7 +27,7 @@ jobs:
 
       - name: Download test dataset
         run: |
-          bash ./tests/get_test_data.sh
+          bash ./tests/scripts/get_test_data.sh micro_data.tar
       
       - name: run pytest
         run: |
