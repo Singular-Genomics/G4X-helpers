@@ -5,12 +5,14 @@
 
 Replaces or updates the transcript manifest in a G4X run, reassigns transcripts via demultiplexing, and regenerates all downstream single-cell data and `.tar` viewer files.
 
+---
+
 ## Usage
 ![`g4x-helpers redemux --help`](../img/redemux-help.svg)
 
 --8<-- "_partials/global_options_note.md"
 
-## argument descriptions
+## Arguments
 ---
 ### required
 --8<-- "_partials/arg_g4x_data.md"

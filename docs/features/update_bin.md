@@ -5,16 +5,17 @@
 
 Updates an existing `.bin` segmentation file with new clustering, embedding, or color metadata from a CSV file.
 
+---
+
 ## Usage
 ![`g4x-helpers update_bin --help`](../img/update_bin-help.svg)
 
 --8<-- "_partials/global_options_note.md"
 
-## argument descriptions
+## Arguments
 ---
-### required 
+### required
 --8<-- "_partials/arg_g4x_data.md"
-
 
 #### `--metadata`: (*type:* `str`)
 
