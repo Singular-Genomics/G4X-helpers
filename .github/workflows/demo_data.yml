@@ -1,21 +1,20 @@
-name: Run Pytest
-description: Build project and run pytest
+name: Download Demo Data from S3
 
 on:
-  push:   
-  workflow_dispatch:
+  # push:
+  workflow_dispatch:  # run manually; you can also use push, pull_request, etc.
 
 jobs:
-  run_pytest:
+  download-from-s3:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Check out repo
         uses: actions/checkout@v5
 
       - name: Setup Project Environment
         uses: ./.github/actions/setup-project
-
+      
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
@@ -25,8 +24,6 @@ jobs:
 
       - name: Download test dataset
         run: |
-          bash ./tests/scripts/get_test_data.sh micro_data.tar
-      
-      - name: run pytest
-        run: |
-          uv run pytest
+          bash ./tests/scripts/get_test_data.sh
+          bash ./tests/scripts/untar_test_data.sh
+          bash ./tests/scripts/test_cli_features.sh

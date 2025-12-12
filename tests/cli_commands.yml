@@ -1,0 +1,47 @@
+common: &common
+  - -v
+  - "2"
+  - -t
+  - "1"
+
+commands:
+  migrate:
+    - *common
+    - migrate
+    - "{data_dir}"
+
+  tar_viewer:
+    - *common
+    - tar_viewer
+    - "{data_dir}"
+
+  new_bin:
+    - *common
+    - new_bin
+    - "{data_dir}"
+
+  update_bin:
+    - *common
+    - update_bin
+    - "{data_dir}"
+    - --metadata
+    - "{data_dir}/single_cell_data/clustering_umap.csv.gz"
+    - --cluster-key
+    - leiden_0.400
+    - --cellid-key
+    - label
+
+  resegment:
+    - *common
+    - resegment
+    - "{data_dir}"
+    - --cell-labels
+    - "{data_dir}/segmentation/segmentation_mask.npz"
+    - --labels-key
+    - nuclei_exp
+  redemux:
+    - *common
+    - redemux
+    - "{data_dir}"
+    - --manifest
+    - "{data_dir}/transcript_panel.csv"

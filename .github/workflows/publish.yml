@@ -23,11 +23,6 @@ jobs:
 
       - name: Setup Project Environment
         uses: ./.github/actions/setup-project
-        with:
-          docs-submodule-token: ${{ secrets.CORE_DOCS_ASSETS_READ }}
-
-      - name: Build
-        run: uv build
 
       - name: Publish
         run: uv publish
