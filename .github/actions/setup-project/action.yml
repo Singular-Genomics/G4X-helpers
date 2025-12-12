@@ -40,12 +40,8 @@ runs:
       with:
         version-file: pyproject.toml
 
-    - name: uv sync
+    - name: Build project
       shell: bash
       run: |
         uv sync --no-progress
-    
-    - name: uv build
-      shell: bash
-      run: |
         uv build
