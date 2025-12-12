@@ -21,7 +21,7 @@ rm -rf datasets
 mkdir -p datasets
 
 echo "Downloading ${DATASET_ID} from S3..."
-aws s3 cp "${S3_BUCKET_ROOT}/datasets/${DATASET_ID}" "datasets/${DATASET_ID}" #--no-progress
+aws s3 cp "${S3_BUCKET_ROOT}/datasets/${DATASET_ID}" "datasets/${DATASET_ID}" --no-progress
 
 # Clean up config and checksum file
 mv "datasets/${DATASET_ID}" datasets/test_data.tar
