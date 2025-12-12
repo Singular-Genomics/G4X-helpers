@@ -1,23 +1,28 @@
 import pytest
-from click.testing import CliRunner
 
 from g4x_helpers.cli.cli import cli
 
 features = ['resegment', 'redemux', 'new_bin', 'update_bin', 'migrate', 'tar_viewer']
 
 
-def test_cli_help_smoke():
+def test_cli_help_option(runner):
     """Exercise the top-level CLI to ensure the package is wired up."""
-    runner = CliRunner()
     result = runner.invoke(cli, ['--help'])
 
     assert result.exit_code == 0, result.output
-    assert 'g4x-helpers' in result.output
+    assert 'docs.singulargenomics.com' in result.output
     for feature in features:
         assert feature in result.output
 
 
-def test_main_feature_imports():
+def test_cli_version_option(runner):
+    result = runner.invoke(cli, ['--version'])
+
+    assert result.exit_code == 0, result.output
+    assert result.output.strip().startswith('g4x-helpers:')
+
+
+def test_import_main_features():
     try:
         from g4x_helpers import main_features as mf
     except ImportError as e:
@@ -32,16 +37,8 @@ def test_main_feature_imports():
 
 
 @pytest.mark.filterwarnings('ignore:Type google\\._upb\\._message\\..*:DeprecationWarning')
-def test_main_class_import():
+def test_import_G4Xoutput():
     try:
         from g4x_helpers import G4Xoutput as G4Xoutput
     except ImportError as e:
         raise AssertionError('Failed to import G4Xoutput class') from e
-
-
-def test_cli_version_option():
-    runner = CliRunner()
-    result = runner.invoke(cli, ['--version'])
-
-    assert result.exit_code == 0, result.output
-    assert result.output.strip().startswith('g4x-helpers:')
