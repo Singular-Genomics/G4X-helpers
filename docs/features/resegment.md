@@ -5,12 +5,14 @@
 
 Replaces or updates the segmentation mask in a G4X run and regenerates all downstream single-cell data and `.bin` files.
 
+---
+
 ## Usage
 ![`g4x-helpers resegment --help`](../img/resegment-help.svg)
 
 --8<-- "_partials/global_options_note.md"
 
-## argument descriptions
+## Arguments
 ---
 ### required
 --8<-- "_partials/arg_g4x_data.md"

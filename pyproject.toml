@@ -63,5 +63,6 @@ default-groups = ["dev", "docs"]
 
 [tool.uv-ship]
 release-branch = "staging"
-changelog-path = "CHANGELOG"
+changelog-path = "CHANGELOG.md"
 changelog-template = "- {message}"
+date-first = true

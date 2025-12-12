@@ -40,7 +40,7 @@ nav:
       - migrate: features/migrate.md
 
     - Contributing: contributing.md
-    - Changelog: changelog.md
+    - Changelog: clog.md
 
   - G4X-viewer: https://docs.singulargenomics.com/G4X-viewer/
 
