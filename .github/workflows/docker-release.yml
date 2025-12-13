@@ -1,6 +1,7 @@
 name: Docker release
 permissions:
   contents: read
+  packages: write
 
 on:
   push:

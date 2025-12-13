@@ -12,12 +12,14 @@ Tars a G4X-viewer folder by validating and organizing key viewer assets (e.g., `
 
 --8<-- "_partials/global_options_note.md"
 
-## Arguments
+--8<-- "_partials/args_optns.md"
+
 ---
-### required
+
 --8<-- "_partials/arg_g4x_data.md"
 
-### optional 
+---
+
 --8<-- "_partials/arg_in_place.md"
 
 <br>
