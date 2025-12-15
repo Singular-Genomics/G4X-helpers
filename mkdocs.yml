@@ -8,12 +8,6 @@ site_description: Singular Genomics G4X data documentation site
 repo_name: G4X-helpers
 repo_url: https://github.com/Singular-Genomics/G4X-helpers
 
-theme:
-  features:
-    - navigation.tabs
-    - navigation.indexes
-    - navigation.expand
-
 # region Nav
 nav:
   - Docs Home: https://docs.singulargenomics.com
@@ -26,7 +20,8 @@ nav:
       - Source install: installation/source.md
       - Docker setup: installation/docker.md
 
-    - Usage: usage/index.md
+    - Usage: 
+      - usage/index.md
 
     - CLI features:
       - features/index.md
