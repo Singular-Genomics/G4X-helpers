@@ -1,5 +1,12 @@
 # Changelog
 
+## [2025-12-16] — `v2.0.3`
+
+- fix: prevent validation fail for tx-only runs (#64)
+- fix: code scanning alert no. 3: Workflow does not contain permissions (#62)
+- pkg: incorporate test data from S3 for full feature tests (#61)
+- docs: layout updates and cleaner changelog format (#63)
+
 ## [2025-12-09] — `v2.0.2`
 
 - docs: update to match global layout
