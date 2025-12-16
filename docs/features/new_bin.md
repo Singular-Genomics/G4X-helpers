@@ -12,12 +12,14 @@ This tool will create a new `.bin` segmentation file compatible with the G4X-vie
 
 --8<-- "_partials/global_options_note.md"
 
-## Arguments
+--8<-- "_partials/args_optns.md"
+
 ---
-### required
+
 --8<-- "_partials/arg_g4x_data.md"
 
-### optional 
+---
+
 --8<-- "_partials/arg_in_place.md"
 
 <br>

@@ -14,13 +14,16 @@ Creates a backup in `<G4X-DATA>/g4x_helpers/migration_backup` before making any 
 
 --8<-- "_partials/global_options_note.md"
 
-## Arguments
+--8<-- "_partials/args_optns.md"
+
 ---
-### required
+
 --8<-- "_partials/arg_g4x_data.md"
 
-### optional
-#### `--restore`: (*flag*  *default:* `False`)
+---
+
+### `--restore`
+_type_ : <span class="acc-2-code">`flag`</span>  
 
 > Restore files from an existing migration backup (if present) instead of performing a migration. The backup directory is removed after a successful restore.
 

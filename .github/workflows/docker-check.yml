@@ -1,6 +1,7 @@
 name: Docker preflight
 permissions:
   contents: read
+  packages: write
 
 on:
   pull_request:
