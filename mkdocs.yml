@@ -12,7 +12,7 @@ repo_url: https://github.com/Singular-Genomics/G4X-helpers
 nav:
   - Docs Home: https://docs.singulargenomics.com
 
-  - G4X-helpers: 
+  - G4X-helpers:
     - index.md
 
     - Installation:
@@ -20,7 +20,7 @@ nav:
       - Source install: installation/source.md
       - Docker setup: installation/docker.md
 
-    - Usage: 
+    - Usage:
       - usage/index.md
 
     - CLI features:
