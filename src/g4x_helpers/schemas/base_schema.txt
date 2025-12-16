@@ -13,11 +13,6 @@ diagnostics/
 	+nuclear.jp2
 	...
 
-+protein/
-	+*.jp2
-	+bead_mask.npz
-	...
-
 +rna/
 	+transcript_table.csv.gz
 	+raw_features.parquet
