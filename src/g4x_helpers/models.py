@@ -102,8 +102,12 @@ class G4Xoutput:
         repr_string += f'{"software version":<{gap}} - {self.software_version}\n\n'
 
         panels = [
-            ('Transcript panel', len(self.genes), 'genes', self.genes),
-            ('Protein panel', len(self.proteins), 'proteins', self.proteins),
+            ('Transcript panel', len(self.genes), 'genes', self.genes)
+            if self.includes_transcript
+            else (None, 0, '', []),
+            ('Protein panel', len(self.proteins), 'proteins', self.proteins)
+            if self.includes_protein
+            else (None, 0, '', []),
         ]
 
         # Step 1: compute lengths of "<count> <label>"
