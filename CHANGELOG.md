@@ -3,10 +3,10 @@
 ## [2025-12-09] — `v2.0.2`
 
 - docs: update to match global layout
-- pkg: pre-commit
 - docs: set up section indices correctly
 - docs: correct readme reference
 - pkg: clean up changelog
+- pkg: pre-commit
 
 ## [2025-12-04] — `v2.0.1`
 
