@@ -148,6 +148,7 @@ def migrate_g4x_data(
         )
     except validate.ValidationError:
         valid_schema = False
+        update_files = False
 
     if not valid_schema:
         logger.error(
