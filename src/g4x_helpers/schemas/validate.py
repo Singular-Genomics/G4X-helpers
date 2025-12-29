@@ -76,7 +76,8 @@ def validate_g4x_data(
         raise ValidationError(
             'Output does not conform to lastest G4X-data schema. \n'
             'If your data was generated with a previous version of G4X-software, '
-            'you can migrate it to the latest schema with: "g4x-helpers migrate"'
+            'you can migrate it to the latest schema with: "g4x-helpers migrate" \n'
+            'Please ensure that all files and folder are in their original configurations.'
         )
     return True
 
@@ -117,14 +118,29 @@ def _print_details(path, result, errors_only=True):
             print(f'{err:<{gap}} - {relative}')
 
 
-def validate_file_schemas(sample_base):
+def validate_file_schemas(sample_base, verbose: bool = False) -> bool:
+    if verbose:
+        print('Validating file schemas...')
+
     _, parquet_shema = infer_parquet_schema(sample_base)
+    if verbose:
+        print(f'raw_features.parquet: {parquet_shema}')
+
     _, tx_panel_schema = infer_tx_panel_schema(sample_base)
+    if verbose:
+        print(f'transcript_panel.csv: {tx_panel_schema}')
+
     _, adata_schema = infer_adata_schema(sample_base)
+    if verbose:
+        print(f'feature_matrix.h5: {adata_schema}')
+
     bin_file_schema = infer_bin_schema(sample_base)
+    if verbose:
+        print(f'segmentation .bin file: {bin_file_schema}')
 
     if parquet_shema == tx_panel_schema == adata_schema == bin_file_schema == 'valid':
-        # print('All files conform to latest G4X-data schema!')
+        if verbose:
+            print('All files conform to latest G4X-data schema!')
         return True
     else:
         # print('Some files do not conform to latest G4X-data schema:')
@@ -133,6 +149,8 @@ def validate_file_schemas(sample_base):
 
 def infer_parquet_schema(sample_base):
     raw_features_path = sample_base / 'rna' / 'raw_features.parquet'
+    if not raw_features_path.exists():
+        raise ValidationError('raw_features.parquet file not found.')
     parquet_lf = pl.scan_parquet(raw_features_path)
     parquet_cols = parquet_lf.collect_schema().names()
 
@@ -194,6 +212,8 @@ def is_valid_probe(s: str) -> bool:
 
 def infer_tx_panel_schema(sample_base: Path) -> str:
     tx_panel_path = sample_base / 'transcript_panel.csv'
+    if not tx_panel_path.exists():
+        raise ValidationError('transcript_panel.csv file not found.')
     tx_panel_old = pl.read_csv(tx_panel_path)
     tx_panel_cols = tx_panel_old.columns
 
@@ -214,6 +234,10 @@ def infer_tx_panel_schema(sample_base: Path) -> str:
 
 def infer_adata_schema(sample_base: Path) -> str:
     adata_path = sample_base / 'single_cell_data' / 'feature_matrix.h5'
+
+    if not adata_path.exists():
+        raise ValidationError('feature_matrix.h5 file not found.')
+
     adata = ad.read_h5ad(adata_path)
 
     cols = set(adata.obs.columns)

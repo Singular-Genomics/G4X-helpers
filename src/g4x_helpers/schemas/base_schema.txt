@@ -7,6 +7,9 @@ diagnostics/
 	-transcript_table.parquet
 	...
 
+g4x_viewer/
+	...
+
 +h_and_e/
 	+eosin.jp2
 	+h_and_e.jp2

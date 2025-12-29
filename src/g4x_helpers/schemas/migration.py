@@ -142,12 +142,17 @@ def migrate_g4x_data(
         mt.migrate()
 
     logger.info('Validating results...')
-    valid_schema = validate.validate_g4x_data(
-        path=data_dir, schema_name='base_schema', formats={'sample_id': sample_id}, report=False
-    )
+    try:
+        valid_schema = validate.validate_g4x_data(
+            path=data_dir, schema_name='base_schema', formats={'sample_id': sample_id}, report=False
+        )
+    except validate.ValidationError:
+        valid_schema = False
 
     if not valid_schema:
-        logger.error('Migration failed to produce correct G4X-data schema.')
+        logger.error(
+            'Migration failed to produce correct G4X-data schema. Please run "g4x-helpers validate" to see details.'
+        )
     else:
         logger.info('Successfully updated file locations! Checking file structures...')
 
