@@ -1,5 +1,9 @@
 # Changelog
 
+## [2025-12-29] — `v2.1.1`
+
+- fix: migration tripping over file updates despite fail
+
 ## [2025-12-29] — `v2.1.0`
 
 - feat: "validate" function for detailed schema output validation (#67)
