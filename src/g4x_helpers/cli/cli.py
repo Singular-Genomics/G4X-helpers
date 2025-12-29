@@ -275,7 +275,7 @@ def tar_viewer(ctx, g4x_data, in_place):
 
 
 ############################################################
-# region tar_viewer
+# region migrate
 @cli.command(name='migrate', help=hm.MIGRT_HELP)
 @g4x_data_opt()
 @click.option(
@@ -296,6 +296,29 @@ def migrate(ctx, g4x_data, restore):
         main_migrate(
             g4x_obj=g4x_obj,
             restore=restore,
+            n_threads=ctx.obj['threads'],
+            verbose=ctx.obj['verbose'],
+        )
+    except Exception as e:
+        cli_setup._fail_message(func_name, e)
+
+
+############################################################
+# region validate
+@cli.command(name='validate', help=hm.VLDTE_HELP)
+@g4x_data_opt()
+@click.pass_context
+def validate(ctx, g4x_data):
+    func_name = inspect.currentframe().f_code.co_name
+
+    g4x_obj, _ = cli_setup.initialize_sample(data_dir=g4x_data, in_place=False, n_threads=ctx.obj['threads'])
+
+    try:
+        with cli_setup._spinner(f'Initializing {func_name} process...'):
+            from ..main_features import validate as main_validate
+
+        main_validate(
+            g4x_obj=g4x_obj,
             n_threads=ctx.obj['threads'],
             verbose=ctx.obj['verbose'],
         )
