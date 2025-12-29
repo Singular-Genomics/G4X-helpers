@@ -31,8 +31,10 @@ if TYPE_CHECKING:
 def apply_segmentation(
     g4x_obj: 'G4Xoutput',
     labels: np.ndarray,
+    
     out_dir: Path,
     *,
+    tx_table: Path | None = None,
     skip_protein_extraction: bool = False,
     signal_list: list[str] | None = None,
     logger: logging.Logger,
@@ -51,7 +53,9 @@ def apply_segmentation(
     nuc_mask = g4x_obj.load_segmentation(expanded=False) if create_source else None
 
     logger.info('Creating cell_by_transcript table.')
-    cell_x_gene, tx_table = create_cell_x_gene(g4x_obj=g4x_obj, mask=labels, nucleus_mask=nuc_mask)
+    if tx_table is None:
+        tx_table = g4x_obj.transcript_table_path
+    cell_x_gene, tx_table = create_cell_x_gene(g4x_obj=g4x_obj, tx_table=tx_table, mask=labels, nucleus_mask=nuc_mask)
 
     logger.info(f'Writing cell_by_transcript matrix to: {cell_x_gene_out.relative_to(out_dir)}.')
     utils.write_csv_gz(df=cell_x_gene, path=cell_x_gene_out)
@@ -59,17 +63,30 @@ def apply_segmentation(
     logger.info(f'Writing transcript table after adding cell-ids to: {tx_table_out.relative_to(out_dir)}.')
     utils.write_csv_gz(df=tx_table, path=tx_table_out)
 
-    if skip_protein_extraction:
-        logger.warning('Skipping protein extraction. Will try existing cell_by_protein table.')
-        cell_x_protein = None
-    else:
-        logger.info('Creating cell_by_protein table.')
-        if signal_list is None:
-            logger.info('Processing all channels.')
+    if signal_list is None:
+        if g4x_obj.includes_protein:
             signal_list = ['nuclear', 'eosin'] + g4x_obj.proteins
         else:
-            logger.info(f'Processing channels: {signal_list}')
+            signal_list = ['nuclear', 'eosin']
+        logger.info(f'Processing image channels: {signal_list}.')
+    else:
+        logger.info('Processing all image channels.')
 
+    if skip_protein_extraction and g4x_obj.includes_protein:
+        logger.warning('Skipping protein extraction. Will try existing cell_by_protein table.')
+        
+        cxp_path = g4x_obj.data_dir / 'single_cell_data' / 'cell_by_protein.csv.gz'
+        cxp_short = Path(cxp_path.parent.name) / cxp_path.name
+        print(f'Cell_x_protein table not provided, loading from: {cxp_short}')
+        cell_x_protein = pl.read_csv(cxp_path)
+
+        if signal_list is not None:
+            logger.info(f'Selecting channels: {signal_list}')
+            signal_list = ['nuclear', 'eosin'] + g4x_obj.proteins
+            cell_x_protein = cell_x_protein.select(['label'] + [f'{signal_name}_intensity_mean' for signal_name in signal_list])
+    else:
+        logger.info('Gathering image intensities.')
+    
         cell_x_protein = create_cell_x_protein(
             g4x_obj=g4x_obj,
             mask=labels,
@@ -77,8 +94,9 @@ def apply_segmentation(
             cached=False,
         )
 
-        logger.info(f'Writing cell_by_protein matrix to: {cell_x_protein_out.relative_to(out_dir)}.')
-        utils.write_csv_gz(df=cell_x_protein, path=cell_x_protein_out)
+        if g4x_obj.includes_protein:
+            logger.info(f'Writing cell_by_protein matrix to: {cell_x_protein_out.relative_to(out_dir)}.')
+            utils.write_csv_gz(df=cell_x_protein, path=cell_x_protein_out)
 
     logger.info('Creating adata and metadata.')
     cell_metadata_pre = create_cell_metadata(
@@ -267,10 +285,10 @@ def build_custom_cell_properties(g4x_obj: G4Xoutput, mask: np.ndarray) -> pl.Dat
 
 def create_cell_x_gene(
     g4x_obj: G4Xoutput,
+    tx_table: Path,
     mask: np.ndarray,
     nucleus_mask: np.ndarray | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
-    tx_table = g4x_obj.transcript_table_path
     reads = pl.scan_csv(tx_table)
 
     print('Assigning transcripts to segmentation labels.')
@@ -332,12 +350,12 @@ def create_cell_x_protein(
     signal_list: list[str] | None = None,
     cached: bool = False,
 ) -> pl.DataFrame | pl.LazyFrame:
-    if signal_list is None:
-        signal_list = ['nuclear', 'eosin'] + g4x_obj.proteins
+    # if signal_list is None:
+    #     signal_list = ['nuclear', 'eosin'] + g4x_obj.proteins
 
     print(f'Creating cell x protein matrix for {len(signal_list)} signals.')
 
-    channel_name_map = {protein: protein for protein in g4x_obj.proteins}
+    channel_name_map = {protein: protein for protein in signal_list}
     channel_name_map['nuclear'] = 'nuclearstain'
     channel_name_map['eosin'] = 'cytoplasmicstain'
 
