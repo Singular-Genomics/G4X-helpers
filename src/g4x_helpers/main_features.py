@@ -25,7 +25,7 @@ def _base_command(func):
     ):
         func_name = func.__name__
 
-        if func_name != 'migrate':
+        if func_name not in ('migrate', 'validate'):
             g4x_obj.validate()
 
         out_dir = g4x_obj.data_dir if out_dir is None else out_dir
@@ -96,6 +96,8 @@ def resegment(
 
     init_bin.init_bin_file(g4x_obj=g4x_obj, out_dir=out_dir, logger=logger, n_threads=n_threads)
 
+    # TODO tell user to run update_bin afterwards
+
     # bin_file = out_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_segmentation.bin'
     # edit_bin.edit_bin_file(g4x_obj=g4x_obj, bin_file=bin_file, logger=logger)
 
@@ -111,7 +113,7 @@ def redemux(
     logger: logging.Logger,
     **kwargs,
 ) -> None:
-    from g4x_helpers.modules import demux, edit_bin, init_bin, segment, transcript_tar
+    from g4x_helpers.modules import demux, init_bin, segment, transcript_tar
 
     demux.demux_raw_features(
         g4x_obj=g4x_obj,
@@ -126,6 +128,7 @@ def redemux(
     segment.apply_segmentation(
         g4x_obj=g4x_obj,
         labels=labels,
+        tx_table=out_dir / 'rna' / 'transcript_table.csv.gz',
         out_dir=out_dir,
         skip_protein_extraction=False,
         create_source=False,
@@ -134,11 +137,14 @@ def redemux(
 
     init_bin.init_bin_file(g4x_obj=g4x_obj, out_dir=out_dir, n_threads=n_threads, logger=logger)
 
-    bin_file = out_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_segmentation.bin'
-    edit_bin.edit_bin_file(g4x_obj=g4x_obj, bin_file=bin_file, logger=logger)
+    # TODO tell user to run update_bin afterwards
+
+    # bin_file = out_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_segmentation.bin'
+    # edit_bin.edit_bin_file(g4x_obj=g4x_obj, bin_file=bin_file, logger=logger)
 
     transcript_tar.create_tx_tarfile(
         g4x_obj=g4x_obj,
+        tx_table=out_dir / 'rna' / 'transcript_table.csv.gz',
         out_path=out_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_transcripts.tar',
         n_threads=n_threads,
         logger=logger,
@@ -230,3 +236,26 @@ def migrate(
         migration.migrate_g4x_data(
             data_dir=g4x_obj.data_dir, sample_id=g4x_obj.sample_id, n_threads=n_threads, logger=logger
         )
+
+
+@_base_command
+def validate(
+    g4x_obj: 'G4Xoutput',
+    *,
+    logger: logging.Logger,
+    **kwargs,
+):
+    from .schemas import validate
+
+    try:
+        validate.validate_g4x_data(
+            g4x_obj.data_dir, schema_name='base_schema', formats={'sample_id': g4x_obj.sample_id}, report='long'
+        )
+    except validate.ValidationError as e:
+        print('Directory structure validation failed!: ', e)
+
+    try:
+        print('\n')
+        validate.validate_file_schemas(g4x_obj.data_dir, verbose=True)
+    except validate.ValidationError as e:
+        print('File schema validation failed!: ', e)

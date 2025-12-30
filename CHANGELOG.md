@@ -1,5 +1,14 @@
 # Changelog
 
+## [2025-12-29] — `v2.1.1`
+
+- fix: migration tripping over file updates despite fail
+
+## [2025-12-29] — `v2.1.0`
+
+- feat: "validate" function for detailed schema output validation (#67)
+- fix: re-demux on tx-only runs (#66)
+
 ## [2025-12-16] — `v2.0.3`
 
 - fix: prevent validation fail for tx-only runs (#64)

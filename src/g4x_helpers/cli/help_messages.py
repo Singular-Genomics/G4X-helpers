@@ -39,3 +39,5 @@ MIGRT_HELP = (
     'Updates file names, headers and locations and creates new G4X-viewer files if necessary.\n\n'
     'A backup of the originals is created before migrating and operation will not proceed if an existing backup is present.\n\n'
 )
+
+VLDTE_HELP = 'Validate G4X-data to ensure correct file and folder structure\n\n'

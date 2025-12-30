@@ -24,6 +24,10 @@ for cont in path.iterdir():
     schemas[cont.name.removesuffix('.txt')] = cont
 
 
+class MigrationError(Exception):
+    pass
+
+
 migration_targets = [
     ('g4x_viewer/{sample_id}.bin', 'g4x_viewer/{sample_id}_segmentation.bin', True),
     ('g4x_viewer/{sample_id}.tar', 'g4x_viewer/{sample_id}_transcripts.tar', True),
@@ -126,6 +130,7 @@ def migrate_g4x_data(
     backup_size = total_size_gb(migration_targets, sample_id=sample_id, base_path=data_dir)
     logger.info(f'Creating backup of {backup_size:.2f} GB before proceeding')
 
+    ### STEP 1: Back up and migrate files to new locations
     logger.info('Updating file locations')
     mts = collect_targets(data_dir=data_dir, sample_id=sample_id)
     if any([mt.check_backup_exists() for mt in mts]):
@@ -142,25 +147,34 @@ def migrate_g4x_data(
         mt.migrate()
 
     logger.info('Validating results...')
-    valid_schema = validate.validate_g4x_data(
-        path=data_dir, schema_name='base_schema', formats={'sample_id': sample_id}, report=False
-    )
+    try:
+        valid_schema = validate.validate_g4x_data(
+            path=data_dir, schema_name='base_schema', formats={'sample_id': sample_id}, report=False
+        )
+    except validate.ValidationError:
+        msg = (
+            'Migration failed to produce correct G4X-data schema\n'
+            'Your data was restored to its original state.\n'
+            'Please run "g4x-helpers validate" to see which files are blocking validation.\n'
+            'Contact care@singulargenomics.com for support'
+        )
+        restore(data_dir=data_dir, sample_id=sample_id, logger=logger)
+        raise MigrationError(msg)
 
-    if not valid_schema:
-        logger.error('Migration failed to produce correct G4X-data schema.')
+    logger.info('Successfully updated file locations! Checking file structures...')
+
+    ### STEP 2: Validate file structures after migration
+    logger.info('Checking for invalid NaN values in run_meta.json')
+    fix_json_nan(data_dir / 'g4x_viewer' / f'{sample_id}_run_metadata.json')
+
+    if not validate.validate_file_schemas(data_dir):
+        logger.info('Some file structures need to be updated.')
+        update_files = True
     else:
-        logger.info('Successfully updated file locations! Checking file structures...')
+        logger.info('File structures are up to date! Migration complete.')
+        return
 
-        logger.info('Checking for invalid NaN values in run_meta.json')
-        fix_json_nan(data_dir / 'g4x_viewer' / f'{sample_id}_run_metadata.json')
-
-        if not validate.validate_file_schemas(data_dir):
-            logger.info('Some file structures need to be updated.')
-            update_files = True
-        else:
-            update_files = False
-            logger.info('File structures are up to date! Migration complete.')
-
+    ### STEP 3: Update file structures as needed
     if update_files:
         parquet_lf, parquet_shema = validate.infer_parquet_schema(data_dir)
         logger.info(f'parquet schema is: {parquet_shema}')
@@ -202,10 +216,18 @@ def migrate_g4x_data(
             )
 
         logger.info('Re-validating file structures...')
-        if not validate.validate_file_schemas(data_dir):
-            raise RuntimeError('Migration failed to produce correct file structures.')
+        if not validate.validate_file_schemas(data_dir, verbose=True):
+            msg = (
+                'Migration failed to produce correct file structures.\n'
+                'Your data was restored to its original state.\n'
+                'Contact care@singulargenomics.com for support'
+            )
+
+            restore(data_dir=data_dir, sample_id=sample_id, logger=logger)
+            raise MigrationError(msg)
         else:
             logger.info('File structures are up to date! Migration complete.')
+            return True
 
 
 @workflow
@@ -228,6 +250,23 @@ def restore_backup(
         shutil.rmtree(Path(data_dir) / backup_loc)
     else:
         logger.info('No backup found. Nothing to restore.')
+
+
+def restore(
+    data_dir: Path,
+    sample_id: str,
+    logger: logging.Logger,
+):
+    mts = collect_targets(data_dir=data_dir, sample_id=sample_id)
+    mt_backups = [mt for mt in mts if mt.check_backup_exists() or mt.rename_only]
+
+    if len(mt_backups) > 0:
+        for mt in mt_backups:
+            logger.info(f'Restoring: {mt.source_file_short}')
+            mt.restore_backup()
+    else:
+        logger.info('No backed up files found. Nothing to restore.')
+    shutil.rmtree(Path(data_dir) / backup_loc)
 
 
 def collect_targets(data_dir: Path, sample_id: str):

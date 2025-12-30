@@ -283,14 +283,26 @@ class G4Xoutput:
 
     # TODO: this is not used anywhere, consider removing. it's also broken
     def load_feature_table(
-        self, *, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
+        self,
+        *,
+        return_polars: bool = True,
+        lazy: bool = False,
+        columns: list[str] | None = None,
+        alt_file_path: str | None = None,
     ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
-        return self._load_table(self.feature_table_path, return_polars, lazy, columns)
+        file_path = self.feature_table_path if alt_file_path is None else alt_file_path
+        return self._load_table(file_path, return_polars, lazy, columns)
 
     def load_transcript_table(
-        self, *, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
+        self,
+        *,
+        return_polars: bool = True,
+        lazy: bool = False,
+        columns: list[str] | None = None,
+        alt_file_path: str | None = None,
     ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
-        return self._load_table(self.transcript_table_path, return_polars, lazy, columns)
+        file_path = self.transcript_table_path if alt_file_path is None else alt_file_path
+        return self._load_table(file_path, return_polars, lazy, columns)
 
     def list_content(self, subdir=None):
         if subdir is None:
@@ -332,7 +344,7 @@ class G4Xoutput:
         return G4Xoutput._load_image_base(data_dir, parent_directory, pattern)
 
     def _load_table(
-        self, file_path: str | Path, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
+        self, file_path: str, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
     ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
         file_path = Path(file_path)
         if lazy:

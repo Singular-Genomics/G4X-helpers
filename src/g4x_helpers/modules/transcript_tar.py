@@ -28,6 +28,7 @@ def create_tx_tarfile(
     g4x_obj: 'G4Xoutput',
     out_path: Path,
     *,
+    tx_table: str | None = None,
     aggregation_level: str = 'gene',
     n_threads: int = 4,
     sampling_fraction: float = 0.2,
@@ -50,8 +51,9 @@ def create_tx_tarfile(
         tx_column = 'transcript'
     else:
         tx_column = 'gene_name'
+    
     keep_cols = ['x_pixel_coordinate', 'y_pixel_coordinate', 'cell_id', tx_column]
-    df = g4x_obj.load_transcript_table(lazy=True, columns=keep_cols)
+    df = g4x_obj.load_transcript_table(lazy=True, columns=keep_cols, alt_file_path=tx_table)
 
     ## make colormap
     unique_genes = df.select(tx_column).collect().unique().to_series().to_list()
