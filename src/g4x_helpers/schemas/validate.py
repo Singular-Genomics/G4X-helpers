@@ -74,7 +74,7 @@ def validate_g4x_data(
 
     if not ok:
         raise ValidationError(
-            'Output does not conform to lastest G4X-data schema. \n'
+            'Output does not conform to latest G4X-data schema. \n'
             'If your data was generated with a previous version of G4X-software, '
             'you can migrate it to the latest schema with: "g4x-helpers migrate" \n'
             'Please ensure that all files and folder are in their original configurations.'
