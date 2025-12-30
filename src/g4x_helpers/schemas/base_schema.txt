@@ -11,7 +11,8 @@ g4x_viewer/
 	...
 
 +h_and_e/
-	+eosin.jp2
+	eosin.jp2
+	cytoplasmic.jp2
 	+h_and_e.jp2
 	+nuclear.jp2
 	...
