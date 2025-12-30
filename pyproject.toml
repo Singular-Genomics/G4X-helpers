@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "g4x_helpers"
-version = "2.1.1"
+version = "2.1.2.dev1"
 
 description = "Python helpers for G4X."
 urls = { repository = "https://github.com/Singular-Genomics/G4X-helpers" }
