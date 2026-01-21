@@ -75,7 +75,7 @@ def write_muliplex_img(smp, root_group):
     data = da.stack(channel_arrays, axis=0)
     axes = ['c', 'z', 'y', 'x'] if data.ndim == 4 else ['c', 'y', 'x']
 
-    img_group = root_group.create_group('images', overwrite=True)
+    img_group = root_group.create_group('multiplex', overwrite=True)
 
     scaler = _get_default_scaler()
     compressor = _get_default_compressor()
