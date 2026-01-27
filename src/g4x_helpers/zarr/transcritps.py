@@ -8,8 +8,8 @@ def write_transcripts(smp, root_group):
 
     aggregation_level = 'gene_name'
     keep_cols = ['x_pixel_coordinate', 'y_pixel_coordinate', 'cell_id', aggregation_level]
-    df = smp.load_transcript_table(lazy=True, columns=keep_cols)
-    df = df.collect()
+    lf = smp.load_transcript_table(lazy=True, columns=keep_cols)
+    df = lf.collect()
 
     img_resolution = smp.shape
 
@@ -25,6 +25,20 @@ def write_transcripts(smp, root_group):
 
     for level, specs in pyramid.items():
         print(f'Level {level}: tile_size: {specs["tile_size"]} - scale: {specs["scale_fct"]}')
+
+    tx_group.attrs['layer_config'] = {
+        'layers': len(pyramid) - 1,
+        'tile_size': pyramid[len(pyramid) - 1]['tile_size'],
+        'layer_height': smp.shape[0],
+        'layer_width': smp.shape[1],
+    }
+
+    gene_list = lf.unique('gene_name').sort('gene_name').collect()['gene_name'].to_list()
+
+    N = len(gene_list)  # number of colors
+    colors = np.random.randint(0, 256, size=(N, 3), dtype=np.uint8)
+    gene_colors = {g: c.tolist() for g, c in zip(gene_list, colors)}
+    tx_group.attrs['gene_colors'] = gene_colors
 
     pyramid = construct_tile_dfs(df, pyramid)
     write_tx_zarr(tx_group, pyramid)
@@ -107,7 +121,7 @@ def write_tx_zarr(tx_group, pyramid):
         for tile in tile_ids:
             y = str(tile[0]).zfill(2)
             x = str(tile[1]).zfill(2)
-            tile_path = f'tiles/p{level}/y{y}/x{x}'
+            tile_path = f'p{level}/y{y}/x{x}'
             tile_group = tx_group.require_group(tile_path)
 
             idx = np.where((all_tile_ids == tile).all(axis=1))[0]
