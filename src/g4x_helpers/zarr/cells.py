@@ -2,7 +2,7 @@ import numpy as np
 import polars as pl
 from numcodecs import Blosc
 
-from g4x_helpers.modules import segment
+from g4x_helpers.modules import edit_bin, segment
 
 
 def setup_cell_group(root_group):
@@ -70,6 +70,10 @@ def write_cells(smp, metadata, gex, gene_names, root_group):
     arr = metadata['area'].to_numpy().astype(np.uint16)
     metadata_group.create_array('area', data=arr, compressor=compressor)
 
+    # TODO another hard coding that needs removal later
+    metadata = metadata.with_columns(cluster_id=pl.col('leiden_0.400').cast(pl.Int8).cast(pl.String).fill_null('-1'))
+    metadata_group.attrs['clusterID_colors'] = edit_bin.generate_cluster_palette(metadata['cluster_id'])
+
     arr = metadata['cluster_id'].to_numpy().astype('U10')
     metadata_group.create_array('cluster_id', data=arr, compressor=compressor)
 
@@ -108,5 +112,5 @@ def write_cells(smp, metadata, gex, gene_names, root_group):
     polygon_group.create_array('polygon_offsets', data=offsets, compressor=compressor)
     polygon_group.create_array('polygon_vertices_xy', data=verts_xy, compressor=compressor)
 
-    gex_group = cell_group.create_group('gex', overwrite=True)
-    write_csr(gex_group, csr=gex, gene_names=gene_names, compressor=compressor, chunks=512)
+    genes_group = cell_group.create_group('genes', overwrite=True)
+    write_csr(genes_group, csr=gex, gene_names=gene_names, compressor=compressor, chunks=512)
