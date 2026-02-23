@@ -21,7 +21,8 @@ jobs:
           uv run rich-codex \
             --skip-git-checks \
             --no-confirm \
-            --clean-img-paths docs/img/*.svg
+            --no-save-log \
+            --clean-img-paths 'docs/img/*.svg'
 
       - name: Commit changed rich-codex images
         uses: stefanzweifel/git-auto-commit-action@v7

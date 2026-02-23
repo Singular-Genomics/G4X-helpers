@@ -1,5 +1,5 @@
 name: Run Pytest
-description: Build project and run pytest
+# description: Build project and run pytest
 permissions:
   contents: read
 
