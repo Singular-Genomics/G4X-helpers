@@ -2,7 +2,10 @@ name: Rich-codex
 on: [push]
 jobs:
   rich_codex:
+    if: ${{ github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout repo
         uses: actions/checkout@v5
@@ -10,10 +13,17 @@ jobs:
       - name: Setup Project Environment
         uses: ./.github/actions/setup-project
 
-      - name: Generate terminal images with rich-codex
-        uses: ewels/rich-codex@v1
+      - name: Generate terminal images with rich-codex (no log file)
         env:
-          LOG_SAVE: "false"
+          FORCE_COLOR: 1
+          TERMINAL_WIDTH: 85
+        run: |
+          uv run rich-codex \
+            --skip-git-checks \
+            --no-confirm \
+            --clean-img-paths docs/img/*.svg
+
+      - name: Commit changed rich-codex images
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
-          commit_changes: "true"
-          clean_img_paths: docs/img/*.svg
+          commit_message: "docs: update rich-codex images"
