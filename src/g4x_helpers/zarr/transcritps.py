@@ -4,7 +4,7 @@ from numcodecs import Blosc
 
 
 def write_transcripts(smp, root_group):
-    tx_group = setup_tx_group(root_group)
+    tx_group = root_group.create_group('transcripts', overwrite=True)
 
     aggregation_level = 'gene_name'
     keep_cols = ['x_pixel_coordinate', 'y_pixel_coordinate', 'cell_id', aggregation_level]
@@ -31,6 +31,7 @@ def write_transcripts(smp, root_group):
         'tile_size': pyramid[len(pyramid) - 1]['tile_size'],
         'layer_height': smp.shape[0],
         'layer_width': smp.shape[1],
+        'coordinate_order': ['x_pixel_coordinate', 'y_pixel_coordinate'],
     }
 
     gene_list = lf.unique('gene_name').sort('gene_name').collect()['gene_name'].to_list()
@@ -42,12 +43,6 @@ def write_transcripts(smp, root_group):
 
     pyramid = construct_tile_dfs(df, pyramid)
     write_tx_zarr(tx_group, pyramid)
-
-
-def setup_tx_group(root_group):
-    tx_group = root_group.create_group('transcripts', overwrite=True)
-
-    return tx_group
 
 
 def choose_square_tiling(image_resolution_hw, total_points, target_points_per_tile, min_tile_size=64):
@@ -97,8 +92,8 @@ def construct_tile_dfs(df, pyramid):
         df_smp = (
             df.sample(fraction=sampling_fct, with_replacement=False)
             .with_columns(
-                (pl.col('x_pixel_coordinate') / tile_size).cast(pl.Int32).alias('tile_y'),
-                (pl.col('y_pixel_coordinate') / tile_size).cast(pl.Int32).alias('tile_x'),
+                (pl.col('x_pixel_coordinate') / tile_size).cast(pl.Int32).alias('tile_x'),
+                (pl.col('y_pixel_coordinate') / tile_size).cast(pl.Int32).alias('tile_y'),
             )
             .sort('tile_y', 'tile_x')
         )
