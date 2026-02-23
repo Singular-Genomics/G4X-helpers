@@ -21,7 +21,6 @@ jobs:
           uv run rich-codex \
             --skip-git-checks \
             --no-confirm \
-            --no-save-log \
             --clean-img-paths 'docs/img/*.svg'
 
       - name: Commit changed rich-codex images
