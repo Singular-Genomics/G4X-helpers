@@ -113,4 +113,4 @@ def write_cells(smp, metadata, gex, gene_names, root_group):
     polygon_group.create_array('polygon_vertices_xy', data=verts_xy, compressor=compressor)
 
     genes_group = cell_group.create_group('genes', overwrite=True)
-    write_csr(genes_group, csr=gex, gene_names=gene_names, compressor=compressor, chunks=512)
+    write_csr(genes_group, csr=gex, gene_names=gene_names, compressor=compressor, chunks='auto')
