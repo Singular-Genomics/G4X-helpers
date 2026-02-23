@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "g4x_helpers"
-version = "2.1.2"
+version = "3.0.0.dev1"
 
 description = "Python helpers for G4X."
 urls = { repository = "https://github.com/Singular-Genomics/G4X-helpers" }
@@ -14,7 +14,7 @@ authors = [
     { name = "Kenneth Gouin III", email = "kennethg@singulargenomics.com" },
     { name = "Florian Raths", email = "flo.raths@singulargenomics.com" },
 ]
-requires-python = ">=3.10, <3.13"
+requires-python = ">=3.11, <3.13"
 
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -26,33 +26,31 @@ classifiers = [
 ]
 
 dependencies = [
-    "geopandas ~= 1.0",
+    "geopandas ~= 1.1",
     "glymur ~= 0.12, <= 0.13.4",
-    "matplotlib ~= 3.7",
-    "polars ~= 1.30",
-    "protobuf ~= 4.25",
+    "polars ~= 1.37",
     "rasterio ~= 1.4",
-    "scanpy ~= 1.10",
-    "scikit-image ~= 0.25",
+    "scanpy ~= 1.11",
+    "scikit-image ~= 0.26",
     "shapely ~= 2.1",
-    "pyarrow ~= 16.1",
+    "pyarrow ~= 23.0",
     "rich-click ~= 1.9",
     "pathschema ~= 0.2.1",
+    "ome-zarr ~= 0.12",
+    "protobuf ~= 4.25",          # soon to be gone
 ]
 
 [dependency-groups]
 dev = [
     "ipykernel ~= 7.1",
     "ipywidgets ~= 8.1",
-    "pre-commit ~= 4.2",
-    "pytest ~= 8.4",
-    "ruff == 0.14.5",    # pinned to match pre-commit version
+    "pre-commit ~= 4.5",
+    "pytest ~= 9.0",
+    "ruff == 0.14.5",                     # pinned to match pre-commit version
+    "mpl-spaceplot>=0.3.0",
+    "dask[diagnostics]>=2024.11.2,<2025",
 ]
-docs = [
-    "mkdocs ~= 1.6",
-    "mkdocs-material ~= 9.7",
-    "rich-codex ~= 1.2",
-]
+docs = ["mkdocs ~= 1.6", "mkdocs-material ~= 9.7", "rich-codex ~= 1.2"]
 
 [project.scripts]
 g4x-helpers = "g4x_helpers.cli.cli:cli"
