@@ -45,17 +45,15 @@ def _load_image_dask(smp, img_type, channel_name=None, dtype=np.uint16):
 
 def write_muliplex_img(smp, root_group):
     # Sort proteins to have aSMA first and Isotype last
-    proteins_sorted = sorted(smp.proteins)
+    channel_names = sorted(smp.proteins)
 
-    if 'aSMA' in proteins_sorted:
-        proteins_sorted.remove('aSMA')
-        proteins_sorted = ['aSMA'] + proteins_sorted
+    if 'aSMA' in channel_names:
+        channel_names.remove('aSMA')
+        channel_names = ['aSMA'] + channel_names
 
-    if 'Isotype' in proteins_sorted:
-        proteins_sorted.remove('Isotype')
-        proteins_sorted = proteins_sorted + ['Isotype']
-
-    channel_names = proteins_sorted[0:5]
+    if 'Isotype' in channel_names:
+        channel_names.remove('Isotype')
+        channel_names = channel_names + ['Isotype']
 
     # Prepare dask arrays for each channel
     dtype = np.uint16
@@ -175,51 +173,3 @@ def write_he_img(smp, root_group):
         storage_options=storage_options,
         metadata={'omero': omero},
     )
-
-
-# def setup_img_group(root_group, group_name, img_shape, channel_names, levels=4, add_single_z=True):
-#     img_group = root_group.create_group(group_name, overwrite=True)
-
-#     if add_single_z:
-#         img_shape = (1,) + img_shape
-
-#     axes = ('c', 'z', 'y', 'x') if len(img_shape) == 3 else ('c', 'y', 'x')
-
-#     arr = np.zeros((len(channel_names),) + img_shape, dtype=np.uint16)
-
-#     compressor = Blosc(cname='zstd', clevel=3, shuffle=Blosc.SHUFFLE)
-#     scaler = oz.scale.Scaler(downscale=2, max_layer=levels)
-#     pyramid = scaler.nearest(arr)  # TODO: change to generator
-#     del arr
-
-#     dataset_paths = []
-#     for level, arr in enumerate(pyramid):
-#         ds_path = f'p{level}'
-#         dataset_paths.append(ds_path)
-#         img_group.create_array(
-#             name=ds_path,
-#             data=arr,
-#             chunks=(1, 1, 256, 256)[-arr.ndim :],  # adjust chunking based on number of dims
-#             compressor=compressor,
-#             overwrite=True,
-#         )
-
-#     img_group.attrs['_creator'] = {'name': 'singulargenomics', 'version': 'unknown'}
-#     img_group.attrs['multiscales'] = [{'axes': list(axes), 'datasets': [{'path': p} for p in dataset_paths]}]
-
-#     channels_meta = [{'label': name} for name in channel_names]
-#     img_group.attrs['omero'] = {
-#         'channels': channels_meta,
-#     }
-#     return img_group, scaler
-
-
-# def write_img_to_pyramid(arr, ci, group, scaler, add_single_z=True):
-#     if arr.ndim == 2 and add_single_z:
-#         arr = arr[None, ...]  # add Z
-
-#     arr = arr[None, ...]  # add C
-#     pyr = scaler.nearest(arr)
-
-#     for level, lvl_arr in enumerate(pyr):
-#         group[f'p{level}'][ci, ...] = lvl_arr[0]  # drop C=1
