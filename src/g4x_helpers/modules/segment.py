@@ -12,8 +12,6 @@ import shapely.affinity
 import skimage.measure
 from anndata import AnnData
 from geopandas import GeoDataFrame
-from rasterio.features import rasterize
-from rasterio.transform import Affine
 from shapely.geometry import Polygon
 from skimage.measure._regionprops import RegionProperties
 from tqdm import tqdm
@@ -24,14 +22,13 @@ from .workflow import OutSchema, workflow
 if TYPE_CHECKING:
     from geopandas.geodataframe import GeoDataFrame
 
-    from g4x_helpers.models import G4Xoutput
+    from g4x_helpers.g4x_output import G4Xoutput
 
 
 @workflow
 def apply_segmentation(
     g4x_obj: 'G4Xoutput',
     labels: np.ndarray,
-    
     out_dir: Path,
     *,
     tx_table: Path | None = None,
@@ -74,7 +71,7 @@ def apply_segmentation(
 
     if skip_protein_extraction and g4x_obj.includes_protein:
         logger.warning('Skipping protein extraction. Will try existing cell_by_protein table.')
-        
+
         cxp_path = g4x_obj.data_dir / 'single_cell_data' / 'cell_by_protein.csv.gz'
         cxp_short = Path(cxp_path.parent.name) / cxp_path.name
         print(f'Cell_x_protein table not provided, loading from: {cxp_short}')
@@ -83,10 +80,12 @@ def apply_segmentation(
         if signal_list is not None:
             logger.info(f'Selecting channels: {signal_list}')
             signal_list = ['nuclear', 'eosin'] + g4x_obj.proteins
-            cell_x_protein = cell_x_protein.select(['label'] + [f'{signal_name}_intensity_mean' for signal_name in signal_list])
+            cell_x_protein = cell_x_protein.select(
+                ['label'] + [f'{signal_name}_intensity_mean' for signal_name in signal_list]
+            )
     else:
         logger.info('Gathering image intensities.')
-    
+
         cell_x_protein = create_cell_x_protein(
             g4x_obj=g4x_obj,
             mask=labels,
@@ -253,21 +252,23 @@ def create_cell_metadata(
 
 
 def build_g4x_cell_properties(g4x_obj: G4Xoutput) -> pl.DataFrame:
+    # first load expanded mask
     mask = g4x_obj.load_segmentation(expanded=True)
     cell_ids = get_cell_ids(g4x_obj.sample_id, mask)
     cell_props_expanded = get_mask_properties(cell_ids, mask)
 
+    # now load non-expanded mask
     mask = g4x_obj.load_segmentation(expanded=False)
     cell_props_nuc = get_mask_properties(cell_ids, mask)
     del mask
 
     df = cell_props_nuc.rename({'area_um': 'nuclei_area_um'})
-    df_exp = cell_props_expanded.rename({'area_um': 'nuclei_expanded_area_um'}).drop(
+    df_exp = cell_props_expanded.rename({'area_um': 'wholecell_area_um'}).drop(
         ['segmentation_label', 'cell_x', 'cell_y']
     )
 
     segmentation_props = df.join(df_exp, on='label').select(
-        ['label', 'segmentation_label', 'cell_x', 'cell_y', 'nuclei_area_um', 'nuclei_expanded_area_um']
+        ['label', 'segmentation_label', 'cell_x', 'cell_y', 'nuclei_area_um', 'wholecell_area_um']
     )
 
     return segmentation_props
@@ -513,6 +514,9 @@ def region_props_to_polygons(region_props: RegionProperties) -> list[Polygon]:
 
 
 def rasterize_polygons(gdf: GeoDataFrame, target_shape: tuple) -> np.ndarray:
+    from rasterio.features import rasterize
+    from rasterio.transform import Affine
+
     height, width = target_shape
     transform = Affine.identity()
 
