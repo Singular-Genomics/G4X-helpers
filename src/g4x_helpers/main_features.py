@@ -8,7 +8,7 @@ from . import __version__, utils
 from .cli.cli_setup import print_k_v
 
 if TYPE_CHECKING:
-    from .models import G4Xoutput
+    from .g4x_output import G4Xoutput
 
 
 def _base_command(func):

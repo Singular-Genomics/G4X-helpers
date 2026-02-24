@@ -13,7 +13,7 @@ _LAZY_ATTRS = {
     'tar_viewer': ('.main_features', 'tar_viewer'),
     'update_bin': ('.main_features', 'update_bin'),
     'migrate': ('.main_features', 'migrate'),
-    'G4Xoutput': ('.models', 'G4Xoutput'),
+    'G4Xoutput': ('.g4x_output', 'G4Xoutput'),
 }
 
 __all__ = ['__version__', *sorted(_LAZY_ATTRS)]

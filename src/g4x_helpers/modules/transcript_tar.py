@@ -18,7 +18,7 @@ from ..g4x_viewer import TranscriptsSchema_pb2 as TranscriptsSchema
 from .workflow import workflow
 
 if TYPE_CHECKING:
-    from ..models import G4Xoutput
+    from ..g4x_output import G4Xoutput
 
 mp.set_start_method('spawn', force=True)
 
@@ -51,7 +51,7 @@ def create_tx_tarfile(
         tx_column = 'transcript'
     else:
         tx_column = 'gene_name'
-    
+
     keep_cols = ['x_pixel_coordinate', 'y_pixel_coordinate', 'cell_id', tx_column]
     df = g4x_obj.load_transcript_table(lazy=True, columns=keep_cols, alt_file_path=tx_table)
 
