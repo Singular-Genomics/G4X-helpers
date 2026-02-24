@@ -14,6 +14,7 @@ from anndata import AnnData, read_h5ad
 from matplotlib.pyplot import imread
 
 from . import utils
+from .modules import io
 from .schemas import validate
 
 
@@ -62,11 +63,12 @@ class G4Xoutput:
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
 
-        if self.sample_id is None:
-            self.sample_id = self.infer_sample_id()
-
-        with open(self.data_dir / 'run_meta.json', 'r') as f:
+        with open(self.data_dir / 'sample_meta.json', 'r') as f:
             self.run_meta = json.load(f)
+
+        # smp_pos = self.run_meta.get('sample_position', 'Unknown')
+        # lane = str(self.run_meta.get('lane', '0')).zfill(2)
+        self.sample_id = self.run_meta.get('sample_id', 'unknown')
 
         self.set_meta_attrs()
 
@@ -87,6 +89,8 @@ class G4Xoutput:
             protein_panel = pl.read_csv(self.data_dir / 'protein_panel.csv').sort('target')
             self.protein_panel_dict = dict(zip(protein_panel['target'], protein_panel['panel_type']))
             self.proteins = protein_panel['target'].to_list()
+
+        self.cache = {}
 
     # region dunder
     def __repr__(self):
@@ -166,10 +170,16 @@ class G4Xoutput:
             'run_id',
             'fc',
             'lane',
+            'assay',
+            'run_name',
+            'block',
+            'tissue_type',
             'software',
             'software_version',
             'transcript_panel',
+            'transcript_addon',
             'protein_panel',
+            'protein_addon',
         ]
 
         for k in static_attrs:
@@ -177,18 +187,30 @@ class G4Xoutput:
 
         self.shape = glymur.Jp2k(self.data_dir / 'h_and_e' / 'nuclear.jp2').shape
 
-    def infer_sample_id(self) -> str:
-        summs = list(self.data_dir.glob('summary_*.html'))
+    @property
+    def cell_labels(self) -> np.ndarray:
+        nuc_mask = io.import_segmentation(
+            seg_path=self.segmentation_path,
+            expected_shape=self.shape,
+            labels_key='nuclei',  # TODO nuclei is not always the key
+            # use_cache=True,
+        )
+        nuc_labels = np.unique(nuc_mask)
 
-        failure = 'Could not determine sample_id:'
-        if len(summs) == 0:
-            raise validate.ValidationError(f'{failure} "summary_{{sample_id}}.html" missing')
-        elif len(summs) > 1:
-            raise validate.ValidationError(f'{failure} Multiple "summary_{{sample_id}}.html" files found')
-        else:
-            summary_file = summs[0]
-            sample_id = summary_file.stem.removeprefix('summary_')
-        return sample_id
+        return nuc_labels[nuc_labels != 0]
+
+    # def infer_sample_id(self) -> str:
+    #     summs = list(self.data_dir.glob('summary_*.html'))
+
+    #     failure = 'Could not determine sample_id:'
+    #     if len(summs) == 0:
+    #         raise validate.ValidationError(f'{failure} "summary_{{sample_id}}.html" missing')
+    #     elif len(summs) > 1:
+    #         raise validate.ValidationError(f'{failure} Multiple "summary_{{sample_id}}.html" files found')
+    #     else:
+    #         summary_file = summs[0]
+    #         sample_id = summary_file.stem.removeprefix('summary_')
+    #     return sample_id
 
     def validate(self, details: bool = False) -> None:
         report_style = 'short' if details else False

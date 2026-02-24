@@ -10,6 +10,8 @@ from tqdm import tqdm
 if TYPE_CHECKING:
     from ..g4x_output import G4Xoutput
 
+PX_SIZE_MICRONS = 0.3125
+
 
 def get_cell_ids(sample_id: str, mask) -> pl.DataFrame:
     print('Getting cell-IDs from segmentation mask.')
@@ -23,7 +25,7 @@ def get_cell_ids(sample_id: str, mask) -> pl.DataFrame:
     return cell_ids
 
 
-def get_mask_properties(cell_ids: pl.DataFrame, mask: np.ndarray) -> pl.DataFrame:
+def get_mask_properties(cell_ids: pl.DataFrame | None, mask: np.ndarray) -> pl.DataFrame:
     print('Getting regionprops.')
     props = measure.regionprops(mask)
 
@@ -31,31 +33,29 @@ def get_mask_properties(cell_ids: pl.DataFrame, mask: np.ndarray) -> pl.DataFram
     # Loop through each region to get the area and centroid, with a progress bar
     for prop in tqdm(props, desc='Extracting mask properties'):
         label = prop.label  # The label (mask id)
-        area = prop.area  # Area: count of pixels
-        centroid = prop.centroid  # Centroid: (row, col)
 
-        # assuming coordinate order: 'yx':
-        cell_y, cell_x = centroid
+        cell_y, cell_x = prop.centroid  # coordinate order: 'yx' (row, col)
 
-        px_to_um_area = 0.3125**2
+        px_to_um_area = PX_SIZE_MICRONS**2
+        area_um = prop.area * px_to_um_area  # prop.area is in pixels
 
         prop_dict.append(
             {
-                'segmentation_label': label,
-                'area_um': area * px_to_um_area,
+                'seg_cell_id': label,
+                'area_um': area_um,
                 'cell_x': cell_x,
                 'cell_y': cell_y,
             }
         )
     schema = {
-        'segmentation_label': pl.Int32,
+        'seg_cell_id': pl.Int32,
         'area_um': pl.Float32,
         'cell_x': pl.Float32,
         'cell_y': pl.Float32,
     }
-    prop_dict_df = pl.DataFrame(prop_dict, schema=schema)
+    prop_dict_df = pl.DataFrame(prop_dict, schema=schema).sort('seg_cell_id')
 
-    prop_dict_df = cell_ids.join(prop_dict_df, on='segmentation_label', how='left')
+    # prop_dict_df = cell_ids.join(prop_dict_df, on='segmentation_label', how='left')
     return prop_dict_df
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from functools import lru_cache, wraps
 from typing import TYPE_CHECKING
 
 import geopandas
@@ -13,21 +15,38 @@ if TYPE_CHECKING:
     from geopandas.geodataframe import GeoDataFrame
 
 
-def build_sample_metadata(p, meta):
-    meta = meta.copy()
-    smp_id = meta['sample_position'] + meta['lane'][-2:]
+def optionally_cached(func):
+    cached_func = lru_cache(maxsize=32)(func)
 
-    sample_info, run_info = _parse_samplesheet(p)
+    @wraps(func)
+    def wrapper(*args, use_cache=True, **kwargs):
+        if use_cache:
+            return cached_func(*args, **kwargs)
+        return func(*args, **kwargs)
+
+    wrapper.cache_clear = cached_func.cache_clear
+    return wrapper
+
+
+def build_sample_metadata(sample_sheet, meta_json, sample_id):
+    with open(meta_json, 'r') as f:
+        run_meta = json.load(f)
+
+    if 'sample_id' not in run_meta:
+        run_meta['sample_id'] = sample_id
+
+    sample_info, run_info = _parse_samplesheet(sample_sheet)
 
     ssheet_info = sample_info.filter(
-        pl.col('lane') == int(smp_id[-1]), pl.col('sample_position') == smp_id[0]
+        pl.col('lane') == int(sample_id[-1]), pl.col('sample_position') == sample_id[0]
     ).to_dicts()[0]
+
     ri_keys = {'run_name', 'user_name', 'assay'}
     filtered = [d for d in run_info.to_dicts() if d['Key'] in ri_keys]
     run_info = {d['Key']: d['Value'] for d in filtered}
 
-    meta.update(run_info)
-    meta.update(ssheet_info)
+    run_meta.update(run_info)
+    run_meta.update(ssheet_info)
 
     order = [
         'run_name',
@@ -40,6 +59,7 @@ def build_sample_metadata(p, meta):
         'fc',
         'lane',
         'sample_position',
+        'sample_id',
         'tissue_type',
         'block',
         'transcript_panel',
@@ -50,7 +70,7 @@ def build_sample_metadata(p, meta):
         'software_version',
     ]
 
-    return {k: meta[k] for k in order if k in meta}
+    return {k: run_meta[k] for k in order if k in run_meta}
 
 
 def _parse_samplesheet(path):
@@ -76,6 +96,7 @@ def _parse_samplesheet(path):
     return sample_info, run_info
 
 
+# @optionally_cached
 def import_segmentation(seg_path: str, expected_shape: tuple[int], labels_key: str | None = None) -> np.ndarray:
     SUPPORTED_MASK_FILETYPES = {'.npy', '.npz', '.geojson'}
     ## load new segmentation
