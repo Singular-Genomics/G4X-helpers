@@ -1,4 +1,3 @@
-import json
 import os
 from dataclasses import dataclass
 from functools import lru_cache
@@ -13,8 +12,7 @@ import tifffile
 from anndata import AnnData, read_h5ad
 from matplotlib.pyplot import imread
 
-from . import utils
-from .modules import io
+from . import io, utils
 from .schemas import validate
 
 
@@ -34,21 +32,6 @@ class G4Xoutput:
     sample_id : str, optional
         The sample ID to associate with the run. If not provided, it will be inferred from the `data_dir` path.
 
-    Attributes
-    ----------
-    run_meta : dict
-        Metadata dictionary loaded from `run_meta.json`.
-    shape : tuple
-        Image shape (height, width) as inferred from the segmentation mask.
-    transcript_panel_dict : dict
-        Mapping of transcript genes to panel types, if the transcript panel is present.
-    protein_panel_dict : dict
-        Mapping of proteins to panel types, if the protein panel is present.
-    genes : list of str
-        List of transcript gene names (only if transcript panel exists).
-    proteins : list of str
-        List of protein names (only if protein panel exists).
-
     Notes
     -----
     On instantiation, this class performs the following:
@@ -62,36 +45,34 @@ class G4Xoutput:
 
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
+        self.run_meta = io.validate_raw_data(self.data_dir)
 
-        with open(self.data_dir / 'sample_meta.json', 'r') as f:
-            self.run_meta = json.load(f)
-
-        # smp_pos = self.run_meta.get('sample_position', 'Unknown')
-        # lane = str(self.run_meta.get('lane', '0')).zfill(2)
         self.sample_id = self.run_meta.get('sample_id', 'unknown')
+
+        # TODO implement with ome.tiff
+        self.shape = glymur.Jp2k(self.data_dir / 'h_and_e' / 'nuclear.jp2').shape
 
         self.set_meta_attrs()
 
-        if self.transcript_panel:
-            try:
-                transcript_panel = (
-                    utils.parse_input_manifest(self.data_dir / 'transcript_panel.csv')
-                    .unique('gene_name')
-                    .sort('gene_name')
-                )
-                self.transcript_panel_dict = dict(zip(transcript_panel['gene_name'], transcript_panel['panel_type']))
-                self.genes = transcript_panel['gene_name'].to_list()
-            except Exception:
-                self.transcript_panel_dict = {}
-                self.genes = []
+        # TODO ensure this is in the meta (happening in validator too)
+        self.includes_transcript = 'transcript_panel' in self.run_meta
+        self.includes_protein = 'protein_panel' in self.run_meta
 
-        if self.protein_panel:
-            protein_panel = pl.read_csv(self.data_dir / 'protein_panel.csv').sort('target')
-            self.protein_panel_dict = dict(zip(protein_panel['target'], protein_panel['panel_type']))
+        if self.includes_transcript:
+            tx_panel_path = self.data_dir / 'transcript_panel.csv'
+
+            tx_panel = utils.parse_input_manifest(tx_panel_path)
+            tx_panel.sort(by=['probe_type', 'probe_name'], descending=[True, False])
+            self.genes = tx_panel['gene_name'].unique(maintain_order=True).to_list()
+
+        if self.includes_protein:
+            pr_panel_path = self.data_dir / 'protein_panel.csv'
+
+            protein_panel = pl.read_csv(pr_panel_path)
+            protein_panel.sort(by=['panel_type', pl.col('target').str.to_lowercase()], descending=[True, False])
             self.proteins = protein_panel['target'].to_list()
 
-        self.cache = {}
-
+    ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ###
     # region dunder
     def __repr__(self):
         machine_num = self.machine.removeprefix('g4-').lstrip('0')
@@ -134,15 +115,8 @@ class G4Xoutput:
 
         return repr_string
 
+    ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ###
     # region properties
-    @property
-    def includes_protein(self) -> bool:
-        return self.protein_panel != []
-
-    @property
-    def includes_transcript(self) -> bool:
-        return self.transcript_panel != []
-
     @property
     def transcript_table_path(self) -> Path:
         return self.data_dir / 'rna' / 'transcript_table.csv.gz'
@@ -170,34 +144,31 @@ class G4Xoutput:
             'run_id',
             'fc',
             'lane',
-            'assay',
-            'run_name',
-            'block',
-            'tissue_type',
-            'software',
             'software_version',
-            'transcript_panel',
-            'transcript_addon',
-            'protein_panel',
-            'protein_addon',
+            # 'assay',
+            # 'run_name',
+            # 'block',
+            # 'tissue_type',
+            # 'transcript_panel',
+            # 'transcript_addon',
+            # 'protein_panel',
+            # 'protein_addon',
         ]
 
         for k in static_attrs:
             setattr(self, k, self.run_meta.get(k, None))
 
-        self.shape = glymur.Jp2k(self.data_dir / 'h_and_e' / 'nuclear.jp2').shape
+    # @property
+    # def cell_labels(self) -> np.ndarray:
+    #     nuc_mask = io.import_segmentation(
+    #         seg_path=self.segmentation_path,
+    #         expected_shape=self.shape,
+    #         labels_key='nuclei',  # TODO nuclei is not always the key
+    #         # use_cache=True,
+    #     )
+    #     nuc_labels = np.unique(nuc_mask)
 
-    @property
-    def cell_labels(self) -> np.ndarray:
-        nuc_mask = io.import_segmentation(
-            seg_path=self.segmentation_path,
-            expected_shape=self.shape,
-            labels_key='nuclei',  # TODO nuclei is not always the key
-            # use_cache=True,
-        )
-        nuc_labels = np.unique(nuc_mask)
-
-        return nuc_labels[nuc_labels != 0]
+    #     return nuc_labels[nuc_labels != 0]
 
     # def infer_sample_id(self) -> str:
     #     summs = list(self.data_dir.glob('summary_*.html'))
