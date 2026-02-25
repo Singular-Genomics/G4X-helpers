@@ -62,7 +62,7 @@ class G4Xoutput:
             tx_panel_path = self.data_dir / 'transcript_panel.csv'
 
             tx_panel = utils.parse_input_manifest(tx_panel_path)
-            tx_panel.sort(by=['probe_type', 'probe_name'], descending=[True, False])
+            tx_panel = tx_panel.sort(by=['probe_type', 'probe_name'], descending=[True, False])
             self.genes = tx_panel['gene_name'].unique(maintain_order=True).to_list()
 
         if self.includes_protein:
@@ -158,17 +158,21 @@ class G4Xoutput:
         for k in static_attrs:
             setattr(self, k, self.run_meta.get(k, None))
 
-    # @property
-    # def cell_labels(self) -> np.ndarray:
-    #     nuc_mask = io.import_segmentation(
-    #         seg_path=self.segmentation_path,
-    #         expected_shape=self.shape,
-    #         labels_key='nuclei',  # TODO nuclei is not always the key
-    #         # use_cache=True,
-    #     )
-    #     nuc_labels = np.unique(nuc_mask)
+    @property
+    def cell_labels(self) -> np.ndarray:
+        nuc_mask = io.import_segmentation(
+            seg_path=self.segmentation_path,
+            expected_shape=self.shape,
+            labels_key='nuclei',  # TODO nuclei is not always the key
+            # use_cache=True,
+        )
+        nuc_labels = np.unique(nuc_mask)
 
-    #     return nuc_labels[nuc_labels != 0]
+        return nuc_labels[nuc_labels != 0]
+
+    @property
+    def cell_frame(self) -> int:
+        return pl.Series(name='seg_cell_id', values=self.cell_labels).sort().to_frame()
 
     # def infer_sample_id(self) -> str:
     #     summs = list(self.data_dir.glob('summary_*.html'))
@@ -225,7 +229,7 @@ class G4Xoutput:
         cached: bool = False,
     ) -> np.ndarray:
         if image_type == 'protein':
-            if not self.protein_panel:
+            if not self.includes_protein:
                 print('No protein results.')
                 return None
             if protein is None or protein not in self.proteins:
