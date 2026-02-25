@@ -15,6 +15,14 @@ from matplotlib.pyplot import imread
 from . import io, utils
 from .schemas import validate
 
+DATA_PATHS = {
+    'transcript_table': 'rna/transcript_table.csv.gz',
+    'raw_features': 'rna/raw_features.parquet',
+    'segmentation': 'segmentation/segmentation_mask.npz',
+    'feature_matrix': 'single_cell_data/feature_matrix.h5',
+    'bead_mask': 'protein/bead_mask.npz',
+}
+
 
 @dataclass()
 class G4Xoutput:
@@ -47,12 +55,11 @@ class G4Xoutput:
         self.data_dir = Path(self.data_dir)
         self.run_meta = io.validate_raw_data(self.data_dir)
 
-        self.sample_id = self.run_meta.get('sample_id', 'unknown')
-
         # TODO implement with ome.tiff
         self.shape = glymur.Jp2k(self.data_dir / 'h_and_e' / 'nuclear.jp2').shape
 
         self.set_meta_attrs()
+        self.set_static_paths()
 
         # TODO ensure this is in the meta (happening in validator too)
         self.includes_transcript = 'transcript_panel' in self.run_meta
@@ -116,27 +123,6 @@ class G4Xoutput:
         return repr_string
 
     ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ###
-    # region properties
-    @property
-    def transcript_table_path(self) -> Path:
-        return self.data_dir / 'rna' / 'transcript_table.csv.gz'
-
-    @property
-    def feature_table_path(self) -> Path:
-        return self.data_dir / 'rna' / 'raw_features.parquet'
-
-    @property
-    def segmentation_path(self) -> Path:
-        return self.data_dir / 'segmentation' / 'segmentation_mask.npz'
-
-    @property
-    def feature_mtx_path(self) -> Path:
-        return self.data_dir / 'single_cell_data' / 'feature_matrix.h5'
-
-    @property
-    def bead_mask_path(self) -> Path:
-        return self.data_dir / 'protein' / 'bead_mask.npz'
-
     def set_meta_attrs(self):
         static_attrs = [
             'platform',
@@ -145,18 +131,19 @@ class G4Xoutput:
             'fc',
             'lane',
             'software_version',
+            'sample_id',
+            'block',
+            'tissue_type',
             # 'assay',
             # 'run_name',
-            # 'block',
-            # 'tissue_type',
-            # 'transcript_panel',
-            # 'transcript_addon',
-            # 'protein_panel',
-            # 'protein_addon',
         ]
 
         for k in static_attrs:
-            setattr(self, k, self.run_meta.get(k, None))
+            setattr(self, k, self.run_meta.get(k, 'unknown'))
+
+    def set_static_paths(self):
+        for k, p in DATA_PATHS.items():
+            setattr(self, f'{k}_path', self.data_dir / p)
 
     @property
     def cell_labels(self) -> np.ndarray:
@@ -169,23 +156,6 @@ class G4Xoutput:
         nuc_labels = np.unique(nuc_mask)
 
         return nuc_labels[nuc_labels != 0]
-
-    @property
-    def cell_frame(self) -> int:
-        return pl.Series(name='seg_cell_id', values=self.cell_labels).sort().to_frame()
-
-    # def infer_sample_id(self) -> str:
-    #     summs = list(self.data_dir.glob('summary_*.html'))
-
-    #     failure = 'Could not determine sample_id:'
-    #     if len(summs) == 0:
-    #         raise validate.ValidationError(f'{failure} "summary_{{sample_id}}.html" missing')
-    #     elif len(summs) > 1:
-    #         raise validate.ValidationError(f'{failure} Multiple "summary_{{sample_id}}.html" files found')
-    #     else:
-    #         summary_file = summs[0]
-    #         sample_id = summary_file.stem.removeprefix('summary_')
-    #     return sample_id
 
     def validate(self, details: bool = False) -> None:
         report_style = 'short' if details else False
