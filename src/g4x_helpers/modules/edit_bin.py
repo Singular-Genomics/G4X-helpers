@@ -8,13 +8,14 @@ import polars as pl
 from tqdm import tqdm
 
 from .. import utils
-from ..g4x_viewer import CellMasksSchema_pb2 as CellMasksSchema
 from ..schemas.validate import read_bin_file
 from .workflow import workflow
 
 if TYPE_CHECKING:
     from ..g4x_output import G4Xoutput
 
+# TODO placeholder to prevent import errors while zarr integration is in progress
+CellMasksSchema = None
 
 DEFAULT_COLOR = '#BFBFBF'
 

@@ -8,7 +8,9 @@ from google.protobuf.message import DecodeError
 from pathschema import validate
 
 from .. import utils
-from ..g4x_viewer import CellMasksSchema_pb2 as CellMasksSchema
+
+# TODO placeholder to prevent import errors while zarr integration is in progress
+CellMasksSchema = None
 
 probe_re = re.compile(utils.PROBE_PATTERN)
 
