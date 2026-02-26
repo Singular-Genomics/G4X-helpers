@@ -157,7 +157,7 @@ def import_segmentation(seg_path: str, expected_shape: tuple[int], labels_key: s
                 )
 
         print('Rasterizing provided GeoDataFrame.')
-        seg = convert.rasterize_polygons(gdf=gdf, target_shape=expected_shape)
+        seg = convert.gdf_to_ndarray(gdf=gdf, target_shape=expected_shape)
 
     # validate shape for final numpy arrays
     if seg.shape != expected_shape:

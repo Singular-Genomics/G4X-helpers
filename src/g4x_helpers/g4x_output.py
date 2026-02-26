@@ -12,7 +12,7 @@ import tifffile
 from anndata import AnnData, read_h5ad
 from matplotlib.pyplot import imread
 
-from . import io, utils
+from . import io
 from .schemas import validate
 
 DATA_PATHS = {
@@ -68,7 +68,7 @@ class G4Xoutput:
         if self.includes_transcript:
             tx_panel_path = self.data_dir / 'transcript_panel.csv'
 
-            tx_panel = utils.parse_input_manifest(tx_panel_path)
+            tx_panel = io.parse_input_manifest(tx_panel_path)
             tx_panel = tx_panel.sort(by=['probe_type', 'probe_name'], descending=[True, False])
             self.genes = tx_panel['gene_name'].unique(maintain_order=True).to_list()
 
