@@ -9,17 +9,16 @@ import numpy as np
 import shapely.affinity
 import skimage.measure
 import tifffile as tiff
-from geopandas import GeoDataFrame
 from shapely.geometry import Polygon
 from skimage import exposure, transform
 from skimage.measure._regionprops import RegionProperties
 from tqdm import tqdm
 
+from .. import constants
+
 if TYPE_CHECKING:
     from geopandas.geodataframe import GeoDataFrame
 
-
-PX_SIZE_um = 0.32
 
 img_settings = {
     'rgb': {'axes': 'YXC', 'tn_clip': None},
@@ -27,7 +26,7 @@ img_settings = {
 }
 
 
-def gdf_to_ndarray(gdf: GeoDataFrame, target_shape: tuple) -> np.ndarray:
+def gdf_to_ndarray(gdf: 'GeoDataFrame', target_shape: tuple) -> np.ndarray:
     from rasterio.features import rasterize
     from rasterio.transform import Affine
 
@@ -50,7 +49,8 @@ def gdf_to_ndarray(gdf: GeoDataFrame, target_shape: tuple) -> np.ndarray:
     return label_array
 
 
-def ndarray_to_gdf(mask: np.ndarray, nudge: bool = True) -> GeoDataFrame:
+def ndarray_to_gdf(mask: np.ndarray, nudge: bool = True) -> 'GeoDataFrame':
+    from geopandas import GeoDataFrame
 
     if mask.max() == 0:
         return GeoDataFrame(geometry=[])
@@ -118,8 +118,8 @@ def jp2_to_ometiff(
         compression='zstd',
         metadata={
             'axes': settings['axes'],
-            'PhysicalSizeX': PX_SIZE_um,
-            'PhysicalSizeY': PX_SIZE_um,
+            'PhysicalSizeX': constants.PX_SIZE_um,
+            'PhysicalSizeY': constants.PX_SIZE_um,
             'PhysicalSizeXUnit': 'µm',
             'PhysicalSizeYUnit': 'µm',
         },

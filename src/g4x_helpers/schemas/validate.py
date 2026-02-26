@@ -7,12 +7,12 @@ import polars as pl
 from google.protobuf.message import DecodeError
 from pathschema import validate
 
-from .. import utils
+from .. import constants
 
 # TODO placeholder to prevent import errors while zarr integration is in progress
 CellMasksSchema = None
 
-probe_re = re.compile(utils.PROBE_PATTERN)
+probe_re = re.compile(constants.PROBE_PATTERN)
 
 # register schemas
 path = resources.files('g4x_helpers.schemas')

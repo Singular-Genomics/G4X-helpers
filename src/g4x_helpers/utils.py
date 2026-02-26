@@ -10,18 +10,6 @@ from pathlib import Path
 import pandas as pd
 import polars as pl
 
-DEFAULT_THREADS = max(1, (os.cpu_count() // 2 or 4))
-PROBE_PATTERN = r'^(.*?)-([ACGT]{2,30})-([^-]+)$'
-
-primer_read_map = {
-    'SP1': 1,
-    'm7a': 2,
-    'm9a': 3,
-    'm6a': 4,
-    'm8a': 5,
-    'm3a': 6,
-}
-
 
 def validate_path(path_str, must_exist=True, is_dir_ok=True, is_file_ok=True, resolve_path=False) -> Path:
     path = Path(path_str)  # .expanduser().resolve()

@@ -9,22 +9,11 @@ import geopandas
 import numpy as np
 import polars as pl
 
-from .. import utils
+from .. import constants, utils
 from . import convert
 
 if TYPE_CHECKING:
     pass
-
-PROBE_PATTERN = r'^(.*?)-([ACGT]{2,30})-([^-]+)$'
-
-primer_read_map = {
-    'SP1': 1,
-    'm7a': 2,
-    'm9a': 3,
-    'm6a': 4,
-    'm8a': 5,
-    'm3a': 6,
-}
 
 
 def optionally_cached(func):
@@ -181,9 +170,9 @@ def parse_input_manifest(file_path: Path, verbose: bool = False) -> pl.DataFrame
 
     parsed = df.with_columns(
         [
-            pl.col(col).str.extract(PROBE_PATTERN, 1).alias('gene_name'),
-            pl.col(col).str.extract(PROBE_PATTERN, 2).alias('sequence'),
-            pl.col(col).str.extract(PROBE_PATTERN, 3).alias('primer'),
+            pl.col(col).str.extract(constants.PROBE_PATTERN, 1).alias('gene_name'),
+            pl.col(col).str.extract(constants.PROBE_PATTERN, 2).alias('sequence'),
+            pl.col(col).str.extract(constants.PROBE_PATTERN, 3).alias('primer'),
         ]
     )
 
@@ -204,14 +193,14 @@ def parse_input_manifest(file_path: Path, verbose: bool = False) -> pl.DataFrame
         parsed = parsed.drop('read')
     else:
         plist = parsed['primer'].unique().to_list()
-        ign_primer = [p for p in plist if p not in primer_read_map]
+        ign_primer = [p for p in plist if p not in constants.primer_read_map]
         if len(ign_primer) > 0:
             if verbose:
                 print('Warning: the following primer names are not known and will be ignored:')
                 for ip in ign_primer:
                     print(f'- {ip}')
-        parsed = parsed.filter(pl.col('primer').is_in(primer_read_map.keys())).with_columns(
-            pl.col('primer').replace(primer_read_map).cast(pl.Int8).alias('read')
+        parsed = parsed.filter(pl.col('primer').is_in(constants.primer_read_map.keys())).with_columns(
+            pl.col('primer').replace(constants.primer_read_map).cast(pl.Int8).alias('read')
         )
 
     if 'gene_name' in df.columns:
