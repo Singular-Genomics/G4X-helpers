@@ -1,4 +1,3 @@
-import json
 import os
 from dataclasses import dataclass
 from functools import lru_cache
@@ -13,8 +12,16 @@ import tifffile
 from anndata import AnnData, read_h5ad
 from matplotlib.pyplot import imread
 
-from . import utils
+from . import io
 from .schemas import validate
+
+DATA_PATHS = {
+    'transcript_table': 'rna/transcript_table.csv.gz',
+    'raw_features': 'rna/raw_features.parquet',
+    'segmentation': 'segmentation/segmentation_mask.npz',
+    'feature_matrix': 'single_cell_data/feature_matrix.h5',
+    'bead_mask': 'protein/bead_mask.npz',
+}
 
 
 @dataclass()
@@ -33,21 +40,6 @@ class G4Xoutput:
     sample_id : str, optional
         The sample ID to associate with the run. If not provided, it will be inferred from the `data_dir` path.
 
-    Attributes
-    ----------
-    run_meta : dict
-        Metadata dictionary loaded from `run_meta.json`.
-    shape : tuple
-        Image shape (height, width) as inferred from the segmentation mask.
-    transcript_panel_dict : dict
-        Mapping of transcript genes to panel types, if the transcript panel is present.
-    protein_panel_dict : dict
-        Mapping of proteins to panel types, if the protein panel is present.
-    genes : list of str
-        List of transcript gene names (only if transcript panel exists).
-    proteins : list of str
-        List of protein names (only if protein panel exists).
-
     Notes
     -----
     On instantiation, this class performs the following:
@@ -61,33 +53,33 @@ class G4Xoutput:
 
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
+        self.run_meta = io.validate_raw_data(self.data_dir)
 
-        if self.sample_id is None:
-            self.sample_id = self.infer_sample_id()
-
-        with open(self.data_dir / 'run_meta.json', 'r') as f:
-            self.run_meta = json.load(f)
+        # TODO implement with ome.tiff
+        self.shape = glymur.Jp2k(self.data_dir / 'h_and_e' / 'nuclear.jp2').shape
 
         self.set_meta_attrs()
+        self.set_static_paths()
 
-        if self.transcript_panel:
-            try:
-                transcript_panel = (
-                    utils.parse_input_manifest(self.data_dir / 'transcript_panel.csv')
-                    .unique('gene_name')
-                    .sort('gene_name')
-                )
-                self.transcript_panel_dict = dict(zip(transcript_panel['gene_name'], transcript_panel['panel_type']))
-                self.genes = transcript_panel['gene_name'].to_list()
-            except Exception:
-                self.transcript_panel_dict = {}
-                self.genes = []
+        # TODO ensure this is in the meta (happening in validator too)
+        self.includes_transcript = 'transcript_panel' in self.run_meta
+        self.includes_protein = 'protein_panel' in self.run_meta
 
-        if self.protein_panel:
-            protein_panel = pl.read_csv(self.data_dir / 'protein_panel.csv').sort('target')
-            self.protein_panel_dict = dict(zip(protein_panel['target'], protein_panel['panel_type']))
+        if self.includes_transcript:
+            tx_panel_path = self.data_dir / 'transcript_panel.csv'
+
+            tx_panel = io.parse_input_manifest(tx_panel_path)
+            tx_panel = tx_panel.sort(by=['probe_type', 'probe_name'], descending=[True, False])
+            self.genes = tx_panel['gene_name'].unique(maintain_order=True).to_list()
+
+        if self.includes_protein:
+            pr_panel_path = self.data_dir / 'protein_panel.csv'
+
+            protein_panel = pl.read_csv(pr_panel_path)
+            protein_panel.sort(by=['panel_type', pl.col('target').str.to_lowercase()], descending=[True, False])
             self.proteins = protein_panel['target'].to_list()
 
+    ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ###
     # region dunder
     def __repr__(self):
         machine_num = self.machine.removeprefix('g4-').lstrip('0')
@@ -130,35 +122,7 @@ class G4Xoutput:
 
         return repr_string
 
-    # region properties
-    @property
-    def includes_protein(self) -> bool:
-        return self.protein_panel != []
-
-    @property
-    def includes_transcript(self) -> bool:
-        return self.transcript_panel != []
-
-    @property
-    def transcript_table_path(self) -> Path:
-        return self.data_dir / 'rna' / 'transcript_table.csv.gz'
-
-    @property
-    def feature_table_path(self) -> Path:
-        return self.data_dir / 'rna' / 'raw_features.parquet'
-
-    @property
-    def segmentation_path(self) -> Path:
-        return self.data_dir / 'segmentation' / 'segmentation_mask.npz'
-
-    @property
-    def feature_mtx_path(self) -> Path:
-        return self.data_dir / 'single_cell_data' / 'feature_matrix.h5'
-
-    @property
-    def bead_mask_path(self) -> Path:
-        return self.data_dir / 'protein' / 'bead_mask.npz'
-
+    ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ###
     def set_meta_attrs(self):
         static_attrs = [
             'platform',
@@ -166,29 +130,32 @@ class G4Xoutput:
             'run_id',
             'fc',
             'lane',
-            'software',
             'software_version',
-            'transcript_panel',
-            'protein_panel',
+            'sample_id',
+            'block',
+            'tissue_type',
+            # 'assay',
+            # 'run_name',
         ]
 
         for k in static_attrs:
-            setattr(self, k, self.run_meta.get(k, None))
+            setattr(self, k, self.run_meta.get(k, 'unknown'))
 
-        self.shape = glymur.Jp2k(self.data_dir / 'h_and_e' / 'nuclear.jp2').shape
+    def set_static_paths(self):
+        for k, p in DATA_PATHS.items():
+            setattr(self, f'{k}_path', self.data_dir / p)
 
-    def infer_sample_id(self) -> str:
-        summs = list(self.data_dir.glob('summary_*.html'))
+    @property
+    def cell_labels(self) -> np.ndarray:
+        nuc_mask = io.import_segmentation(
+            seg_path=self.segmentation_path,
+            expected_shape=self.shape,
+            labels_key='nuclei',  # TODO nuclei is not always the key
+            # use_cache=True,
+        )
+        nuc_labels = np.unique(nuc_mask)
 
-        failure = 'Could not determine sample_id:'
-        if len(summs) == 0:
-            raise validate.ValidationError(f'{failure} "summary_{{sample_id}}.html" missing')
-        elif len(summs) > 1:
-            raise validate.ValidationError(f'{failure} Multiple "summary_{{sample_id}}.html" files found')
-        else:
-            summary_file = summs[0]
-            sample_id = summary_file.stem.removeprefix('summary_')
-        return sample_id
+        return nuc_labels[nuc_labels != 0]
 
     def validate(self, details: bool = False) -> None:
         report_style = 'short' if details else False
@@ -232,7 +199,7 @@ class G4Xoutput:
         cached: bool = False,
     ) -> np.ndarray:
         if image_type == 'protein':
-            if not self.protein_panel:
+            if not self.includes_protein:
                 print('No protein results.')
                 return None
             if protein is None or protein not in self.proteins:

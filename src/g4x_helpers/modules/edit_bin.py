@@ -13,7 +13,7 @@ from ..schemas.validate import read_bin_file
 from .workflow import workflow
 
 if TYPE_CHECKING:
-    from ..models import G4Xoutput
+    from ..g4x_output import G4Xoutput
 
 
 DEFAULT_COLOR = '#BFBFBF'

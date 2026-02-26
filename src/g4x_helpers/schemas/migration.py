@@ -9,7 +9,7 @@ from pathlib import Path
 import polars as pl
 
 from .. import utils
-from ..models import G4Xoutput
+from ..g4x_output import G4Xoutput
 from ..modules import create_tx_tarfile, edit_bin_file, init_bin_file
 from ..modules.workflow import workflow
 from . import validate

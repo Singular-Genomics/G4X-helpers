@@ -15,7 +15,7 @@ from .. import utils
 from .workflow import OutSchema, workflow
 
 if TYPE_CHECKING:
-    from ..models import G4Xoutput
+    from ..g4x_output import G4Xoutput
 
 BASE_ORDER = 'CTGA'
 LUT = np.zeros((256, 4), dtype=np.float32)

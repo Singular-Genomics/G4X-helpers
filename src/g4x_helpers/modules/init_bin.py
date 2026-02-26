@@ -20,7 +20,7 @@ from .segment import get_cell_ids
 from .workflow import OutSchema, workflow
 
 if TYPE_CHECKING:
-    from ..models import G4Xoutput
+    from ..g4x_output import G4Xoutput
 
 
 @workflow

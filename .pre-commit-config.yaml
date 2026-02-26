@@ -34,7 +34,7 @@ repos:
       exclude: ^.*\.(txt|md|svg)$
 
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.14.5 # Ruff version.
+  rev: v0.15.2 # Ruff version.
   hooks:
 
     # Run the linter.
@@ -46,10 +46,10 @@ repos:
     - id: ruff-format
       name: Format python files (Ruff)
 
-- repo: local
-  hooks:
-    - id: rich-codex
-      name: Run Rich Codex on SVG assets
-      entry: env FORCE_COLOR=1 TERMINAL_WIDTH=85 uv run rich-codex --skip-git-checks --no-confirm --clean-img-paths docs/img/*.svg
-      language: system
-      pass_filenames: false
+# - repo: local
+#   hooks:
+#     - id: rich-codex
+#       name: Run Rich Codex on SVG assets
+#       entry: env FORCE_COLOR=1 TERMINAL_WIDTH=85 uv run rich-codex --skip-git-checks --no-confirm --clean-img-paths docs/img/*.svg
+#       language: system
+#       pass_filenames: false

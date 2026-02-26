@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "g4x_helpers"
-version = "3.0.0.dev1"
+version = "3.0.0.dev2"
 
 description = "Python helpers for G4X."
 urls = { repository = "https://github.com/Singular-Genomics/G4X-helpers" }
@@ -27,9 +27,9 @@ classifiers = [
 
 dependencies = [
     "geopandas ~= 1.1",
-    "glymur ~= 0.12, <= 0.13.4",
-    "polars ~= 1.37",
-    "rasterio ~= 1.4",
+    "glymur >= 0.12, <= 0.13.4",
+    "polars ~= 1.38",
+    "rasterio >= 1.4",
     "scanpy ~= 1.11",
     "scikit-image ~= 0.26",
     "shapely ~= 2.1",
@@ -37,7 +37,7 @@ dependencies = [
     "rich-click ~= 1.9",
     "pathschema ~= 0.2.1",
     "ome-zarr ~= 0.12",
-    "protobuf ~= 4.25",          # soon to be gone
+    "protobuf>=6.33.5",
 ]
 
 [dependency-groups]
@@ -46,7 +46,7 @@ dev = [
     "ipywidgets ~= 8.1",
     "pre-commit ~= 4.5",
     "pytest ~= 9.0",
-    "ruff == 0.14.5",                     # pinned to match pre-commit version
+    "ruff == 0.15.2",                     # pinned to match pre-commit version
     "mpl-spaceplot>=0.3.0",
     "dask[diagnostics]>=2024.11.2,<2025",
 ]
@@ -56,7 +56,7 @@ docs = ["mkdocs ~= 1.6", "mkdocs-material ~= 9.7", "rich-codex ~= 1.2"]
 g4x-helpers = "g4x_helpers.cli.cli:cli"
 
 [tool.uv]
-required-version = ">=0.8.8"     # also update in Dockerfile
+required-version = ">=0.9"
 default-groups = ["dev", "docs"]
 
 [tool.uv-ship]

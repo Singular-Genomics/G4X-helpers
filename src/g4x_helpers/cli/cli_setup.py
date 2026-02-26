@@ -81,7 +81,7 @@ def initialize_sample(
     with _spinner(msg):
         import glymur
 
-        from ..models import G4Xoutput
+        from ..g4x_output import G4Xoutput
 
         glymur.set_option('lib.num_threads', n_threads)
         try:
