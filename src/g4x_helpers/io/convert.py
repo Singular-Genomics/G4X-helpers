@@ -15,6 +15,7 @@ from skimage.measure._regionprops import RegionProperties
 from tqdm import tqdm
 
 from .. import constants
+from ..modules.single_cell import CELL_ID_NAME
 
 if TYPE_CHECKING:
     from geopandas.geodataframe import GeoDataFrame
@@ -76,7 +77,7 @@ def ndarray_to_gdf(mask: np.ndarray, nudge: bool = True) -> 'GeoDataFrame':
         # add the region label once per polygon
         labels.extend([region.label] * len(polys))
 
-    gdf = GeoDataFrame({'label': labels}, geometry=geoms)
+    gdf = GeoDataFrame({CELL_ID_NAME: labels}, geometry=geoms)
 
     if nudge:
         gdf['geometry'] = gdf['geometry'].translate(xoff=-0.5, yoff=-0.5)
