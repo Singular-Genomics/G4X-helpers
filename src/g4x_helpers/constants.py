@@ -1,8 +1,7 @@
 import os
 
 DEFAULT_THREADS = max(1, (os.cpu_count() // 2 or 4))
-
-PX_SIZE_um = 0.32
+PIXEL_SIZE_MICRONS = 0.3125
 
 PROBE_PATTERN = r'^(.*?)-([ACGT]{2,30})-([^-]+)$'
 

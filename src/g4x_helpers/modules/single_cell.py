@@ -2,16 +2,22 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import polars as pl
+import scanpy as sc
 from skimage import measure
 from tqdm import tqdm
 
-from .. import io
+from .. import constants, io
 
 if TYPE_CHECKING:
+    from anndata import AnnData
+
     from ..g4x_output import G4Xoutput
 
-PX_SIZE_MICRONS = 0.3125
+
 CELL_ID_NAME = 'seg_cell_id'
+GENE_ID_NAME = 'gene_id'
+CELL_COORD_X = 'cell_x'
+CELL_COORD_Y = 'cell_y'
 
 
 def cell_frame(g4x_obj: 'G4Xoutput', lazy: bool = True) -> int:
@@ -22,34 +28,83 @@ def cell_frame(g4x_obj: 'G4Xoutput', lazy: bool = True) -> int:
 # TODO addition of protein values is missing
 def create_adata(g4x_obj: 'G4Xoutput', cell_metadata: pl.DataFrame, cell_x_gene: pl.DataFrame):
     from anndata import AnnData
-    from scanpy.preprocessing import calculate_qc_metrics
+    from scipy.sparse import csr_matrix
 
     X = cell_x_gene.drop(CELL_ID_NAME).to_numpy().astype(np.uint16)
+    X = csr_matrix(X)
 
-    obs_df = cell_metadata.to_pandas()  # .set_index('label')
+    obs_df = cell_metadata.to_pandas().set_index(CELL_ID_NAME)
     obs_df.index = obs_df.index.astype(str)
 
-    gene_ids = pl.Series(name='gene_id', values=cell_x_gene.columns[1:])
+    gene_ids = pl.Series(name=GENE_ID_NAME, values=cell_x_gene.columns[1:])
     var_df = pl.DataFrame(gene_ids).with_columns(pl.lit('tx').alias('modality'))
 
     panel_type = (
         io.parse_input_manifest(g4x_obj.data_dir / 'transcript_panel.csv')
         .unique('gene_name')
         .select('gene_name', 'probe_type')
-        .rename({'gene_name': 'gene_id'})
+        .rename({'gene_name': GENE_ID_NAME})
     )
 
-    var_df = var_df.join(
-        panel_type,
-        on='gene_id',
-        how='left',
-    ).to_pandas()
+    var_df = (
+        var_df.join(
+            panel_type,
+            on=GENE_ID_NAME,
+            how='left',
+        )
+        .to_pandas()
+        .set_index(GENE_ID_NAME)
+    )
 
-    # TODO I think the correct thing to do here is to set the index to the gene_id
-    var_df.index = var_df.index.astype(str)
+    # # TODO I think the correct thing to do here is to set the index to the gene_id
+    # var_df.index = var_df.index.astype(str)
+    # .set_index('label')
 
     adata = AnnData(X=X, obs=obs_df, var=var_df)
-    calculate_qc_metrics(adata, inplace=True, percent_top=None)
+    sc.pp.calculate_qc_metrics(adata, inplace=True, percent_top=None)
+    return adata.copy()
+
+
+def process_adata(adata: 'AnnData'):
+    ## 1. filter on cell size, remove top and bottom 1%
+    ## 2. remove genes not expressed by at least 5% of remaining cells
+    ## 3. filter on total transcripts and unique genes remove top 1% and bottom 5%
+
+    adata = filter_by_quantiles(adata, obs_key='nuclei_area_um', quantiles=(0.01, 0.99))
+
+    min_cells = int(0.05 * adata.n_obs)
+    sc.pp.filter_genes(adata, min_cells=min_cells, inplace=True)
+
+    adata = filter_by_quantiles(adata, obs_key='total_counts', quantiles=(0.05, 0.99))
+    adata = filter_by_quantiles(adata, obs_key='n_genes_by_counts', quantiles=(0.05, 0.99))
+
+    # normalize data
+    sc.pp.normalize_total(adata)
+    sc.pp.log1p(adata)
+    sc.pp.pca(adata)
+    sc.pp.neighbors(adata)
+
+    res = 1
+    sc.tl.leiden(
+        adata,
+        resolution=res,
+        objective_function='modularity',
+        n_iterations=-1,
+        random_state=42,
+        flavor='igraph',
+        key_added=f'leiden_{res:0.2f}',
+    )
+
+    sc.tl.umap(adata)
+
+    sc.tl.rank_genes_groups(
+        adata,
+        groupby=f'leiden_{res:0.2f}',
+        use_raw=False,
+        method='wilcoxon',
+        pts=True,
+        key_added=f'leiden_{res:0.2f}_rank_genes_groups',
+    )
     return adata
 
 
@@ -97,22 +152,22 @@ def extract_cell_props(mask: np.ndarray, mask_name: str | None = None) -> pl.Dat
 
         cell_y, cell_x = prop.centroid  # coordinate order: 'yx' (row, col)
 
-        px_to_um_area = PX_SIZE_MICRONS**2
+        px_to_um_area = constants.PIXEL_SIZE_MICRONS**2
         area_um = prop.area * px_to_um_area  # prop.area is in pixels
 
         prop_dict.append(
             {
                 CELL_ID_NAME: label,
                 'area_um': area_um,
-                'cell_x': cell_x,
-                'cell_y': cell_y,
+                CELL_COORD_X: cell_x,
+                CELL_COORD_Y: cell_y,
             }
         )
     schema = {
         CELL_ID_NAME: pl.Int32,
         'area_um': pl.Float32,
-        'cell_x': pl.Float32,
-        'cell_y': pl.Float32,
+        CELL_COORD_X: pl.Float32,
+        CELL_COORD_Y: pl.Float32,
     }
     prop_dict_df = pl.DataFrame(prop_dict, schema=schema).sort(CELL_ID_NAME)
     return prop_dict_df
@@ -131,10 +186,10 @@ def extract_cell_props_g4x(g4x_obj: 'G4Xoutput') -> pl.DataFrame:
     del seg_mask
 
     mask_props_nuc = mask_props_nuc.rename({'area_um': 'nuclei_area_um'})
-    mask_props_exp = mask_props_exp.rename({'area_um': 'wholecell_area_um'}).drop(['cell_x', 'cell_y'])
+    mask_props_exp = mask_props_exp.rename({'area_um': 'wholecell_area_um'}).drop([CELL_COORD_X, CELL_COORD_Y])
     mask_props = mask_props_nuc.join(mask_props_exp, on=CELL_ID_NAME)
 
-    mask_props = mask_props.select([CELL_ID_NAME, 'cell_x', 'cell_y', 'nuclei_area_um', 'wholecell_area_um'])
+    mask_props = mask_props.select([CELL_ID_NAME, CELL_COORD_X, CELL_COORD_Y, 'nuclei_area_um', 'wholecell_area_um'])
 
     return mask_props
 
@@ -241,3 +296,13 @@ def image_intensity_extraction(
     means = np.divide(sums, counts, out=np.zeros_like(sums), where=counts != 0)
 
     return means
+
+
+def filter_by_quantiles(adata: 'AnnData', obs_key: str, quantiles: tuple[float, float] = (0.0, 1.0)):
+    if obs_key not in adata.obs:
+        raise ValueError(f"obs_key '{obs_key}' not found in adata.obs")
+
+    qs = adata.obs[obs_key].quantile([quantiles[0], quantiles[1]]).to_numpy(dtype=int)
+
+    adata = adata[(adata.obs[obs_key] >= qs[0]) & (adata.obs[obs_key] <= qs[1])]
+    return adata.copy()

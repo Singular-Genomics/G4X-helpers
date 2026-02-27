@@ -118,8 +118,8 @@ def jp2_to_ometiff(
         compression='zstd',
         metadata={
             'axes': settings['axes'],
-            'PhysicalSizeX': constants.PX_SIZE_um,
-            'PhysicalSizeY': constants.PX_SIZE_um,
+            'PhysicalSizeX': constants.PIXEL_SIZE_MICRONS,
+            'PhysicalSizeY': constants.PIXEL_SIZE_MICRONS,
             'PhysicalSizeXUnit': 'µm',
             'PhysicalSizeYUnit': 'µm',
         },
