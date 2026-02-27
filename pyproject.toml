@@ -37,7 +37,6 @@ dependencies = [
     "rich-click ~= 1.9",
     "pathschema ~= 0.2.1",
     "ome-zarr ~= 0.12",
-    "protobuf>=6.33.5",
 ]
 
 [dependency-groups]
