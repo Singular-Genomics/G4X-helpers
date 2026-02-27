@@ -14,8 +14,7 @@ from skimage import exposure, transform
 from skimage.measure._regionprops import RegionProperties
 from tqdm import tqdm
 
-from .. import constants
-from ..modules.single_cell import CELL_ID_NAME
+from .. import constants as c
 
 if TYPE_CHECKING:
     from geopandas.geodataframe import GeoDataFrame
@@ -77,7 +76,7 @@ def ndarray_to_gdf(mask: np.ndarray, nudge: bool = True) -> 'GeoDataFrame':
         # add the region label once per polygon
         labels.extend([region.label] * len(polys))
 
-    gdf = GeoDataFrame({CELL_ID_NAME: labels}, geometry=geoms)
+    gdf = GeoDataFrame({c.CELL_ID_NAME: labels}, geometry=geoms)
 
     if nudge:
         gdf['geometry'] = gdf['geometry'].translate(xoff=-0.5, yoff=-0.5)
@@ -119,8 +118,8 @@ def jp2_to_ometiff(
         compression='zstd',
         metadata={
             'axes': settings['axes'],
-            'PhysicalSizeX': constants.PIXEL_SIZE_MICRONS,
-            'PhysicalSizeY': constants.PIXEL_SIZE_MICRONS,
+            'PhysicalSizeX': c.PIXEL_SIZE_MICRONS,
+            'PhysicalSizeY': c.PIXEL_SIZE_MICRONS,
             'PhysicalSizeXUnit': 'µm',
             'PhysicalSizeYUnit': 'µm',
         },

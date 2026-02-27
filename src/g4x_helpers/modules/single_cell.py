@@ -6,7 +6,8 @@ import scanpy as sc
 from skimage import measure
 from tqdm import tqdm
 
-from .. import constants, io
+from .. import constants as c
+from .. import io
 
 if TYPE_CHECKING:
     from anndata import AnnData
@@ -14,46 +15,43 @@ if TYPE_CHECKING:
     from ..g4x_output import G4Xoutput
 
 
-CELL_ID_NAME = 'seg_cell_id'
-GENE_ID_NAME = 'gene_id'
-CELL_COORD_X = 'cell_x'
-CELL_COORD_Y = 'cell_y'
-
-
 def cell_frame(g4x_obj: 'G4Xoutput', lazy: bool = True) -> int:
-    lf = pl.LazyFrame(g4x_obj.cell_labels, schema={CELL_ID_NAME: pl.Int32}).sort(CELL_ID_NAME)
+    lf = pl.LazyFrame(g4x_obj.cell_labels, schema={c.CELL_ID_NAME: pl.Int32}).sort(c.CELL_ID_NAME)
     return lf if lazy else lf.collect()
 
 
 # TODO addition of protein values is missing
-def create_adata(g4x_obj: 'G4Xoutput', cell_metadata: pl.DataFrame, cell_x_gene: pl.DataFrame):
+def create_adata(g4x_obj: 'G4Xoutput', cell_x_gene: pl.DataFrame, cell_metadata: pl.DataFrame | None = None):
     from anndata import AnnData
     from scipy.sparse import csr_matrix
 
-    X = cell_x_gene.drop(CELL_ID_NAME).to_numpy().astype(np.uint16)
+    X = cell_x_gene.drop(c.CELL_ID_NAME).to_numpy().astype(np.uint16)
     X = csr_matrix(X)
 
-    obs_df = cell_metadata.to_pandas().set_index(CELL_ID_NAME)
+    if cell_metadata is None:
+        cell_metadata = create_cell_metadata(g4x_obj, mask=None)
+
+    obs_df = cell_metadata.to_pandas().set_index(c.CELL_ID_NAME)
     obs_df.index = obs_df.index.astype(str)
 
-    gene_ids = pl.Series(name=GENE_ID_NAME, values=cell_x_gene.columns[1:])
+    gene_ids = pl.Series(name=c.GENE_ID_NAME, values=cell_x_gene.columns[1:])
     var_df = pl.DataFrame(gene_ids).with_columns(pl.lit('tx').alias('modality'))
 
     panel_type = (
         io.parse_input_manifest(g4x_obj.data_dir / 'transcript_panel.csv')
         .unique('gene_name')
         .select('gene_name', 'probe_type')
-        .rename({'gene_name': GENE_ID_NAME})
+        .rename({'gene_name': c.GENE_ID_NAME})
     )
 
     var_df = (
         var_df.join(
             panel_type,
-            on=GENE_ID_NAME,
+            on=c.GENE_ID_NAME,
             how='left',
         )
         .to_pandas()
-        .set_index(GENE_ID_NAME)
+        .set_index(c.GENE_ID_NAME)
     )
 
     # # TODO I think the correct thing to do here is to set the index to the gene_id
@@ -79,6 +77,7 @@ def process_adata(adata: 'AnnData'):
     adata = filter_by_quantiles(adata, obs_key='n_genes_by_counts', quantiles=(0.05, 0.99))
 
     # normalize data
+    adata.layers['counts'] = adata.X
     sc.pp.normalize_total(adata)
     sc.pp.log1p(adata)
     sc.pp.pca(adata)
@@ -108,6 +107,18 @@ def process_adata(adata: 'AnnData'):
     return adata
 
 
+def reorder_clusters_by_size(clust_umap, key: str, prefix='C'):
+    clust_sorted = clust_umap.group_by(key).agg(pl.len()).sort('len', descending=True)
+    size_order = clust_sorted[key].to_list()
+    numeric_order = np.arange(len(size_order)).astype(str).tolist()
+
+    numeric_order = [prefix + str(uid) for uid in numeric_order]
+    order_map = dict(zip(size_order, numeric_order))
+
+    new_umap = clust_umap.with_columns(pl.col(key).replace(order_map)).sort('seg_cell_id')
+    return new_umap
+
+
 def create_cell_metadata(g4x_obj: 'G4Xoutput', mask: np.ndarray | None):
     cell_meta = init_cell_metadata(g4x_obj).collect()
 
@@ -121,8 +132,8 @@ def create_cell_metadata(g4x_obj: 'G4Xoutput', mask: np.ndarray | None):
 
     mask_props = mask_props.with_columns(pl.lit(source).alias('source'))
 
-    if mask_props[CELL_ID_NAME].equals(cell_meta[CELL_ID_NAME]):
-        cell_meta = cell_meta.join(mask_props, on=CELL_ID_NAME, how='left')
+    if mask_props[c.CELL_ID_NAME].equals(cell_meta[c.CELL_ID_NAME]):
+        cell_meta = cell_meta.join(mask_props, on=c.CELL_ID_NAME, how='left')
     else:
         raise ValueError('The CELL_ID columns in cell_meta and mask_props do not match.')
 
@@ -152,24 +163,24 @@ def extract_cell_props(mask: np.ndarray, mask_name: str | None = None) -> pl.Dat
 
         cell_y, cell_x = prop.centroid  # coordinate order: 'yx' (row, col)
 
-        px_to_um_area = constants.PIXEL_SIZE_MICRONS**2
+        px_to_um_area = c.PIXEL_SIZE_MICRONS**2
         area_um = prop.area * px_to_um_area  # prop.area is in pixels
 
         prop_dict.append(
             {
-                CELL_ID_NAME: label,
+                c.CELL_ID_NAME: label,
                 'area_um': area_um,
-                CELL_COORD_X: cell_x,
-                CELL_COORD_Y: cell_y,
+                c.CELL_COORD_X: cell_x,
+                c.CELL_COORD_Y: cell_y,
             }
         )
     schema = {
-        CELL_ID_NAME: pl.Int32,
+        c.CELL_ID_NAME: pl.Int32,
         'area_um': pl.Float32,
-        CELL_COORD_X: pl.Float32,
-        CELL_COORD_Y: pl.Float32,
+        c.CELL_COORD_X: pl.Float32,
+        c.CELL_COORD_Y: pl.Float32,
     }
-    prop_dict_df = pl.DataFrame(prop_dict, schema=schema).sort(CELL_ID_NAME)
+    prop_dict_df = pl.DataFrame(prop_dict, schema=schema).sort(c.CELL_ID_NAME)
     return prop_dict_df
 
 
@@ -186,10 +197,12 @@ def extract_cell_props_g4x(g4x_obj: 'G4Xoutput') -> pl.DataFrame:
     del seg_mask
 
     mask_props_nuc = mask_props_nuc.rename({'area_um': 'nuclei_area_um'})
-    mask_props_exp = mask_props_exp.rename({'area_um': 'wholecell_area_um'}).drop([CELL_COORD_X, CELL_COORD_Y])
-    mask_props = mask_props_nuc.join(mask_props_exp, on=CELL_ID_NAME)
+    mask_props_exp = mask_props_exp.rename({'area_um': 'wholecell_area_um'}).drop([c.CELL_COORD_X, c.CELL_COORD_Y])
+    mask_props = mask_props_nuc.join(mask_props_exp, on=c.CELL_ID_NAME)
 
-    mask_props = mask_props.select([CELL_ID_NAME, CELL_COORD_X, CELL_COORD_Y, 'nuclei_area_um', 'wholecell_area_um'])
+    mask_props = mask_props.select(
+        [c.CELL_ID_NAME, c.CELL_COORD_X, c.CELL_COORD_Y, 'nuclei_area_um', 'wholecell_area_um']
+    )
 
     return mask_props
 
@@ -198,15 +211,15 @@ def create_cell_x_gene(g4x_obj: 'G4Xoutput', return_lazy: bool = False) -> tuple
     reads = pl.scan_csv(g4x_obj.transcript_table_path)
 
     cell_by_gene = (
-        reads.filter(pl.col(CELL_ID_NAME) != 0)
-        .group_by(CELL_ID_NAME, 'gene_name')
+        reads.filter(pl.col(c.CELL_ID_NAME) != 0)
+        .group_by(c.CELL_ID_NAME, 'gene_name')
         .agg(pl.len().alias('counts'))
         .sort('gene_name')
-        .pivot(on='gene_name', values='counts', index=CELL_ID_NAME, on_columns=g4x_obj.genes)
+        .pivot(on='gene_name', values='counts', index=c.CELL_ID_NAME, on_columns=g4x_obj.genes)
     )
 
     # Adding missing cells with zero counts
-    cell_by_gene = cell_frame(g4x_obj).join(cell_by_gene, left_on='seg_cell_id', right_on=CELL_ID_NAME, how='left')
+    cell_by_gene = cell_frame(g4x_obj).join(cell_by_gene, left_on='seg_cell_id', right_on=c.CELL_ID_NAME, how='left')
 
     existing = cell_by_gene.collect_schema().names()
     if not set(existing[1:]) == set(g4x_obj.genes):

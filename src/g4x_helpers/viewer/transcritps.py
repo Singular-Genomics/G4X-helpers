@@ -2,14 +2,14 @@ import numpy as np
 import polars as pl
 from numcodecs import Blosc
 
-from ..modules.single_cell import CELL_ID_NAME
+from .. import constants as c
 
 
 def write_transcripts(smp, root_group):
     tx_group = root_group.create_group('transcripts', overwrite=True)
 
     aggregation_level = 'gene_name'
-    keep_cols = ['x_pixel_coordinate', 'y_pixel_coordinate', CELL_ID_NAME, aggregation_level]
+    keep_cols = ['x_pixel_coordinate', 'y_pixel_coordinate', c.CELL_ID_NAME, aggregation_level]
     lf = smp.load_transcript_table(lazy=True, columns=keep_cols)
     df = lf.collect()
 
@@ -109,7 +109,7 @@ def write_tx_zarr(tx_group, pyramid):
     for level in pyramid:
         tile_df = pyramid[level]['tile_df']
         all_coords = tile_df.select(['x_pixel_coordinate', 'y_pixel_coordinate']).to_numpy()
-        all_cell_ids = tile_df.select(CELL_ID_NAME).to_numpy()
+        all_cell_ids = tile_df.select(c.CELL_ID_NAME).to_numpy()
         all_gene_names = tile_df.select('gene_name').to_numpy()
         all_tile_ids = tile_df.select(['tile_y', 'tile_x']).to_numpy()
 
