@@ -2,7 +2,33 @@ import numpy as np
 import polars as pl
 from numcodecs import Blosc
 
-from g4x_helpers.modules import edit_bin, segment
+from .. import io
+from ..modules.single_cell import CELL_ID_NAME
+
+DEFAULT_COLOR = '#BFBFBF'
+
+sg_palette = [
+    '#72FFAB',
+    '#A16CFD',
+    '#FF7043',
+    '#008FFF',
+    '#D32F2F',
+    '#7CB342',
+    '#7F34BE',
+    '#FFCA28',
+    '#0C8668',
+    '#FB4695',
+    '#005EE1',
+    '#28EDED',
+    '#A17B64',
+    '#FFFF58',
+    '#BC29AE',
+    '#006D8F',
+    '#FFBAFF',
+    '#FFD091',
+    '#5C6BC0',
+    '#F490B2',
+]
 
 
 def setup_cell_group(root_group):
@@ -26,53 +52,24 @@ def write_cells(smp, metadata, gex, gene_names, root_group):
 
     # generate polygon vertices
     seg_mask = smp.load_segmentation()
-    gdf = segment.vectorize_mask(seg_mask)
+    vertices = extract_vertices(seg_mask)
 
-    # Keep only largest polygon per label
-    gdf['_area'] = gdf.geometry.area
-    gdf = (
-        gdf.sort_values('_area', ascending=False)
-        .drop_duplicates(subset='label', keep='first')
-        .drop(columns='_area')
-        .reset_index(drop=True)
-    )
-
-    # Alternative way to keep largest polygon per label
-    # idx = gdf.groupby("label")["_area"].idxmax()
-    # gdf = gdf.loc[idx].drop(columns="_area").reset_index(drop=True)
-
-    # Simplify geometries
-    gdf['geometry_simplified'] = gdf.geometry.simplify(tolerance=1.5, preserve_topology=True)
-    gdf['geometry_simplified'] = gdf['geometry_simplified'].buffer(0)
-
-    # TODO this section has a lot of room for optimization
-    # for now it ensures that the vertices are in the same order as the metadata rows
-    res = {
-        'x': [poly.exterior.xy[0].tolist() for poly in gdf.geometry_simplified],
-        'y': [poly.exterior.xy[1].tolist() for poly in gdf.geometry_simplified],
-    }
-
-    gdf['vert_x'] = res['x']
-    gdf['vert_y'] = res['y']
-
-    vertices = pl.from_pandas(gdf[['label', 'vert_x', 'vert_y']])
-
-    metadata = metadata.join(vertices, left_on='segmentation_label', right_on='label')
-    metadata = metadata.sort('segmentation_label')
+    metadata = metadata.join(vertices, left_on=CELL_ID_NAME, right_on='label')
+    metadata = metadata.sort(CELL_ID_NAME)
 
     # write arrays for each attribute
 
     metadata_group = cell_group.create_group('metadata', overwrite=True)
 
-    arr = metadata['segmentation_label'].to_numpy().astype(np.uint32)
+    arr = metadata[CELL_ID_NAME].to_numpy().astype(np.uint32)
     metadata_group.create_array('cell_id', data=arr, compressor=compressor)
 
-    arr = metadata['area'].to_numpy().astype(np.uint16)
+    arr = metadata['area_um'].to_numpy().astype(np.uint16)
     metadata_group.create_array('area', data=arr, compressor=compressor)
 
     # TODO another hard coding that needs removal later
     metadata = metadata.with_columns(cluster_id=pl.col('leiden_0.400').cast(pl.Int8).cast(pl.String).fill_null('-1'))
-    metadata_group.attrs['clusterID_colors'] = edit_bin.generate_cluster_palette(metadata['cluster_id'])
+    metadata_group.attrs['clusterID_colors'] = generate_cluster_palette(metadata['cluster_id'])
 
     arr = metadata['cluster_id'].to_numpy().astype('U10')
     metadata_group.create_array('cluster_id', data=arr, compressor=compressor)
@@ -114,3 +111,95 @@ def write_cells(smp, metadata, gex, gene_names, root_group):
 
     genes_group = cell_group.create_group('genes', overwrite=True)
     write_csr(genes_group, csr=gex, gene_names=gene_names, compressor=compressor, chunks='auto')
+
+
+def generate_cluster_palette(clusters: list, max_colors: int = 256) -> dict:
+    """
+    Generate a color palette mapping for cluster labels.
+
+    This function assigns RGB colors to unique cluster labels using a matplotlib colormap.
+    Clusters labeled as "-1" are assigned a default gray color `[191, 191, 191]`.
+
+    The colormap used depends on the number of clusters:
+        - `tab10` for ≤10 clusters
+        - `tab20` for ≤20 clusters
+        - `hsv` for more than 20 clusters, capped by `max_colors`
+
+    Parameters
+    ----------
+    clusters : list
+        A list of cluster identifiers (strings or integers). The special label '-1' is excluded
+        from color mapping and handled separately.
+    max_colors : int, optional
+        Maximum number of colors to use in the HSV colormap. Only used if there are more than
+        20 unique clusters. Default is 256.
+
+    Returns
+    -------
+    dict
+        A dictionary mapping each cluster ID (as a string) to a list of three integers
+        representing an RGB color in the range [0, 255].
+
+    Examples
+    --------
+    >>> generate_cluster_palette(['0', '1', '2', '-1'])
+    {'0': [31, 119, 180], '1': [255, 127, 14], '2': [44, 160, 44], '-1': [191, 191, 191]}
+    """
+
+    import matplotlib.colors as mcolors
+
+    def hex2rgb(hex: str) -> list[int, int, int]:
+        return [int(x * 255) for x in mcolors.to_rgb(hex)]
+
+    unique_clusters = [c for c in np.unique(clusters) if c != '-1']
+    n_clusters = len(unique_clusters)
+
+    if n_clusters <= 20:
+        hex_list = sg_palette
+
+    else:
+        from matplotlib.pyplot import get_cmap
+
+        hex_list = get_cmap('hsv', min(max_colors, n_clusters)).colors
+
+    cluster_palette = {}
+    for i, cluster in enumerate(unique_clusters):
+        cluster_palette[str(cluster)] = hex2rgb(hex_list[i])
+
+    cluster_palette['-1'] = hex2rgb(DEFAULT_COLOR)
+
+    return cluster_palette
+
+
+def extract_vertices(mask):
+    gdf = io.convert.ndarray_to_gdf(mask)
+
+    # Keep only largest polygon per label
+    gdf['_area'] = gdf.geometry.area
+    gdf = (
+        gdf.sort_values('_area', ascending=False)
+        .drop_duplicates(subset=CELL_ID_NAME, keep='first')
+        .drop(columns='_area')
+        .reset_index(drop=True)
+    )
+
+    # Alternative way to keep largest polygon per label
+    # idx = gdf.groupby(CELL_ID_NAME)["_area"].idxmax()
+    # gdf = gdf.loc[idx].drop(columns="_area").reset_index(drop=True)
+
+    # Simplify geometries
+    gdf['geometry_simplified'] = gdf.geometry.simplify(tolerance=1.5, preserve_topology=True)
+    gdf['geometry_simplified'] = gdf['geometry_simplified'].buffer(0)
+
+    # TODO this section has a lot of room for optimization
+    # for now it ensures that the vertices are in the same order as the metadata rows
+    res = {
+        'x': [poly.exterior.xy[0].tolist() for poly in gdf.geometry_simplified],
+        'y': [poly.exterior.xy[1].tolist() for poly in gdf.geometry_simplified],
+    }
+
+    gdf['vert_x'] = res['x']
+    gdf['vert_y'] = res['y']
+
+    vertices = pl.from_pandas(gdf[[CELL_ID_NAME, 'vert_x', 'vert_y']]).sort(CELL_ID_NAME)
+    return vertices

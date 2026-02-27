@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import matplotlib.colors as mcolors
-import numpy as np
 import polars as pl
 from tqdm import tqdm
 
@@ -203,7 +202,7 @@ def parse_clustercolor_key(obs_df: pl.DataFrame, clustercolor_key: str | None) -
             cluster_palette[cluster] = hex2rgb(color)
 
     else:
-        cluster_palette = generate_cluster_palette(obs_df['cluster_id'])
+        cluster_palette = None  # generate_cluster_palette(obs_df['cluster_id'])
     return cluster_palette
 
 
@@ -233,59 +232,6 @@ def infer_emb_key(obs_df: pl.DataFrame) -> pl.DataFrame:
         emb_key = emb_keys[0]
         print(f'Inferred embedding_key: {emb_key}')
     return emb_key
-
-
-def generate_cluster_palette(clusters: list, max_colors: int = 256) -> dict:
-    """
-    Generate a color palette mapping for cluster labels.
-
-    This function assigns RGB colors to unique cluster labels using a matplotlib colormap.
-    Clusters labeled as "-1" are assigned a default gray color `[191, 191, 191]`.
-
-    The colormap used depends on the number of clusters:
-        - `tab10` for ≤10 clusters
-        - `tab20` for ≤20 clusters
-        - `hsv` for more than 20 clusters, capped by `max_colors`
-
-    Parameters
-    ----------
-    clusters : list
-        A list of cluster identifiers (strings or integers). The special label '-1' is excluded
-        from color mapping and handled separately.
-    max_colors : int, optional
-        Maximum number of colors to use in the HSV colormap. Only used if there are more than
-        20 unique clusters. Default is 256.
-
-    Returns
-    -------
-    dict
-        A dictionary mapping each cluster ID (as a string) to a list of three integers
-        representing an RGB color in the range [0, 255].
-
-    Examples
-    --------
-    >>> generate_cluster_palette(['0', '1', '2', '-1'])
-    {'0': [31, 119, 180], '1': [255, 127, 14], '2': [44, 160, 44], '-1': [191, 191, 191]}
-    """
-
-    unique_clusters = [c for c in np.unique(clusters) if c != '-1']
-    n_clusters = len(unique_clusters)
-
-    if n_clusters <= 20:
-        hex_list = sg_palette
-
-    else:
-        from matplotlib.pyplot import get_cmap
-
-        hex_list = get_cmap('hsv', min(max_colors, n_clusters)).colors
-
-    cluster_palette = {}
-    for i, cluster in enumerate(unique_clusters):
-        cluster_palette[str(cluster)] = hex2rgb(hex_list[i])
-
-    cluster_palette['-1'] = hex2rgb(DEFAULT_COLOR)
-
-    return cluster_palette
 
 
 def update_colormap(cell_masks: CellMasksSchema.CellMasks, cluster_palette: dict[str, list[int]]) -> None:
