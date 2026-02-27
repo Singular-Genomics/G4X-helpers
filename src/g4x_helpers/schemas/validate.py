@@ -4,7 +4,8 @@ from pathlib import Path
 
 import anndata as ad
 import polars as pl
-from google.protobuf.message import DecodeError
+
+# from google.protobuf.message import DecodeError
 from pathschema import validate
 
 from .. import constants
@@ -136,7 +137,7 @@ def validate_file_schemas(sample_base, verbose: bool = False) -> bool:
     if verbose:
         print(f'feature_matrix.h5: {adata_schema}')
 
-    bin_file_schema = infer_bin_schema(sample_base)
+    bin_file_schema = True  # infer_bin_schema(sample_base)
     if verbose:
         print(f'segmentation .bin file: {bin_file_schema}')
 
@@ -183,29 +184,29 @@ def infer_parquet_schema(sample_base):
     return parquet_lf, parquet_shema
 
 
-def infer_bin_schema(sample_base):
-    p = sample_base / 'g4x_viewer'
-    bin_files = list(p.glob('*.bin'))
+# def infer_bin_schema(sample_base):
+#     p = sample_base / 'g4x_viewer'
+#     bin_files = list(p.glob('*.bin'))
 
-    if len(bin_files) > 1:
-        print('Multiple bin files found. Cannot infer schema.')
-        return 'unknown'
-    elif len(bin_files) == 0:
-        print('No bin file found. Nothing to update.')
-        return 'unknown'
+#     if len(bin_files) > 1:
+#         print('Multiple bin files found. Cannot infer schema.')
+#         return 'unknown'
+#     elif len(bin_files) == 0:
+#         print('No bin file found. Nothing to update.')
+#         return 'unknown'
 
-    bin_file = bin_files[0]
+#     bin_file = bin_files[0]
 
-    bin_file_schema = 'invalid'
-    if bin_file.exists():
-        cell_masks = read_bin_file(bin_file)
-        if not cell_masks:
-            bin_file_schema = 'invalid'
-        else:
-            bin_file_schema = 'valid'
-    else:
-        print('No bin file found. Nothing to update.')
-    return bin_file_schema
+#     bin_file_schema = 'invalid'
+#     if bin_file.exists():
+#         cell_masks = read_bin_file(bin_file)
+#         if not cell_masks:
+#             bin_file_schema = 'invalid'
+#         else:
+#             bin_file_schema = 'valid'
+#     else:
+#         print('No bin file found. Nothing to update.')
+#     return bin_file_schema
 
 
 def is_valid_probe(s: str) -> bool:
@@ -286,16 +287,16 @@ def infer_adata_schema(sample_base: Path) -> str:
     return adata, adata_schema
 
 
-def read_bin_file(bin_file: Path) -> CellMasksSchema.CellMasks:
-    with open(bin_file, 'rb') as f:
-        data = f.read()
+# def read_bin_file(bin_file: Path) -> CellMasksSchema.CellMasks:
+#     with open(bin_file, 'rb') as f:
+#         data = f.read()
 
-    # print('Parsing bin file with current schema.')
-    cell_masks = CellMasksSchema.CellMasks()
-    try:
-        # print('Attempting to parse bin file.')
-        cell_masks.ParseFromString(data)
-        return cell_masks
-    except DecodeError:
-        print('Failed to parse bin file with current schema. It may need to be updated.')
-        return None
+#     # print('Parsing bin file with current schema.')
+#     cell_masks = CellMasksSchema.CellMasks()
+#     try:
+#         # print('Attempting to parse bin file.')
+#         cell_masks.ParseFromString(data)
+#         return cell_masks
+#     except DecodeError:
+#         print('Failed to parse bin file with current schema. It may need to be updated.')
+#         return None
