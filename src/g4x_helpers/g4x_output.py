@@ -16,11 +16,14 @@ from . import io
 from .schemas import validate
 
 DATA_PATHS = {
+    'transcript_panel': 'transcript_panel.csv',
     'transcript_table': 'rna/transcript_table.csv.gz',
     'raw_features': 'rna/raw_features.parquet',
     'segmentation': 'segmentation/segmentation_mask.npz',
     'feature_matrix': 'single_cell_data/feature_matrix.h5',
     'bead_mask': 'protein/bead_mask.npz',
+    'cell_x_gene': 'single_cell_data/cell_by_gene.csv.gz',
+    'cell_x_protein': 'single_cell_data/cell_by_protein.csv.gz',
 }
 
 
@@ -156,6 +159,16 @@ class G4Xoutput:
         nuc_labels = np.unique(nuc_mask)
 
         return nuc_labels[nuc_labels != 0]
+
+    @property
+    def demuxed(self):
+        return self.transcript_table_path.exists()
+
+    @property
+    def aggregated(self):
+        cxg = self.cell_x_gene_path.exists()
+        cxp = self.cell_x_protein_path.exists()
+        return cxg and cxp
 
     def validate(self, details: bool = False) -> None:
         report_style = 'short' if details else False

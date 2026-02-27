@@ -3,10 +3,20 @@ from pathlib import Path
 
 import polars as pl
 
+# required_files
+SAMPLE_META = Path('sample_meta.json')
+TX_PANEL = Path('transcript_panel.csv')
+PR_PANEL = Path('protein_panel.csv')
+RAW_FEATURES = Path('rna/raw_features.parquet')
+SEG_MASK = Path('segmentation/segmentation_mask.npz')
+NUC_IMAGE = Path('h_and_e/nuclear.jp2')
+H_AND_E_IMAGE = Path('h_and_e/h_and_e.jp2')
+CYT_IMAGE = Path('h_and_e/eosin.jp2')
+
 
 def validate_raw_data(data_dir):
     data_dir = Path(data_dir)
-    meta_path = data_dir / 'sample_meta.json'
+    meta_path = data_dir / SAMPLE_META
     if not meta_path.exists():
         raise FileNotFoundError(f'G4X-helpers requires a sample_meta.json file: {meta_path}')
 
@@ -28,8 +38,8 @@ def validate_raw_data(data_dir):
     # TODO ensure this is in the meta
     # validate transcript panel
     if 'transcript_panel' in run_meta:
-        tx_panel_path = data_dir / 'transcript_panel.csv'
-        raw_feats = data_dir / 'rna' / 'raw_features.parquet'
+        tx_panel_path = data_dir / TX_PANEL
+        raw_feats = data_dir / RAW_FEATURES
 
         if not tx_panel_path.exists():
             raise FileNotFoundError(f'Transcript panel file not found: {tx_panel_path}')
@@ -40,7 +50,7 @@ def validate_raw_data(data_dir):
     # TODO ensure this is in the meta
     # validate protein panel
     if 'protein_panel' in run_meta:
-        pr_panel_path = data_dir / 'protein_panel.csv'
+        pr_panel_path = data_dir / PR_PANEL
         pr_img_path = data_dir / 'protein'
 
         if not pr_panel_path.exists():
@@ -61,11 +71,10 @@ def validate_raw_data(data_dir):
             raise FileNotFoundError(f'Missing protein images for: {missing}')
 
     # validate segmentation
-    seg_path = data_dir / 'segmentation'
-    if not seg_path.exists():
-        raise FileNotFoundError(f'Segmentation directory not found: {seg_path}')
+    seg_file = data_dir / SEG_MASK
+    if not seg_file.parent.exists():
+        raise FileNotFoundError(f'Segmentation directory not found: {seg_file.parent}')
 
-    seg_file = seg_path / 'segmentation_mask.npz'
     if not seg_file.exists():
         raise FileNotFoundError(f'Segmentation file not found: {seg_file}')
 
