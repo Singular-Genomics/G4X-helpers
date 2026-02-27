@@ -14,13 +14,15 @@ from skimage.measure import approximate_polygon
 from skimage.morphology import dilation, disk, erosion
 from tqdm import tqdm
 
-from ..g4x_viewer import CellMasksSchema_pb2 as CellMasksSchema
 from .edit_bin import DEFAULT_COLOR, hex2rgb, update_colormap
 from .segment import get_cell_ids
 from .workflow import OutSchema, workflow
 
 if TYPE_CHECKING:
     from ..g4x_output import G4Xoutput
+
+# TODO placeholder to prevent import errors while zarr integration is in progress
+CellMasksSchema = None
 
 
 @workflow

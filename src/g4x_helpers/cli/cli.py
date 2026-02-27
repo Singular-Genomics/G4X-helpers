@@ -1,6 +1,6 @@
 import inspect
 
-from .. import __version__, utils
+from .. import __version__, constants
 from . import cli_setup
 from . import help_messages as hm
 
@@ -19,7 +19,7 @@ click = cli_setup.click
     '--threads',
     required=False,
     type=int,
-    default=utils.DEFAULT_THREADS,
+    default=constants.DEFAULT_THREADS,
     show_default=True,
     help='Number of threads to use for processing',
 )

@@ -4,7 +4,7 @@ from contextlib import contextmanager
 import rich_click as click
 from rich.console import Console
 
-from .. import utils
+from .. import constants
 
 console = Console()
 
@@ -75,7 +75,7 @@ def _fail_message(func_name, e, trace_back=False):
 
 
 def initialize_sample(
-    data_dir: str, sample_id: str | None = None, in_place: bool = False, n_threads: int = utils.DEFAULT_THREADS
+    data_dir: str, sample_id: str | None = None, in_place: bool = False, n_threads: int = constants.DEFAULT_THREADS
 ) -> None:
     msg = f'loading G4X-data from [blue]{data_dir}[/blue]'
     with _spinner(msg):

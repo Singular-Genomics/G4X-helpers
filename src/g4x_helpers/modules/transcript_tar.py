@@ -14,11 +14,14 @@ import matplotlib.pyplot as plt
 import polars as pl
 from tqdm import tqdm
 
-from ..g4x_viewer import TranscriptsSchema_pb2 as TranscriptsSchema
 from .workflow import workflow
 
 if TYPE_CHECKING:
     from ..g4x_output import G4Xoutput
+
+
+# TODO placeholder to prevent import errors while zarr integration is in progress
+TranscriptsSchema = None
 
 mp.set_start_method('spawn', force=True)
 
