@@ -5,8 +5,9 @@ from numcodecs import Blosc
 from ome_zarr import scale as oz_scale
 from ome_zarr import writer as oz_writer
 
-rgb_cols = ['FF0000', '00FF00', '0000FF']
+from .. import constants as c
 
+# TODO need to test if this is being used by any reader
 sat_cols = [
     'FF0000',
     'FF8000',
@@ -41,6 +42,14 @@ def _load_image_dask(smp, img_type, channel_name=None, dtype=np.uint16):
     )
 
     return data
+
+
+def write_images(smp, root_group):
+    img_group = root_group.create_group('images', overwrite=True)
+    img_group.attrs['axes'] = {'unit': 'micrometer', 'pixel_per_um': c.PIXEL_PER_MICRON}
+
+    write_muliplex_img(smp, img_group)
+    write_he_img(smp, img_group)
 
 
 def write_muliplex_img(smp, root_group):
@@ -107,6 +116,8 @@ def write_muliplex_img(smp, root_group):
 
 def write_he_img(smp, root_group):
     channel_names = ['R', 'G', 'B']
+    channel_cols = dict(zip(channel_names, ['FF0000', '00FF00', '0000FF']))
+
     img_group = root_group.create_group('h_and_e', overwrite=True)
 
     scaler = _get_default_scaler()
@@ -115,6 +126,7 @@ def write_he_img(smp, root_group):
     dtype = np.uint8
     data = _load_image_dask(smp, img_type='h_and_e', channel_name=None, dtype=dtype)
 
+    # TODO remove the astronaut at some point =)
     ### ### ### ### ### ### ### ### ### ###
     ### Add rgb image to bottom left corner
     from skimage import data as skdata
@@ -155,7 +167,7 @@ def write_he_img(smp, root_group):
             {
                 'label': name,
                 'window': {'start': 0, 'end': dtype_max, 'min': 0, 'max': dtype_max},
-                'color': rgb_cols[channel_names.index(name) % len(rgb_cols)],
+                'color': channel_cols[name],
                 'active': True,
             }
             for name in channel_names

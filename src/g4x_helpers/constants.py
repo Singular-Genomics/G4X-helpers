@@ -3,6 +3,17 @@ import os
 # System
 DEFAULT_THREADS = max(1, (os.cpu_count() // 2 or 4))
 
+# Files
+FILE_SMP_META = 'sample_meta.json'
+FILE_TX_PANEL = 'transcript_panel.csv'
+FILE_PR_PANEL = 'protein_panel.csv'
+FILE_RAW_FEATURES = 'raw_features.parquet'
+FILE_TX_TABLE = 'transcript_table.csv.gz'
+FILE_SEG_MASK = 'segmentation_mask.npz'
+FILE_VIEWER_ZARR = 'g4x-viewer.zarr'
+FILE_SUMMARY = 'summary.html'
+
+
 # Physical
 PIXEL_SIZE_MICRONS = 0.3125
 PIXEL_PER_MICRON = 3.2
