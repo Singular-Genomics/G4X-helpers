@@ -2,39 +2,9 @@ import numpy as np
 import polars as pl
 from numcodecs import Blosc
 
+from .. import constants as c
 from .. import io
-from ..modules.single_cell import CELL_ID_NAME
-
-DEFAULT_COLOR = '#BFBFBF'
-
-sg_palette = [
-    '#72FFAB',
-    '#A16CFD',
-    '#FF7043',
-    '#008FFF',
-    '#D32F2F',
-    '#7CB342',
-    '#7F34BE',
-    '#FFCA28',
-    '#0C8668',
-    '#FB4695',
-    '#005EE1',
-    '#28EDED',
-    '#A17B64',
-    '#FFFF58',
-    '#BC29AE',
-    '#006D8F',
-    '#FFBAFF',
-    '#FFD091',
-    '#5C6BC0',
-    '#F490B2',
-]
-
-
-def setup_cell_group(root_group):
-    cell_group = root_group.create_group('cells', overwrite=True)
-
-    return cell_group
+from ..modules import single_cell as g4xsc
 
 
 def write_csr(group, csr, gene_names, compressor=None, chunks=None):
@@ -46,30 +16,25 @@ def write_csr(group, csr, gene_names, compressor=None, chunks=None):
     group.create_array('gene_names', data=np.array(gene_names).astype('U12'), compressor=compressor, chunks='auto')
 
 
-def write_cells(smp, metadata, gex, gene_names, root_group):
-    cell_group = setup_cell_group(root_group)
+def write_cells(smp, root_group):
+    cell_group = root_group.create_group('cells', overwrite=True)
     compressor = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
 
-    # generate polygon vertices
-    seg_mask = smp.load_segmentation()
-    vertices = extract_vertices(seg_mask)
-
-    metadata = metadata.join(vertices, left_on=CELL_ID_NAME, right_on='label')
-    metadata = metadata.sort(CELL_ID_NAME)
+    metadata, gex, gene_names = prepare_cell_group_input(smp)
 
     # write arrays for each attribute
-
     metadata_group = cell_group.create_group('metadata', overwrite=True)
 
-    arr = metadata[CELL_ID_NAME].to_numpy().astype(np.uint32)
+    arr = metadata[c.CELL_ID_NAME].to_numpy().astype(np.uint32)
     metadata_group.create_array('cell_id', data=arr, compressor=compressor)
 
     arr = metadata['area_um'].to_numpy().astype(np.uint16)
     metadata_group.create_array('area', data=arr, compressor=compressor)
 
     # TODO another hard coding that needs removal later
-    metadata = metadata.with_columns(cluster_id=pl.col('leiden_0.400').cast(pl.Int8).cast(pl.String).fill_null('-1'))
-    metadata_group.attrs['clusterID_colors'] = generate_cluster_palette(metadata['cluster_id'])
+    uids = sort_clusters(metadata)
+    metadata_group.attrs['clusterID_colors'] = generate_cluster_palette(uids)
+    # metadata_group.attrs['clusterID_colors'] = generate_cluster_palette_v1(metadata['cluster_id'])
 
     arr = metadata['cluster_id'].to_numpy().astype('U10')
     metadata_group.create_array('cluster_id', data=arr, compressor=compressor)
@@ -87,7 +52,7 @@ def write_cells(smp, metadata, gex, gene_names, root_group):
     protein_names = np.array([s.removesuffix('_intensity_mean') for s in protein_df.columns]).astype('U50')
     protein_group.create_array('protein_names', data=protein_names, compressor=compressor)
 
-    umap = ['X_umap_0.300_0.900_1', 'X_umap_0.300_0.900_2']  # TODO <- remove hard code
+    umap = ['UMAP1', 'UMAP2']  # TODO <- remove hard code
     arr = metadata.select(umap).rename({umap[0]: 'umap_1', umap[1]: 'umap_2'}).to_numpy().astype(np.float16)
     metadata_group.create_array('umap', data=arr, compressor=compressor)
 
@@ -113,49 +78,72 @@ def write_cells(smp, metadata, gex, gene_names, root_group):
     write_csr(genes_group, csr=gex, gene_names=gene_names, compressor=compressor, chunks='auto')
 
 
-def generate_cluster_palette(clusters: list, max_colors: int = 256) -> dict:
-    """
-    Generate a color palette mapping for cluster labels.
+def sort_clusters(metadata):
+    uids = metadata.group_by('cluster_id').agg(pl.len())
+    uids = uids.sort('len', descending=True)['cluster_id'].to_list()
+    if 'unassigned' in uids:
+        uids.remove('unassigned')
 
-    This function assigns RGB colors to unique cluster labels using a matplotlib colormap.
-    Clusters labeled as "-1" are assigned a default gray color `[191, 191, 191]`.
+    uids.append('unassigned')
+    return uids
 
-    The colormap used depends on the number of clusters:
-        - `tab10` for ≤10 clusters
-        - `tab20` for ≤20 clusters
-        - `hsv` for more than 20 clusters, capped by `max_colors`
 
-    Parameters
-    ----------
-    clusters : list
-        A list of cluster identifiers (strings or integers). The special label '-1' is excluded
-        from color mapping and handled separately.
-    max_colors : int, optional
-        Maximum number of colors to use in the HSV colormap. Only used if there are more than
-        20 unique clusters. Default is 256.
+def prepare_cell_group_input(smp):
+    # 1: create fresh adata with qc-values
+    cell_x_gene = pl.read_csv(smp.data_dir / 'single_cell_data' / 'cell_by_gene.csv.gz')
 
-    Returns
-    -------
-    dict
-        A dictionary mapping each cluster ID (as a string) to a list of three integers
-        representing an RGB color in the range [0, 255].
+    mask = smp.load_segmentation(expanded=True)
+    cell_metadata = g4xsc.create_cell_metadata(smp, mask=mask)
+    adata = g4xsc.create_adata(smp, cell_metadata=cell_metadata, cell_x_gene=cell_x_gene)
 
-    Examples
-    --------
-    >>> generate_cluster_palette(['0', '1', '2', '-1'])
-    {'0': [31, 119, 180], '1': [255, 127, 14], '2': [44, 160, 44], '-1': [191, 191, 191]}
-    """
+    gex = adata.X
+    del cell_x_gene
+    gene_names = adata.var_names
 
+    # 2: extract cell vertices
+    vertices = extract_vertices(mask)
+    del mask
+
+    # 3: create metadata dataframe
+    obs_df = (
+        pl.from_pandas(adata.obs, include_index=True)
+        .drop('tissue_type', 'block', 'source')
+        .cast({c.CELL_ID_NAME: pl.UInt32})
+    )
+    del adata
+
+    metadata = obs_df.join(vertices, on=c.CELL_ID_NAME)
+    metadata = metadata.sort(c.CELL_ID_NAME)
+    del obs_df, vertices
+
+    # 4: load clustering and UMAP coordinates
+    clust_umap = pl.read_csv(
+        smp.data_dir / 'single_cell_data' / 'clustering_umap.csv.gz',
+        schema={c.CELL_ID_NAME: pl.UInt32, 'leiden_1.00': pl.Utf8, 'UMAP1': pl.Float32, 'UMAP2': pl.Float32},
+    )
+    clust_umap = clust_umap.rename({'leiden_1.00': 'cluster_id'})  # TODO this is hard coded right now
+
+    metadata = metadata.join(clust_umap, on=c.CELL_ID_NAME, how='left')
+    metadata = metadata.with_columns(pl.col('cluster_id').fill_null('unassigned'))
+
+    # 5: load protein data if available
+    if smp.includes_protein:
+        protein_data = pl.read_csv(smp.data_dir / 'single_cell_data' / 'cell_by_protein.csv.gz')
+        metadata = metadata.join(protein_data, on=c.CELL_ID_NAME, how='left')
+
+    return metadata, gex, gene_names
+
+
+def generate_cluster_palette(ordered_unique_clusters: list, max_colors: int = 256) -> dict:
     import matplotlib.colors as mcolors
 
     def hex2rgb(hex: str) -> list[int, int, int]:
         return [int(x * 255) for x in mcolors.to_rgb(hex)]
 
-    unique_clusters = [c for c in np.unique(clusters) if c != '-1']
-    n_clusters = len(unique_clusters)
+    n_clusters = len(ordered_unique_clusters)
 
     if n_clusters <= 20:
-        hex_list = sg_palette
+        hex_list = c.SG_PALETTE
 
     else:
         from matplotlib.pyplot import get_cmap
@@ -163,10 +151,10 @@ def generate_cluster_palette(clusters: list, max_colors: int = 256) -> dict:
         hex_list = get_cmap('hsv', min(max_colors, n_clusters)).colors
 
     cluster_palette = {}
-    for i, cluster in enumerate(unique_clusters):
+    for i, cluster in enumerate(ordered_unique_clusters):
         cluster_palette[str(cluster)] = hex2rgb(hex_list[i])
 
-    cluster_palette['-1'] = hex2rgb(DEFAULT_COLOR)
+    cluster_palette['unassigned'] = hex2rgb(c.UNASSIGNED_COLOR)
 
     return cluster_palette
 
@@ -178,7 +166,7 @@ def extract_vertices(mask):
     gdf['_area'] = gdf.geometry.area
     gdf = (
         gdf.sort_values('_area', ascending=False)
-        .drop_duplicates(subset=CELL_ID_NAME, keep='first')
+        .drop_duplicates(subset=c.CELL_ID_NAME, keep='first')
         .drop(columns='_area')
         .reset_index(drop=True)
     )
@@ -201,5 +189,5 @@ def extract_vertices(mask):
     gdf['vert_x'] = res['x']
     gdf['vert_y'] = res['y']
 
-    vertices = pl.from_pandas(gdf[[CELL_ID_NAME, 'vert_x', 'vert_y']]).sort(CELL_ID_NAME)
+    vertices = pl.from_pandas(gdf[[c.CELL_ID_NAME, 'vert_x', 'vert_y']]).sort(c.CELL_ID_NAME)
     return vertices
