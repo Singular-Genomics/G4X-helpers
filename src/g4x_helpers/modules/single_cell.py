@@ -198,15 +198,15 @@ def create_cell_x_gene(g4x_obj: 'G4Xoutput', return_lazy: bool = False) -> tuple
     reads = pl.scan_csv(g4x_obj.transcript_table_path)
 
     cell_by_gene = (
-        reads.filter(pl.col('cell_id') != 0)
-        .group_by('cell_id', 'gene_name')
+        reads.filter(pl.col(CELL_ID_NAME) != 0)
+        .group_by(CELL_ID_NAME, 'gene_name')
         .agg(pl.len().alias('counts'))
         .sort('gene_name')
-        .pivot(on='gene_name', values='counts', index='cell_id', on_columns=g4x_obj.genes)
+        .pivot(on='gene_name', values='counts', index=CELL_ID_NAME, on_columns=g4x_obj.genes)
     )
 
     # Adding missing cells with zero counts
-    cell_by_gene = cell_frame(g4x_obj).join(cell_by_gene, left_on='seg_cell_id', right_on='cell_id', how='left')
+    cell_by_gene = cell_frame(g4x_obj).join(cell_by_gene, left_on='seg_cell_id', right_on=CELL_ID_NAME, how='left')
 
     existing = cell_by_gene.collect_schema().names()
     if not set(existing[1:]) == set(g4x_obj.genes):
@@ -306,3 +306,10 @@ def filter_by_quantiles(adata: 'AnnData', obs_key: str, quantiles: tuple[float, 
 
     adata = adata[(adata.obs[obs_key] >= qs[0]) & (adata.obs[obs_key] <= qs[1])]
     return adata.copy()
+
+
+def intersect_tx_with_cells(tx_table, mask):
+    coord_order = ['y_pixel_coordinate', 'x_pixel_coordinate']
+    tx_coords = tx_table.select(coord_order).collect().to_numpy().astype(int)
+    cell_ids = mask[tx_coords[:, 0], tx_coords[:, 1]]
+    return cell_ids

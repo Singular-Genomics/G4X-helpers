@@ -17,7 +17,7 @@ from .workflow import OutSchema, workflow
 if TYPE_CHECKING:
     from ..g4x_output import G4Xoutput
 
-BASE_ORDER = 'CTGA'
+# BASE_ORDER = 'CTGA'
 LUT = np.zeros((256, 4), dtype=np.float32)
 LUT[ord('C'), 0] = 1.0
 LUT[ord('T'), 1] = 1.0
@@ -231,20 +231,3 @@ def update_metadata_and_tx_file(g4x_obj: 'G4Xoutput', manifest, out_dir):
 
     with open(out_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_run_metadata.json', 'w') as f:
         json.dump(meta, f, indent=2)
-
-
-def concatenate_and_cleanup(batch_dir, out_dir):
-    final_tx_table_path = out_dir / 'rna' / 'transcript_table.csv'
-    # final_tx_pq_path = out_dir / 'rna' / 'transcript_table.parquet'
-
-    utils.delete_existing(final_tx_table_path)
-    utils.delete_existing(final_tx_table_path.with_suffix('.csv.gz'))
-    # utils.delete_existing(final_tx_pq_path)
-
-    tx_table = pl.scan_parquet(list(batch_dir.glob('*.parquet')))
-    # tx_table.sink_parquet(final_tx_pq_path)
-
-    tx_table.filter(pl.col('demuxed')).sink_csv(final_tx_table_path)
-
-    _ = utils.gzip_file(final_tx_table_path)
-    shutil.rmtree(batch_dir)
