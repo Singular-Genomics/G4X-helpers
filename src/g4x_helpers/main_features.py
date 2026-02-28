@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 import rich_click as click
 
-from . import __version__, utils
+from . import __version__, c, utils
 from .cli.cli_setup import print_k_v
 
 if TYPE_CHECKING:
@@ -18,7 +18,7 @@ def _base_command(func):
     def wrapper(
         g4x_obj: 'G4Xoutput',
         out_dir: str | None = None,
-        n_threads: int = utils.DEFAULT_THREADS,
+        n_threads: int = c.DEFAULT_THREADS,
         verbose: int = 1,
         file_logger: bool = True,
         **kwargs,
@@ -75,7 +75,7 @@ def resegment(
     cell_labels: str,
     *,
     labels_key: str | None = None,
-    n_threads: int = utils.DEFAULT_THREADS,
+    n_threads: int = c.DEFAULT_THREADS,
     logger: logging.Logger,
     **kwargs,
 ) -> None:
@@ -109,7 +109,7 @@ def redemux(
     manifest: str,
     *,
     batch_size: int = 1_000_000,
-    n_threads: int = utils.DEFAULT_THREADS,
+    n_threads: int = c.DEFAULT_THREADS,
     logger: logging.Logger,
     **kwargs,
 ) -> None:
@@ -152,78 +152,10 @@ def redemux(
 
 
 @_base_command
-def update_bin(
-    g4x_obj: 'G4Xoutput',
-    bin_file: str,
-    metadata: str,
-    out_dir: str,
-    *,
-    cellid_key: str | None = None,
-    cluster_key: str | None = None,
-    clustercolor_key: str | None = None,
-    emb_key: str | None = None,
-    logger: logging.Logger,
-    **kwargs,
-) -> None:
-    from .modules import edit_bin
-
-    metadata = utils.validate_path(metadata, must_exist=True, is_dir_ok=False, is_file_ok=True)
-
-    edit_bin.edit_bin_file(
-        g4x_obj=g4x_obj,
-        bin_file=bin_file,
-        metadata=metadata,
-        bin_out=out_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_segmentation.bin',
-        cellid_key=cellid_key,
-        cluster_key=cluster_key,
-        clustercolor_key=clustercolor_key,
-        emb_key=emb_key,
-        logger=logger,
-    )
-
-
-@_base_command
-def new_bin(
-    g4x_obj: 'G4Xoutput',  #
-    out_dir: str,
-    *,
-    n_threads: int = utils.DEFAULT_THREADS,
-    logger: logging.Logger,
-    **kwargs,
-) -> None:
-    from .modules import init_bin
-
-    init_bin.init_bin_file(
-        g4x_obj=g4x_obj,
-        out_dir=out_dir,
-        n_threads=n_threads,
-        logger=logger,
-    )
-
-
-@_base_command
-def tar_viewer(
-    g4x_obj: 'G4Xoutput',  #
-    out_dir: str | None = None,
-    *,
-    logger: logging.Logger,
-    **kwargs,
-) -> None:
-    from .modules import viewer_dir
-
-    viewer_dir.package_viewer_dir(
-        viewer_dir=g4x_obj.data_dir / 'g4x_viewer',
-        sample_id=g4x_obj.sample_id,
-        out_dir=out_dir,
-        logger=logger,
-    )
-
-
-@_base_command
 def migrate(
     g4x_obj: 'G4Xoutput',
     restore: bool = False,
-    n_threads: int = utils.DEFAULT_THREADS,
+    n_threads: int = c.DEFAULT_THREADS,
     *,
     logger: logging.Logger,
     **kwargs,

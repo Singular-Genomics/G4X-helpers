@@ -1,22 +1,21 @@
 from importlib import import_module
 from importlib.metadata import PackageNotFoundError, version
 
+from . import constants as c
+
 try:
     __version__ = version('g4x_helpers')
 except PackageNotFoundError:
     __version__ = 'unknown'
 
 _LAZY_ATTRS = {
-    'new_bin': ('.main_features', 'new_bin'),
     'redemux': ('.main_features', 'redemux'),
     'resegment': ('.main_features', 'resegment'),
-    'tar_viewer': ('.main_features', 'tar_viewer'),
-    'update_bin': ('.main_features', 'update_bin'),
     'migrate': ('.main_features', 'migrate'),
     'G4Xoutput': ('.g4x_output', 'G4Xoutput'),
 }
 
-__all__ = ['__version__', *sorted(_LAZY_ATTRS)]
+__all__ = ['__version__', 'c', *sorted(_LAZY_ATTRS)]
 
 
 def __getattr__(name):
