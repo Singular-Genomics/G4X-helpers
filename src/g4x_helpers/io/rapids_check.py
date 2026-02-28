@@ -35,7 +35,7 @@ def check_rapids() -> RapidsCheck:
     except metadata.PackageNotFoundError:
         return RapidsCheck(
             status=RapidsStatus.s0,
-            detail="Distribution 'rapids-singlecell' not found. Install with `uv sync --extra rapids`.",
+            detail="Distribution 'rapids-singlecell' not found. Install with `uv sync --extra rapids`. (linux only)",
         )
 
     # --- Stage 2: import module (realistic) ---
