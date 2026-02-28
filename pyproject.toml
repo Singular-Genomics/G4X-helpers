@@ -25,7 +25,6 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 
-
 dependencies = [
     "geopandas ~= 1.1",
     "glymur >= 0.12, <= 0.13.4",
@@ -43,8 +42,9 @@ dependencies = [
 
 
 [project.optional-dependencies]
-rapids = ["rapids-singlecell[rapids-c12] <= 0.14; sys_platform == 'linux'"]
-
+rapids = [
+  "rapids-singlecell[rapids12] ~=0.13; sys_platform == 'linux'",
+]
 
 [dependency-groups]
 dev = [
@@ -54,7 +54,7 @@ dev = [
     "pytest ~= 9.0",
     "ruff == 0.15.2",                     # pinned to match pre-commit version
     "mpl-spaceplot>=0.3.0",
-    "dask[diagnostics]>=2024.11.2,<2025",
+    "dask[diagnostics]>=2024.11.2",
 ]
 docs = ["mkdocs ~= 1.6", "mkdocs-material ~= 9.7", "rich-codex ~= 1.2"]
 
@@ -65,6 +65,7 @@ g4x-helpers = "g4x_helpers.cli.cli:cli"
 [tool.uv]
 required-version = ">=0.9"
 default-groups = ["dev", "docs"]
+index-strategy = "unsafe-best-match"
 
 [tool.uv-ship]
 release-branch = "staging"
