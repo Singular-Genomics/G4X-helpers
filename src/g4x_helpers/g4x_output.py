@@ -24,6 +24,7 @@ DATA_PATHS = {
     'bead_mask': 'protein/bead_mask.npz',
     'cell_x_gene': 'single_cell_data/cell_by_gene.csv.gz',
     'cell_x_protein': 'single_cell_data/cell_by_protein.csv.gz',
+    'viewer_zarr': 'g4x-viewer.zarr',
 }
 
 
@@ -169,6 +170,10 @@ class G4Xoutput:
         cxg = self.cell_x_gene_path.exists()
         cxp = self.cell_x_protein_path.exists()
         return cxg and cxp
+
+    @property
+    def zarred(self):
+        return self.viewer_zarr_path.exists()
 
     def validate(self, details: bool = False) -> None:
         report_style = 'short' if details else False

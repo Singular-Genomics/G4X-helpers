@@ -12,7 +12,11 @@ FILE_TX_TABLE = 'transcript_table.csv.gz'
 FILE_SEG_MASK = 'segmentation_mask.npz'
 FILE_VIEWER_ZARR = 'g4x-viewer.zarr'
 FILE_SUMMARY = 'summary.html'
-
+FILE_CELL_METADATA = 'cell_metadata.csv.gz'
+FILE_CELL_X_GENE = 'cell_by_gene.csv.gz'
+FILE_CELL_X_PROTEIN = 'cell_by_protein.csv.gz'
+FILE_FEAT_MTX = 'feature_matrix.h5'
+FILE_CLUSTERING_UMAP = 'clustering_umap.csv.gz'
 
 # Physical
 PIXEL_SIZE_MICRONS = 0.3125
