@@ -71,6 +71,7 @@ def batched_demuxing(feature_table_path, manifest, batch_dir, batch_size):
 
     seq_reads = manifest['read'].unique().to_list()
     seq_reads = [int(x.split('_')[-1]) if isinstance(x, str) else x for x in seq_reads]
+    manifest_by_read = {seq_read: manifest.filter(pl.col('read') == seq_read) for seq_read in seq_reads}
 
     num_features = pl.scan_parquet(feature_table_path).select(pl.len()).collect().item()
     num_expected_batches = math.ceil(num_features / batch_size)
@@ -87,7 +88,7 @@ def batched_demuxing(feature_table_path, manifest, batch_dir, batch_size):
         redemuxed_feature_batch = []
         for seq_read in seq_reads:
             feature_batch_read = feature_batch.filter(pl.col('read') == seq_read)
-            manifest_read = manifest.filter(pl.col('read') == seq_read)
+            manifest_read = manifest_by_read[seq_read]
 
             if len(feature_batch_read) == 0 or len(manifest_read) == 0:
                 continue
