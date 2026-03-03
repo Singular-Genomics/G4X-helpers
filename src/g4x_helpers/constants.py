@@ -1,7 +1,7 @@
-import os
+from .utils import default_workers
 
 # System
-DEFAULT_THREADS = max(1, (os.cpu_count() // 2 or 4))
+DEFAULT_THREADS = default_workers(max_workers=16, reserve=1)
 
 # Files
 FILE_SMP_META = 'sample_meta.json'

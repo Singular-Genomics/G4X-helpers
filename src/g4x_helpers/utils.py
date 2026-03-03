@@ -11,6 +11,10 @@ import pandas as pd
 import polars as pl
 
 
+def default_workers(max_workers: int = 16, reserve: int = 1) -> int:
+    cpu = os.cpu_count() or 1
+    return min(max_workers, max(1, cpu - reserve))
+
 def validate_path(path_str, must_exist=True, is_dir_ok=True, is_file_ok=True, resolve_path=False) -> Path:
     path = Path(path_str)  # .expanduser().resolve()
     if resolve_path:
