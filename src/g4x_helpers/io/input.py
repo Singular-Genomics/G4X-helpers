@@ -29,11 +29,19 @@ def optionally_cached(func):
     return wrapper
 
 
-def build_sample_metadata(sample_sheet, meta_json, sample_id):
+def build_sample_metadata(sample_dir):
+    sample_dir = Path(sample_dir)
+
+    meta_json = sample_dir / 'run_meta.json'
+    sample_sheet = sample_dir / 'samplesheet.csv'
+
     with open(meta_json, 'r') as f:
         run_meta = json.load(f)
 
-    if 'sample_id' not in run_meta:
+    if 'sample_id' in run_meta:
+        sample_id = run_meta['sample_id']
+    else:
+        sample_id = _infer_smp_id(sample_dir)
         run_meta['sample_id'] = sample_id
 
     sample_info, run_info = _parse_samplesheet(sample_sheet)
@@ -71,7 +79,22 @@ def build_sample_metadata(sample_sheet, meta_json, sample_id):
         'software_version',
     ]
 
-    return {k: run_meta[k] for k in order if k in run_meta}
+    return {k: str(run_meta[k]) for k in order if k in run_meta}
+
+
+def _infer_smp_id(sample_dir):
+    summary_file = list(sample_dir.glob('summary*.html'))[0].stem
+    core_metrics = sample_dir / 'metrics' / 'transcript_core_metrics.csv'
+
+    smp_id_met = pl.read_csv(core_metrics).to_dicts()[0]['sample_id']
+    smp_id_sum = summary_file.split('_')[-1]
+
+    if smp_id_met == smp_id_sum:
+        smp_id = smp_id_met
+    else:
+        smp_id = None
+
+    return smp_id
 
 
 def _parse_samplesheet(path):
@@ -83,9 +106,10 @@ def _parse_samplesheet(path):
         df.filter(pl.col('index').is_between(0, data_index, closed='none'))
         .select('column_1', 'column_2')
         .rename({'column_1': 'Key', 'column_2': 'Value'})
+        .with_columns(pl.col('Key').str.to_lowercase().str.replace(' ', '_'))
+        .cast({'Value': pl.Utf8})
+        .fill_null('not specified')
     )
-
-    run_info = run_info.with_columns(pl.col('Key').str.to_lowercase().str.replace(' ', '_'))
 
     sample_info = pl.read_csv(path, skip_rows=data_index + 1)
     sample_info = sample_info.rename({c: c.lower().replace(' ', '_') for c in sample_info.columns})
