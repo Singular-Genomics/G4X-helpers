@@ -24,6 +24,8 @@ DATA_PATHS = {
     'bead_mask': 'protein/bead_mask.npz',
     'cell_x_gene': 'single_cell_data/cell_by_gene.csv.gz',
     'cell_x_protein': 'single_cell_data/cell_by_protein.csv.gz',
+    'cell_metadata': 'single_cell_data/cell_metadata.csv.gz',
+    'clustering_umap': 'single_cell_data/clustering_umap.csv.gz',
     'viewer_zarr': 'g4x-viewer.zarr',
 }
 
@@ -57,7 +59,9 @@ class G4Xoutput:
 
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
-        self.run_meta = io.validate_raw_data(self.data_dir)
+        run_meta = io.validate_raw_data(self.data_dir)
+
+        self.run_meta = run_meta
 
         # TODO implement with ome.tiff
         self.shape = glymur.Jp2k(self.data_dir / 'h_and_e' / 'nuclear.jp2').shape
@@ -162,17 +166,24 @@ class G4Xoutput:
         return nuc_labels[nuc_labels != 0]
 
     @property
-    def demuxed(self):
+    def is_demuxed(self):
         return self.transcript_table_path.exists()
 
     @property
-    def aggregated(self):
+    def is_aggregated(self):
         cxg = self.cell_x_gene_path.exists()
         cxp = self.cell_x_protein_path.exists()
         return cxg and cxp
 
     @property
-    def zarred(self):
+    def is_scprocessed(self):
+        umap = self.clustering_umap_path.exists()
+        meta = self.cell_metadata_path.exists()
+        fm = self.feature_matrix_path.exists()
+        return umap and meta and fm
+
+    @property
+    def is_viewer(self):
         return self.viewer_zarr_path.exists()
 
     def validate(self, details: bool = False) -> None:
