@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import geopandas
 import numpy as np
 import polars as pl
+import polars.selectors as cs
 
 from .. import constants, utils
 from . import convert
@@ -97,13 +98,13 @@ def _infer_smp_id(sample_dir):
     return smp_id
 
 
-def _parse_samplesheet(path):
-    df = pl.read_csv(path, has_header=False, row_index_name='index')
+def _parse_samplesheet(ss_path: str):
+    ss_df = pl.read_csv(ss_path, has_header=False, row_index_name='index')
 
-    data_index = df.filter(pl.col('column_1') == '[Data]')['index'][0]
+    data_index = ss_df.filter(pl.col('column_1') == '[Data]')['index'][0]
 
     run_info = (
-        df.filter(pl.col('index').is_between(0, data_index, closed='none'))
+        ss_df.filter(pl.col('index').is_between(0, data_index, closed='none'))
         .select('column_1', 'column_2')
         .rename({'column_1': 'Key', 'column_2': 'Value'})
         .with_columns(pl.col('Key').str.to_lowercase().str.replace(' ', '_'))
@@ -111,14 +112,11 @@ def _parse_samplesheet(path):
         .fill_null('not specified')
     )
 
-    sample_info = pl.read_csv(path, skip_rows=data_index + 1)
-    sample_info = sample_info.rename({c: c.lower().replace(' ', '_') for c in sample_info.columns})
+    data_section = pl.read_csv(ss_path, skip_rows=data_index + 1)
+    data_section = data_section.rename({c: c.lower().replace(' ', '_') for c in data_section.columns})
+    data_section = data_section.drop(cs.contains('_duplicated')).drop('').fill_null('none')
 
-    # TODO protein_addon is not always the last column ...
-    final_col = np.where(np.array(sample_info.columns) == 'protein_addon')[0][0]
-    sample_info = sample_info.select(pl.col(sample_info.columns[: final_col + 1])).fill_null('none')
-
-    return sample_info, run_info
+    return run_info, data_section
 
 
 # @optionally_cached
