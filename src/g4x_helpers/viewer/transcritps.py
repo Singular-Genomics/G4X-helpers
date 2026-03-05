@@ -6,7 +6,6 @@ from .. import constants as c
 
 
 def write_transcripts(smp, root_group):
-    tx_group = root_group.create_group('transcripts', overwrite=True)
 
     aggregation_level = 'gene_name'
     keep_cols = ['x_pixel_coordinate', 'y_pixel_coordinate', c.CELL_ID_NAME, aggregation_level]
@@ -23,10 +22,23 @@ def write_transcripts(smp, root_group):
     )
     print(tile_specs)
 
+    # contstruct pyramid
     pyramid = build_tx_pyramid(tile_specs, image_resolution=img_resolution)
 
     for level, specs in pyramid.items():
         print(f'Level {level}: tile_size: {specs["tile_size"]} - scale: {specs["scale_fct"]}')
+
+    pyramid = construct_tile_dfs(df, pyramid)
+
+    # contstruct gene_list
+    gene_list = lf.unique('gene_name').sort('gene_name').collect()['gene_name'].to_list()
+
+    N = len(gene_list)  # number of colors
+    colors = np.random.randint(0, 256, size=(N, 3), dtype=np.uint8)
+    gene_colors = {g: c.tolist() for g, c in zip(gene_list, colors)}
+
+    # populate attrs
+    tx_group = root_group['transcripts']
 
     tx_group.attrs['layer_config'] = {
         'layers': len(pyramid) - 1,
@@ -36,14 +48,9 @@ def write_transcripts(smp, root_group):
         'coordinate_order': ['x_pixel_coordinate', 'y_pixel_coordinate'],
     }
 
-    gene_list = lf.unique('gene_name').sort('gene_name').collect()['gene_name'].to_list()
-
-    N = len(gene_list)  # number of colors
-    colors = np.random.randint(0, 256, size=(N, 3), dtype=np.uint8)
-    gene_colors = {g: c.tolist() for g, c in zip(gene_list, colors)}
     tx_group.attrs['gene_colors'] = gene_colors
 
-    pyramid = construct_tile_dfs(df, pyramid)
+    # write
     write_tx_zarr(tx_group, pyramid)
 
 

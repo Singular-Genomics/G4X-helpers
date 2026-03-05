@@ -11,20 +11,23 @@ def write_csr(group, csr, gene_names, compressor=None, chunks=None):
     group.create_array('data', data=csr.data.astype('int16'), compressor=compressor, chunks=chunks)
     group.create_array('indices', data=csr.indices.astype('int32'), compressor=compressor, chunks=chunks)
     group.create_array('indptr', data=csr.indptr.astype('int64'), compressor=compressor, chunks=chunks)
-    group.attrs['shape'] = csr.shape
+
     # TODO find maybe better spot for dtype conversion
     group.create_array('gene_names', data=np.array(gene_names).astype('U12'), compressor=compressor, chunks='auto')
 
 
 def write_cells(smp, root_group):
-    cell_group = root_group.create_group('cells', overwrite=True)
+    cell_group = root_group['cells']
+    metadata_group = cell_group['metadata']
+    protein_group = cell_group['protein']
+    polygon_group = cell_group['polygons']
+    genes_group = cell_group['genes']
+
     compressor = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
 
     metadata, gex, gene_names = prepare_cell_group_input(smp)
 
     # write arrays for each attribute
-    metadata_group = cell_group.create_group('metadata', overwrite=True)
-
     arr = metadata[c.CELL_ID_NAME].to_numpy().astype(np.uint32)
     metadata_group.create_array('cell_id', data=arr, compressor=compressor)
 
@@ -45,7 +48,6 @@ def write_cells(smp, root_group):
     arr = metadata['n_genes_by_counts'].to_numpy().astype(np.uint16)
     metadata_group.create_array('total_genes', data=arr, compressor=compressor)
 
-    protein_group = cell_group.create_group('protein', overwrite=True)
     protein_df = metadata.select(*[c for c in metadata.columns if '_intensity_mean' in c])
     arr = protein_df.to_numpy().astype(np.uint16)
     protein_group.create_array('protein_values', data=arr, compressor=compressor)
@@ -70,11 +72,10 @@ def write_cells(smp, root_group):
     y_long = np.concatenate(y_vert, axis=0)
     verts_xy = np.stack([x_long, y_long], axis=1)
 
-    polygon_group = cell_group.create_group('polygons', overwrite=True)
     polygon_group.create_array('polygon_offsets', data=offsets, compressor=compressor)
     polygon_group.create_array('polygon_vertices_xy', data=verts_xy, compressor=compressor)
 
-    genes_group = cell_group.create_group('genes', overwrite=True)
+    genes_group.attrs['shape'] = gex.shape
     write_csr(genes_group, csr=gex, gene_names=gene_names, compressor=compressor, chunks='auto')
 
 

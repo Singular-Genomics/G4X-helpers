@@ -5,9 +5,10 @@ from numcodecs import Blosc
 from ome_zarr import scale as oz_scale
 from ome_zarr import writer as oz_writer
 
-from .. import constants as c
 
-# TODO need to test if this is being used by any reader
+DEFAULT_VISIBLE_CHANNELS = ['PanCK', 'aSMA', 'CD31', 'CD45']
+
+# TODO apply these properly to channels
 sat_cols = [
     'FF0000',
     'FF8000',
@@ -45,11 +46,11 @@ def _load_image_dask(smp, img_type, channel_name=None, dtype=np.uint16):
 
 
 def write_images(smp, root_group):
-    img_group = root_group.create_group('images', overwrite=True)
-    img_group.attrs['axes'] = {'unit': 'micrometer', 'pixel_per_um': c.PIXEL_PER_MICRON}
+    # img_group = root_group.create_group('images', overwrite=True)
+    # img_group.attrs['axes'] = {'unit': 'micrometer', 'pixel_per_um': c.PIXEL_PER_MICRON}
 
-    write_muliplex_img(smp, img_group)
-    write_he_img(smp, img_group)
+    write_muliplex_img(smp, root_group)
+    write_he_img(smp, root_group)
 
 
 def write_muliplex_img(smp, root_group):
@@ -82,8 +83,6 @@ def write_muliplex_img(smp, root_group):
     data = da.stack(channel_arrays, axis=0)
     axes = ['c', 'z', 'y', 'x'] if data.ndim == 4 else ['c', 'y', 'x']
 
-    img_group = root_group.create_group('multiplex', overwrite=True)
-
     scaler = _get_default_scaler()
     compressor = _get_default_compressor()
 
@@ -95,15 +94,16 @@ def write_muliplex_img(smp, root_group):
     omero = {
         'channels': [
             {
-                'label': name,  #
-                # 'window': {'start': 0, 'end': dtype_max, 'min': 0, 'max': dtype_max},
+                'label': name,
                 'color': sat_cols[channel_names.index(name) % len(sat_cols)],
-                'active': True,
+                'active': True if name in DEFAULT_VISIBLE_CHANNELS else False,
+                # 'window': {'start': 0, 'end': dtype_max, 'min': 0, 'max': dtype_max},
             }
             for name in channel_names
         ]
     }
 
+    img_group = root_group['images']['multiplex']
     oz_writer.write_image(
         data,
         img_group,
@@ -117,8 +117,6 @@ def write_muliplex_img(smp, root_group):
 def write_he_img(smp, root_group):
     channel_names = ['R', 'G', 'B']
     channel_cols = dict(zip(channel_names, ['FF0000', '00FF00', '0000FF']))
-
-    img_group = root_group.create_group('h_and_e', overwrite=True)
 
     scaler = _get_default_scaler()
     compressor = _get_default_compressor()
@@ -177,6 +175,7 @@ def write_he_img(smp, root_group):
     chunks = (1, 1, 256, 256)[-data.ndim :]
     storage_options = {'chunks': chunks, 'compressor': compressor}
 
+    img_group = root_group['images']['h_and_e']
     oz_writer.write_image(
         data,
         img_group,
