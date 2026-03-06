@@ -1,10 +1,11 @@
+import warnings
+
 import dask
 import dask.array as da
 import numpy as np
 from numcodecs import Blosc
 from ome_zarr import scale as oz_scale
 from ome_zarr import writer as oz_writer
-
 
 DEFAULT_VISIBLE_CHANNELS = ['PanCK', 'aSMA', 'CD31', 'CD45']
 
@@ -24,42 +25,53 @@ sat_cols = [
     'FF0080',
 ]
 
+sat_cols2 = [
+    '00FFFF',
+    'FF8000',
+    '0000FF',
+    '80FF00',
+    'FF00FF',
+    '00FF80',
+    'FF0000',
+    '007FFF',
+    'FFFF00',
+    '7F00FF',
+    '00FF00',
+    'FF0080',
+]
 
-def _get_default_compressor():
-    return Blosc(cname='zstd', clevel=5, shuffle=Blosc.SHUFFLE)
+OMERO_DEFAULT = {
+    'label': 'channel',
+    'color': 'FFFFFF',
+    'active': True,
+    'window': {'start': 0, 'end': 1, 'min': 0, 'max': 1},
+}
 
 
-def _get_default_scaler(levels=4):
-    return oz_scale.Scaler(downscale=2, max_layer=levels)
+class ImageChannel:
+    def __init__(self, img, label: str = 'channel', dtype: np.dtype = None, omero_attrs: dict = {}):
+        self.img = da.array(img, dtype=dtype)
+        self.label = label
+        self.attrs = omero_attrs
+        self.attrs['label'] = self.label
 
+        if 'window' not in self.attrs:
+            dtype_max = np.iinfo(self.img.dtype).max
+            self.attrs['window'] = {'start': 0, 'end': dtype_max, 'min': 0, 'max': dtype_max}
 
-def _load_image_dask(smp, img_type, channel_name=None, dtype=np.uint16):
-    shape = smp.shape + (3,) if img_type == 'h_and_e' else smp.shape
-
-    data = da.from_delayed(
-        dask.delayed(smp.load_image_by_type)(image_type=img_type, protein=channel_name, thumbnail=False, cached=False),
-        shape=shape,
-        dtype=dtype,
-    )
-
-    return data
+        self.omero = OMERO_DEFAULT.copy()
+        self.omero.update(self.attrs)
 
 
 def write_images(smp, root_group):
-    # img_group = root_group.create_group('images', overwrite=True)
-    # img_group.attrs['axes'] = {'unit': 'micrometer', 'pixel_per_um': c.PIXEL_PER_MICRON}
-
     write_muliplex_img(smp, root_group)
     write_he_img(smp, root_group)
 
 
 def write_muliplex_img(smp, root_group):
+    # TODO this should happen in the sample class
     # Sort proteins to have aSMA first and Isotype last
-    channel_names = sorted(smp.proteins)
-
-    if 'aSMA' in channel_names:
-        channel_names.remove('aSMA')
-        channel_names = ['aSMA'] + channel_names
+    channel_names = sorted(smp.proteins, key=str.lower)
 
     if 'Isotype' in channel_names:
         channel_names.remove('Isotype')
@@ -80,6 +92,20 @@ def write_muliplex_img(smp, root_group):
         if arr.ndim == 2:
             arr = arr[None, ...]  # add Z
 
+    # build the channels and their metadata
+    channels = []
+    for arr, name in zip(channel_arrays, channel_names):
+        color = sat_cols2[channel_names.index(name) % len(sat_cols2)]
+        active = True if name in DEFAULT_VISIBLE_CHANNELS else False
+        ic = ImageChannel(arr, label=name, dtype=np.uint16, omero_attrs={'color': color, 'active': active})
+        channels.append(ic)
+
+    img_group = root_group['images']['multiplex']
+    write_channel_stack(img_group, channels)
+
+
+def write_channel_stack(img_group, channels):
+    channel_arrays = [ch.img for ch in channels]
     data = da.stack(channel_arrays, axis=0)
     axes = ['c', 'z', 'y', 'x'] if data.ndim == 4 else ['c', 'y', 'x']
 
@@ -89,22 +115,9 @@ def write_muliplex_img(smp, root_group):
     chunks = (1, 1, 256, 256)[-data.ndim :]
     storage_options = {'chunks': chunks, 'compressor': compressor}
 
-    # dtype_max = np.iinfo(dtype).max
-    channel_names += ['nuclear', 'eosin']
-    omero = {
-        'channels': [
-            {
-                'label': name,
-                'color': sat_cols[channel_names.index(name) % len(sat_cols)],
-                'active': True if name in DEFAULT_VISIBLE_CHANNELS else False,
-                # 'window': {'start': 0, 'end': dtype_max, 'min': 0, 'max': dtype_max},
-            }
-            for name in channel_names
-        ]
-    }
+    omero = {'channels': [ch.omero for ch in channels]}
 
-    img_group = root_group['images']['multiplex']
-    oz_writer.write_image(
+    _write_image_withouth_storage_warning(
         data,
         img_group,
         scaler=scaler,
@@ -115,16 +128,60 @@ def write_muliplex_img(smp, root_group):
 
 
 def write_he_img(smp, root_group):
-    channel_names = ['R', 'G', 'B']
-    channel_cols = dict(zip(channel_names, ['FF0000', '00FF00', '0000FF']))
-
-    scaler = _get_default_scaler()
-    compressor = _get_default_compressor()
-
     dtype = np.uint8
-    data = _load_image_dask(smp, img_type='h_and_e', channel_name=None, dtype=dtype)
+    image = _load_image_dask(smp, img_type='h_and_e', channel_name=None, dtype=dtype)
+    image = _add_rgb_astronaut_to_img(image)
 
-    # TODO remove the astronaut at some point =)
+    if image.ndim == 3 and image.shape[-1] == 3:
+        image = da.moveaxis(image, -1, 0)
+    elif image.ndim == 3 and image.shape[0] == 3:
+        pass
+    else:
+        raise ValueError(f'Unexpected H&E image shape: {image.shape}')
+
+    c1 = ImageChannel(image[0], label='R', omero_attrs={'color': 'FF0000', 'active': True})
+    c2 = ImageChannel(image[1], label='G', omero_attrs={'color': '00FF00', 'active': True})
+    c3 = ImageChannel(image[2], label='B', omero_attrs={'color': '0000FF', 'active': True})
+
+    img_group = root_group['images']['h_and_e']
+    write_channel_stack(img_group, [c1, c2, c3])
+
+
+# region helpers
+def _get_default_compressor():
+    return Blosc(cname='zstd', clevel=5, shuffle=Blosc.SHUFFLE)
+
+
+def _get_default_scaler(levels=4):
+    return oz_scale.Scaler(downscale=2, max_layer=levels)
+
+
+def _write_image_withouth_storage_warning(*args, **kwargs):
+    # ome-zarr currently passes storage params to da.to_zarr via **kwargs;
+    # suppress only that known deprecation warning until upstream updates.
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            'ignore',
+            category=FutureWarning,
+            message=r'Passing storage-related arguments via \*\*kwargs is deprecated\..*',
+        )
+        return oz_writer.write_image(*args, **kwargs)
+
+
+def _load_image_dask(smp, img_type, channel_name=None, dtype=np.uint16):
+    shape = smp.shape + (3,) if img_type == 'h_and_e' else smp.shape
+
+    data = da.from_delayed(
+        dask.delayed(smp.load_image_by_type)(image_type=img_type, protein=channel_name, thumbnail=False, cached=False),
+        shape=shape,
+        dtype=dtype,
+    )
+
+    return data
+
+
+# region testing
+def _add_rgb_astronaut_to_img(data):
     ### ### ### ### ### ### ### ### ### ###
     ### Add rgb image to bottom left corner
     from skimage import data as skdata
@@ -144,43 +201,7 @@ def write_he_img(smp, root_group):
     # Overwrite that region
     out = data.copy()
     out[row0:row1, col0:col1, :] = da.from_array(np_img2, chunks=(h, w, 3))
-    data = out
+
     ### Add rgb image to bottom left corner
     ### ### ### ### ### ### ### ### ### ###
-
-    # Ensure channels are the first axis without reinterpreting memory.
-    if data.ndim == 3 and data.shape[-1] == 3:
-        data = da.moveaxis(data, -1, 0)
-    elif data.ndim == 3 and data.shape[0] == 3:
-        pass
-    else:
-        raise ValueError(f'Unexpected H&E image shape: {data.shape}')
-
-    data = data[:, None, :, :]
-    axes = ['c', 'z', 'y', 'x'] if data.ndim == 4 else ['c', 'y', 'x']
-
-    dtype_max = np.iinfo(dtype).max
-    omero = {
-        'channels': [
-            {
-                'label': name,
-                'window': {'start': 0, 'end': dtype_max, 'min': 0, 'max': dtype_max},
-                'color': channel_cols[name],
-                'active': True,
-            }
-            for name in channel_names
-        ]
-    }
-
-    chunks = (1, 1, 256, 256)[-data.ndim :]
-    storage_options = {'chunks': chunks, 'compressor': compressor}
-
-    img_group = root_group['images']['h_and_e']
-    oz_writer.write_image(
-        data,
-        img_group,
-        scaler=scaler,
-        axes=axes,
-        storage_options=storage_options,
-        metadata={'omero': omero},
-    )
+    return out
