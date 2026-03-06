@@ -45,9 +45,9 @@ def build_sample_metadata(sample_dir):
         sample_id = _infer_smp_id(sample_dir)
         run_meta['sample_id'] = sample_id
 
-    sample_info, run_info = _parse_samplesheet(sample_sheet)
+    run_info, data_section = _parse_samplesheet(sample_sheet)
 
-    ssheet_info = sample_info.filter(
+    ssheet_info = data_section.filter(
         pl.col('lane') == int(sample_id[-1]), pl.col('sample_position') == sample_id[0]
     ).to_dicts()[0]
 
@@ -59,19 +59,19 @@ def build_sample_metadata(sample_dir):
     run_meta.update(ssheet_info)
 
     order = [
+        'sample_id',
+        'tissue_type',
+        'block',
         'run_name',
         'machine',
         'run_id',
         'platform',
-        'assay',
-        'user_name',
-        'time_of_creation',
         'fc',
         'lane',
         'sample_position',
-        'sample_id',
-        'tissue_type',
-        'block',
+        'user_name',
+        'time_of_creation',
+        'assay',
         'transcript_panel',
         'transcript_addon',
         'protein_panel',
