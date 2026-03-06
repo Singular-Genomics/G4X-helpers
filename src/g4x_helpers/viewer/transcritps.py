@@ -3,6 +3,7 @@ import polars as pl
 from numcodecs import Blosc
 
 from .. import constants as c
+from .setup import populate_zarr_metadata
 
 
 def write_transcripts(smp, root_group):
@@ -38,9 +39,7 @@ def write_transcripts(smp, root_group):
     gene_colors = {g: c.tolist() for g, c in zip(gene_list, colors)}
 
     # populate attrs
-    tx_group = root_group['transcripts']
-
-    tx_group.attrs['layer_config'] = {
+    layer_config = {
         'layers': len(pyramid) - 1,
         'tile_size': pyramid[len(pyramid) - 1]['tile_size'],
         'layer_height': smp.shape[0],
@@ -48,9 +47,10 @@ def write_transcripts(smp, root_group):
         'coordinate_order': ['x_pixel_coordinate', 'y_pixel_coordinate'],
     }
 
-    tx_group.attrs['gene_colors'] = gene_colors
+    populate_zarr_metadata(root_group, gene_colors=gene_colors, tx_layer_config=layer_config)
 
     # write
+    tx_group = root_group['transcripts']
     write_tx_zarr(tx_group, pyramid)
 
 

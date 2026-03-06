@@ -5,6 +5,7 @@ from numcodecs import Blosc
 from .. import constants as c
 from .. import io
 from ..modules import single_cell as g4xsc
+from .setup import populate_zarr_metadata
 
 
 def write_csr(group, csr, gene_names, compressor=None, chunks=None):
@@ -33,11 +34,6 @@ def write_cells(smp, root_group):
 
     arr = metadata['area_um'].to_numpy().astype(np.uint16)
     metadata_group.create_array('area', data=arr, compressor=compressor)
-
-    # TODO another hard coding that needs removal later
-    uids = sort_clusters(metadata)
-    metadata_group.attrs['clusterID_colors'] = generate_cluster_palette(uids)
-    # metadata_group.attrs['clusterID_colors'] = generate_cluster_palette_v1(metadata['cluster_id'])
 
     arr = metadata['cluster_id'].to_numpy().astype('U10')
     metadata_group.create_array('cluster_id', data=arr, compressor=compressor)
@@ -75,7 +71,8 @@ def write_cells(smp, root_group):
     polygon_group.create_array('polygon_offsets', data=offsets, compressor=compressor)
     polygon_group.create_array('polygon_vertices_xy', data=verts_xy, compressor=compressor)
 
-    genes_group.attrs['shape'] = gex.shape
+    uids = sort_clusters(metadata)
+    populate_zarr_metadata(root_group, gene_mtx_shape=gex.shape, cluster_ids=generate_cluster_palette(uids))
     write_csr(genes_group, csr=gex, gene_names=gene_names, compressor=compressor, chunks='auto')
 
 
