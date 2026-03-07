@@ -35,7 +35,6 @@ dependencies = [
     "shapely ~= 2.1",
     "pyarrow ~= 23.0",
     "rich-click ~= 1.9",
-    "pathschema ~= 0.2.1",
     "ome-zarr ~= 0.12",
     "igraph>=1.0.0",
 ]
