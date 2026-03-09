@@ -30,7 +30,7 @@ def optionally_cached(func):
     return wrapper
 
 
-def build_sample_metadata(sample_dir):
+def build_sample_metadata(sample_dir, save_file: bool = False):
     sample_dir = Path(sample_dir)
 
     meta_json = sample_dir / 'run_meta.json'
@@ -80,7 +80,12 @@ def build_sample_metadata(sample_dir):
         'software_version',
     ]
 
-    return {k: str(run_meta[k]) for k in order if k in run_meta}
+    out = {k: str(run_meta[k]) for k in order if k in run_meta}
+    if save_file:
+        with open(sample_dir / 'sample.g4x', 'w') as f:
+            json.dump(out, f, indent=4)
+
+    return out
 
 
 def _infer_smp_id(sample_dir):
