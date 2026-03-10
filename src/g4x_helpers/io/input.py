@@ -59,19 +59,19 @@ def build_sample_metadata(sample_dir, save_file: bool = False):
     run_meta.update(ssheet_info)
 
     order = [
+        'run_name',
+        'sample_position',
         'sample_id',
         'tissue_type',
         'block',
-        'run_name',
+        'assay',
         'machine',
         'run_id',
-        'platform',
         'fc',
         'lane',
-        'sample_position',
+        'platform',
         'user_name',
         'time_of_creation',
-        'assay',
         'transcript_panel',
         'transcript_addon',
         'protein_panel',
