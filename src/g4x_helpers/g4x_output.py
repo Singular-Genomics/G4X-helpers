@@ -13,7 +13,6 @@ from anndata import AnnData, read_h5ad
 from matplotlib.pyplot import imread
 
 from . import io
-from .schemas import validate
 
 DATA_PATHS = {
     'transcript_panel': 'transcript_panel.csv',
@@ -185,12 +184,6 @@ class G4Xoutput:
     @property
     def is_viewer(self):
         return self.viewer_zarr_path.exists()
-
-    def validate(self, details: bool = False) -> None:
-        report_style = 'short' if details else False
-        _ = validate.validate_g4x_data(
-            self.data_dir, schema_name='base_schema', formats={'sample_id': self.sample_id}, report=report_style
-        )
 
     # region methods
     def load_adata(self, *, remove_nontargeting: bool = True, load_clustering: bool = True) -> AnnData:
