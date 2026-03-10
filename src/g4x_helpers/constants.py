@@ -4,14 +4,20 @@ from .utils import default_workers
 DEFAULT_THREADS = default_workers(max_workers=16, reserve=1)
 
 # Files
-FILE_SMP_META = 'sample_meta.json'
-FILE_TX_PANEL = 'transcript_panel.csv'
-FILE_PR_PANEL = 'protein_panel.csv'
-FILE_RAW_FEATURES = 'raw_features.parquet'
+REQUIRED_SMP_META = 'sample.g4x'
+REQUIRED_TX_PANEL = 'transcript_panel.csv'
+REQUIRED_PR_PANEL = 'protein_panel.csv'
+REQUIRED_RAW_FEATURES = 'rna/raw_features.parquet'
+REQUIRED_SEG_MASK = 'masks/segmentation_mask.npz'
+REQUIRED_SUMMARY = 'summary_*.html'
+REQUIRED_SSHEET = 'samplesheet.csv'
+
+REQUIRED_NUC_IMG = 'h_and_e/nuclear.ome.tiff'
+REQUIRED_CYT_IMG = 'h_and_e/cytoplasmic.ome.tiff'
+REQUIRED_HnE_IMG = 'h_and_e/h_and_e.ome.tiff'
+
 FILE_TX_TABLE = 'transcript_table.csv.gz'
-FILE_SEG_MASK = 'segmentation_mask.npz'
 FILE_VIEWER_ZARR = 'g4x-viewer.zarr'
-FILE_SUMMARY = 'summary.html'
 FILE_CELL_METADATA = 'cell_metadata.csv.gz'
 FILE_CELL_X_GENE = 'cell_by_gene.csv.gz'
 FILE_CELL_X_PROTEIN = 'cell_by_protein.csv.gz'
