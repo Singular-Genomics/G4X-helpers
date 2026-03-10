@@ -37,6 +37,7 @@ dependencies = [
     "rich-click ~= 1.9",
     "ome-zarr ~= 0.12",
     "igraph>=1.0.0",
+    "imagecodecs>=2026.3.6",
 ]
 
 
