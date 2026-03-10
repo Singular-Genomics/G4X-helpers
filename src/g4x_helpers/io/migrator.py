@@ -7,19 +7,34 @@ class MigrationError(Exception):
     pass
 
 
+def migration_method(func):
+    func._is_migration_method = True
+    return func
+
+
 class DataMigrator:
+    MIGRATION_METHODS = ()
     ABSENT_SENTINEL = '__ABSENT__'
 
-    def __init__(self, smp_dir, probes: dict, name: str | None = None):
-        self.name = name or '_unnamed-migrator_'
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+
+        tests = []
+        for base in reversed(cls.__mro__[1:]):
+            tests.extend(getattr(base, 'MIGRATION_METHODS', ()))
+
+        for name, value in cls.__dict__.items():
+            if getattr(value, '_is_migration_method', False):
+                tests.append(name)
+
+        cls.MIGRATION_METHODS = tuple(dict.fromkeys(tests))
+
+    def __init__(self, smp_dir: str, target_path: str, probes: dict):
         self.smp_dir = Path(smp_dir)
-
+        self.target_path = Path(target_path)
+        self.name = type(self).__name__ + 'Migrator'
         self.probes = self._validate_probes(probes)
-        self.backup_dir = self.smp_dir / 'g4x-helpers' / 'migration_backup'
-
-    @property
-    def target_path(self):
-        return self.probes['current']
+        self.backup_dir = self.smp_dir / 'g4x_helpers' / 'migration_backup'
 
     @property
     def target_path_full(self):
@@ -34,6 +49,8 @@ class DataMigrator:
 
     @property
     def detected_path_full(self):
+        if self.detected_path is None:
+            return None
         return self.smp_dir / self.detected_path
 
     @property
@@ -56,6 +73,10 @@ class DataMigrator:
         return self.backup_path_full.exists()
 
     @property
+    def has_legacy_data(self):
+        return self.get_version() is not None
+
+    @property
     def has_absent_target(self):
         return self.target_path == self.ABSENT_SENTINEL
 
@@ -70,11 +91,7 @@ class DataMigrator:
     def get_version(self, backup: bool = False):
         matched = self.matched_backup_versions if backup else self.matched_versions
 
-        if 'current' in matched:
-            # TODO: if both current and legacy versions coexist, optionally run cleanup logic for stale legacy paths.
-            return 'current'
-
-        legacy_versions = [v for v in matched if v != 'current']
+        legacy_versions = [v for v in matched]
         if len(legacy_versions) == 1:
             return legacy_versions[0]
 
@@ -83,12 +100,6 @@ class DataMigrator:
             return max(legacy_versions, key=lambda v: int(v.rsplit('_', 1)[-1]))
 
         return None
-
-    @property
-    def is_valid(self):
-        if self.has_absent_target:
-            return self.get_version() is None
-        return self.get_version() == 'current'
 
     def relocate(self, src, dst, how):
         src = Path(src)
@@ -147,10 +158,6 @@ class DataMigrator:
         if version is None:
             raise MigrationError(f'{self.name}: No matching file found.')
 
-        if version == 'current':
-            print(f'{self.name}: path is valid, skipping migration.')
-            return True
-
         # check for migration method first to the backup does not run if this fails
         migrate_method = self._get_migrate_method(version)
 
@@ -160,19 +167,16 @@ class DataMigrator:
         migrate_method()
 
         print(f'{self.name}: Finished migration for: {self.detected_path}')
-        print(f'{self.name}: Path is now valid: {self.is_valid}')
+        # print(f'{self.name}: Path is now valid: {self.is_valid}')
         return True
 
     def _validate_probes(self, probes):
-        if 'current' not in probes:
-            raise ValueError(f'{self.name}: The "current" key must be present in the probes dictionary.')
-
         pattern = r'^legacy_version_\d+$'
 
         def is_valid(s):
             return bool(re.match(pattern, s))
 
-        invalid_keys = [k for k in probes.keys() if k != 'current' and not is_valid(k)]
+        invalid_keys = [k for k in probes.keys() if not is_valid(k)]
 
         if invalid_keys:
             raise ValueError(

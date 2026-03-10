@@ -4,16 +4,21 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
+from .. import constants as c
+
+
+class ValidationError(Exception):
+    pass
+
 
 class DataValidator:
-    target_path = '.'
+    DEFAULT_TARGET_PATH = '.'
     VALIDATION_TESTS = ()
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
 
         tests = []
-
         for base in reversed(cls.__mro__[1:]):
             tests.extend(getattr(base, 'VALIDATION_TESTS', ()))
 
@@ -23,10 +28,20 @@ class DataValidator:
 
         cls.VALIDATION_TESTS = tuple(dict.fromkeys(tests))
 
-    def __init__(self, smp_dir, target_path: str | None = None):
+    def __init__(self, smp_dir, target_path: str | None = None, validate_absence: bool = False):
         self.smp_dir = Path(smp_dir)
-        self.target_path = Path(target_path) if target_path is not None else Path(self.target_path)
+        self._target_path = Path(target_path) if target_path is not None else Path(type(self).DEFAULT_TARGET_PATH)
         self.name = type(self).__name__ + 'Validator'
+        self.validate_absence = validate_absence
+        self.backup_dir = self.smp_dir / 'g4x_helpers' / 'migration_backup'
+
+    @property
+    def target_path(self):
+        return self._target_path
+
+    @target_path.setter
+    def target_path(self, value):
+        self._target_path = Path(value)
 
     @property
     def target_path_resolved(self):
@@ -65,7 +80,21 @@ class DataValidator:
             for test_name in self.VALIDATION_TESTS:
                 validation_results[test_name] = getattr(self, test_name)()
 
+        if self.validate_absence:
+            validation_results['required_absent'] = not self.path_exists
+
         return validation_results
+
+    def report_validation(self):
+        val_name = self.name.removesuffix('Validator')
+        is_file = self.target_path_resolved.is_file()
+        proxy = 'file' if is_file else 'directory'
+        if not self.is_valid:
+            raise ValidationError(
+                f'G4X-helpers requires a {val_name} {proxy}: {self.target_path.name}.\nReason: {self.validation()}'
+            )
+        else:
+            print(f'Found valid {val_name} {proxy}: {self.target_path.name}')
 
 
 def validation_test(func):
@@ -73,10 +102,22 @@ def validation_test(func):
     return func
 
 
-class SampleMeta(DataValidator):
-    target_path = 'run_meta.json'
+class SampleMetadata(DataValidator):
+    DEFAULT_TARGET_PATH = c.REQUIRED_SMP_META
 
-    SCHEMA = ['run_id']
+    SCHEMA = [
+        'sample_id',
+        'run_name',
+        'machine',
+        'run_id',
+        'platform',
+        'fc',
+        'lane',
+        'sample_position',
+        'time_of_creation',
+        'software',
+        'software_version',
+    ]
 
     @validation_test
     def correct_schema(self):
@@ -87,7 +128,7 @@ class SampleMeta(DataValidator):
 
 
 class Segmentation(DataValidator):
-    target_path = 'segmentation/segmentation_mask.npz'
+    DEFAULT_TARGET_PATH = c.REQUIRED_SEG_MASK
 
     @validation_test
     def correct_keys(self):
@@ -96,15 +137,15 @@ class Segmentation(DataValidator):
 
 
 class QCSummary(DataValidator):
-    target_path = 'summary_*.html'
+    DEFAULT_TARGET_PATH = c.REQUIRED_SUMMARY
 
 
 class SampleSheet(DataValidator):
-    target_path = 'samplesheet.csv'
+    DEFAULT_TARGET_PATH = c.REQUIRED_SSHEET
 
 
 class RawFeatures(DataValidator):
-    target_path = 'rna/raw_features.parquet'
+    DEFAULT_TARGET_PATH = 'rna/raw_features.parquet'
 
     SCHEMA = [
         'TXUID',
@@ -123,7 +164,7 @@ class RawFeatures(DataValidator):
 
 
 class TranscriptPanel(DataValidator):
-    target_path = 'transcript_panel.csv'
+    DEFAULT_TARGET_PATH = 'transcript_panel.csv'
 
     SCHEMA = ['probe_name', 'gene_name', 'panel_type']
 
@@ -136,7 +177,7 @@ class TranscriptPanel(DataValidator):
 
 
 class ProteinPanel(DataValidator):
-    target_path = 'protein_panel.csv'
+    DEFAULT_TARGET_PATH = 'protein_panel.csv'
 
     SCHEMA = ['target', 'panel_type']
 
@@ -154,7 +195,7 @@ class ProteinPanel(DataValidator):
 
 
 class ProteinFolder(DataValidator):
-    target_path = 'protein'
+    DEFAULT_TARGET_PATH = 'protein'
 
     IMG_SUFFIX = '.jp2'
 
@@ -174,4 +215,22 @@ class ProteinFolder(DataValidator):
         for pr in required_proteins:
             img = (self.target_path_resolved / pr).with_suffix(self.IMG_SUFFIX)
             existing_files[pr] = img.exists()
+        return all(existing_files.values())
+
+
+class HnEFolder(DataValidator):
+    DEFAULT_TARGET_PATH = 'h_and_e'
+
+    REQUIRED_IMAGES = [
+        c.REQUIRED_NUC_IMG,
+        c.REQUIRED_CYT_IMG,
+        c.REQUIRED_HnE_IMG,
+    ]
+
+    @validation_test
+    def images_present(self):
+        existing_files = {}
+        for img_path in self.REQUIRED_IMAGES:
+            img = self.smp_dir / img_path
+            existing_files[img_path] = img.exists()
         return all(existing_files.values())

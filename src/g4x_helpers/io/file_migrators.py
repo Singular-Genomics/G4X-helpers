@@ -7,28 +7,21 @@ from .migrator import DataMigrator
 
 
 class SampleMetaMigrator(DataMigrator):
-    name = 'SampleMetaMigrator'
-    probes = {
-        'current': 'sample.g4x',
-        'legacy_version_1': 'run_meta.json',
-    }
+    probes = {'legacy_version_1': 'run_meta.json'}
 
-    def __init__(self, sample_dir):
-        super().__init__(sample_dir, self.probes, name=self.name)
+    def __init__(self, sample_dir, target_path):
+        super().__init__(sample_dir, target_path, probes=self.probes)
 
     def _migrate_legacy_version_1(self):
         _ = build_sample_metadata(self.smp_dir, save_file=True)
 
 
 class CytoplasmicImageMigrator(DataMigrator):
-    name = 'CytoplasmicImageMigrator'
-    probes = {
-        'current': 'h_and_e/cytoplasmic.jp2',
-        'legacy_version_1': 'h_and_e/eosin.jp2',
-    }
+    target_path = 'h_and_e/cytoplasmic.jp2'
+    probes = {'legacy_version_1': 'h_and_e/eosin.jp2'}
 
     def __init__(self, sample_dir):
-        super().__init__(sample_dir, self.probes, name=self.name)
+        super().__init__(sample_dir, target_path=self.target_path, probes=self.probes)
 
     def _migrate_legacy_version_1(self):
 
@@ -36,9 +29,8 @@ class CytoplasmicImageMigrator(DataMigrator):
 
 
 class RawFeaturesMigrator(DataMigrator):
-    name = 'RawFeaturesMigrator'
+    target_path = 'rna/raw_features.parquet'
     probes = {
-        'current': 'rna/raw_features.parquet',
         'legacy_version_2': 'rna/transcript_table.parquet',
         'legacy_version_1': 'diagnostics/transcript_table.parquet',
     }
@@ -53,17 +45,7 @@ class RawFeaturesMigrator(DataMigrator):
     ]
 
     def __init__(self, sample_dir):
-        super().__init__(sample_dir, self.probes, name=self.name)
-
-    @property
-    def is_valid(self):
-        # start with base behavior if useful
-        base_valid = super().is_valid
-        # add further checks
-        lf = pl.scan_parquet(self.detected_path_full)
-        lf_schema = lf.collect_schema().names()
-        correct_lf_schema = lf_schema == self.desired_schema
-        return base_valid and correct_lf_schema
+        super().__init__(sample_dir, target_path=self.target_path, probes=self.probes)
 
     def _migrate_legacy_version_2(self):
 
@@ -94,14 +76,11 @@ class RawFeaturesMigrator(DataMigrator):
 
 
 class DiagnosticsMigrator(DataMigrator):
-    name = 'DiagnosticsMigrator'
-    probes = {
-        'current': DataMigrator.ABSENT_SENTINEL,
-        'legacy_version_1': 'diagnostics',
-    }
+    target_path = DataMigrator.ABSENT_SENTINEL
+    probes = {'legacy_version_1': 'diagnostics'}
 
     def __init__(self, sample_dir):
-        super().__init__(sample_dir, self.probes, name=self.name)
+        super().__init__(sample_dir, target_path=self.target_path, probes=self.probes)
 
     def _migrate_legacy_version_1(self):
 
