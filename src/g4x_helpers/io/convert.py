@@ -87,27 +87,44 @@ def ndarray_to_gdf(mask: np.ndarray, nudge: bool = True) -> 'GeoDataFrame':
 def jp2_to_ometiff(
     in_file: str | Path,
     out_file: str | Path,
-    img_type: Literal['rgb', 'grey'] = 'grey',
+    img_type: Literal['rgb', 'grey', 'auto'] = 'auto',
     create_thumb: bool = True,
     report_size: bool = True,
 ):
+    in_file = Path(in_file)
+    out_file = Path(out_file)
+
+    if create_thumb:
+        thumb_dir = in_file.parent / 'thumbs'
+        thumb_suffix = '_thumbnail'
+        thumb_dir.mkdir(exist_ok=True)
+
     if not in_file.exists():
         raise FileNotFoundError(f"Input file '{in_file}' does not exist.")
-    if not in_file.suffix == '.jp2':
+    if in_file.suffix != '.jp2':
         raise ValueError(f"Input file '{in_file}' is not a JP2 file.")
+
+    img = glymur.Jp2k(in_file)[:]
+
+    # --- auto detect ---
+    if img_type == 'auto':
+        if img.ndim == 2:
+            img_type = 'grey'
+        elif img.ndim == 3 and img.shape[2] == 1:
+            img_type = 'grey'
+            img = img[..., 0]  # squeeze channel
+        elif img.ndim == 3 and img.shape[2] == 3:
+            img_type = 'rgb'
+        else:
+            raise ValueError(f'Cannot infer image type from shape {img.shape}')
 
     if img_type not in img_settings:
         raise ValueError(f"Invalid img_type '{img_type}'. Expected one of {list(img_settings.keys())}.")
 
     settings = img_settings[img_type]
 
-    in_file = Path(in_file)
-    out_file = Path(out_file)
-
-    img = glymur.Jp2k(in_file)[:]
-
-    if img_type == 'rgb' and img.shape[2] != 3:
-        raise ValueError('Expected image with 3 channels (RGB).')
+    if img_type == 'rgb' and (img.ndim != 3 or img.shape[2] != 3):
+        raise ValueError(f'Expected RGB image with shape (H, W, 3), got {img.shape}.')
 
     # Write OME-TIFF
     tiff.imwrite(
@@ -130,7 +147,8 @@ def jp2_to_ometiff(
         img_thumb = create_img_thumbnail(img, downsample_ratio=0.2, clip_q=q, anti_aliasing=False)
 
         fname = out_file.name.split('.')[0]
-        out_file_thumb = out_file.with_stem(f'{fname}_thumbnail').with_suffix('.png')
+        out_file_thumb = out_file.with_stem(f'{fname}{thumb_suffix}').with_suffix('.png')
+        out_file_thumb = thumb_dir / out_file_thumb.name
         iio.imwrite(out_file_thumb, img_thumb)
 
     if report_size:
