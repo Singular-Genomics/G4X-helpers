@@ -1,6 +1,5 @@
 import json
 import os
-from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -13,25 +12,9 @@ import tifffile
 from anndata import AnnData, read_h5ad
 from matplotlib.pyplot import imread
 
-from . import constants as c
 from . import io
 
-# DATA_PATHS = {
-#     'transcript_panel': c.REQUIRED_TX_PANEL,
-#     'transcript_table': c.FILE_TX_TABLE,
-#     'raw_features': c.REQUIRED_RAW_FEATURES,
-#     'segmentation': c.REQUIRED_SEG_MASK,
-#     'feature_matrix': c.FILE_FEAT_MTX,
-#     'bead_mask': c.REQUIRED_BEAD_MASK,
-#     'cell_x_gene': c.FILE_CELL_X_GENE,
-#     'cell_x_protein': c.FILE_CELL_X_PROTEIN,
-#     'cell_metadata': c.FILE_CELL_METADATA,
-#     'clustering_umap': c.FILE_CLUSTERING_UMAP,
-#     'viewer_zarr': c.FILE_VIEWER_ZARR,
-# }
 
-
-@dataclass()
 class G4Xoutput:
     """
     Container for managing and processing data from a G4X run.
@@ -39,36 +22,16 @@ class G4Xoutput:
     This class initializes and loads metadata, image dimensions, transcript and protein panels for downstream analysis of G4X output data.
     It provides methods to load images, segmentations, transcript data, and interact with single-cell and spatial analysis pipelines.
 
-    Parameters
-    ----------
-    data_dir : str
-        Path pointing to a G4X sample output directory. This should contain all run-related files including metadata,
-        segmentation masks, panels, and feature matrices.
-    sample_id : str, optional
-        The sample ID to associate with the run. If not provided, it will be inferred from the `data_dir` path.
-
-    Notes
-    -----
-    On instantiation, this class performs the following:
-      - Loads metadata from `run_meta.json`.
-      - Loads the shape of the segmentation mask.
-      - Parses transcript and protein panel files (if present).
     """
 
-    data_dir: str
-    sample_id: str | None = None
-
-    def __post_init__(self):
-        self.data_dir = Path(self.data_dir)
+    def __init__(self, data_dir: str):
+        self.data_dir = Path(data_dir)
         self.tree = io.FileTree(self.data_dir)
 
-        if not self.tree.is_valid:
-            raise ValueError(f'Validation failed for raw data in {self.data_dir}. errors: {self.tree.errors}')
+        self.tree.validation_report_minimal(report_pass=False)
 
-        with open(self.data_dir / c.REQUIRED_SMP_META, 'r') as f:
-            smp_meta = json.load(f)
-
-        self.run_meta = smp_meta
+        with open(self.tree.SampleMetadata.path, 'r') as f:
+            self.smp_meta = json.load(f)
 
         nuc_img = list((self.data_dir / 'h_and_e').glob('nuclear.*'))[0]
         if nuc_img.suffix == '.tiff':
@@ -151,7 +114,7 @@ class G4Xoutput:
         ]
 
         for k in static_attrs:
-            setattr(self, k, self.run_meta.get(k, 'unknown'))
+            setattr(self, k, self.smp_meta.get(k, 'unknown'))
 
     # def set_static_paths(self):
     #     for k, p in DATA_PATHS.items():
@@ -162,8 +125,7 @@ class G4Xoutput:
         nuc_mask = io.import_segmentation(
             seg_path=self.tree.Segmentation.path,
             expected_shape=self.shape,
-            labels_key='nuclei',  # TODO nuclei is not always the key
-            # use_cache=True,
+            labels_key='nuclei',  # TODO figure out what to do with custom segmentations
         )
         nuc_labels = np.unique(nuc_mask)
 
@@ -171,7 +133,7 @@ class G4Xoutput:
 
     @property
     def is_demuxed(self):
-        return self.transcript_table_path.exists()
+        return self.tree.TranscriptTable.path_exists
 
     @property
     def is_aggregated(self):
