@@ -12,22 +12,19 @@ class FileTree:
         self.smp_dir = sample_dir
         meta_validator = SampleMetadata(sample_dir)
 
-        validators = [
+        self.raw_validators = [
             meta_validator,
-            SampleMetadata(sample_dir),
             SampleSheet(sample_dir),
             Segmentation(sample_dir),
             BeadMask(sample_dir),
             QCSummary(sample_dir),
             HnEFolder(sample_dir),
-            TranscriptPanel(sample_dir),
-            RawFeatures(sample_dir),
-            ProteinPanel(sample_dir),
-            ProteinFolder(sample_dir),
         ]
 
         self.tx_detected = False
         self.pr_detected = False
+        self.tx_validators = []
+        self.pr_validators = []
 
         # TODO ensure these hooks are a good choice
         if meta_validator.is_valid:
@@ -38,27 +35,80 @@ class FileTree:
             if 'transcript_panel' in smp_meta:
                 tx_val = TranscriptPanel(sample_dir)
                 rw_val = RawFeatures(sample_dir)
-                validators.extend([tx_val, rw_val])
+                self.tx_validators = [tx_val, rw_val]
                 self.tx_detected = True
 
             if 'protein_panel' in smp_meta:
                 px_val = ProteinPanel(sample_dir)
                 pf_val = ProteinFolder(sample_dir)
-                validators.extend([px_val, pf_val])
+                self.pr_validators = [px_val, pf_val]
                 self.pr_detected = True
 
-        self.validators = validators
+        self.raw_validators.extend(self.tx_validators)
+        self.raw_validators.extend(self.pr_validators)
+
+        self.secondary_validators = [
+            TranscriptTable(sample_dir),
+            ViewerZarr(sample_dir),
+            SingleCellFolder(sample_dir),
+        ]
+
+        self.validators = self.raw_validators + self.secondary_validators
 
         for v in self.validators:
             setattr(self, v.name, v)
 
     @property
-    def is_valid(self):
+    def is_valid_raw(self):
+        return all([v.is_valid for v in self.raw_validators])
+
+    @property
+    def is_valid_all(self):
         return all([v.is_valid for v in self.validators])
 
     @property
     def errors(self):
         return {v.name: v.validation() for v in self.validators if not v.is_valid}
+
+    @property
+    def reports(self):
+        return {v.name: v.validation() for v in self.validators}
+
+    def validation_report_minimal(self, validate_all: bool = False, report_pass: bool = True):
+        gate = self.is_valid_raw if not validate_all else self.is_valid_all
+        if not gate:
+            msg = 'G4X-data validation failed for:\n'
+            msg += f'{self.smp_dir}\n'
+            msg += f'errors: {self.errors}'
+            raise ValidationError(msg)
+        else:
+            if report_pass:
+                print('G4X-data validation passed for:\n', self.smp_dir)
+
+    def validation_report_full(self):
+
+        if self.SampleMetadata.path_exists:
+            print('Detected G4X-metadata file: ', self.SampleMetadata.target_path_resolved)
+            print('\n> Validating directory ...')
+        else:
+            self.SampleMetadata.report_validation()
+
+        for v in self.raw_validators:
+            v.report_validation()
+
+        if self.tx_detected:
+            print('\n> Detected transcript data, validating ...')
+            for v in self.tx_validators:
+                v.report_validation()
+
+        if self.pr_detected:
+            print('\n> Detected protein data, validating ...')
+            for v in self.pr_validators:
+                v.report_validation()
+
+        print('\n> Validating secondary data ...')
+        for v in self.secondary_validators:
+            v.report_validation()
 
 
 class ValidationError(Exception):
@@ -67,6 +117,7 @@ class ValidationError(Exception):
 
 class DataValidator:
     DEFAULT_TARGET_PATH = '.'
+    TYPE = 'file'
     VALIDATION_TESTS = ()
 
     def __init_subclass__(cls, **kwargs):
@@ -132,7 +183,10 @@ class DataValidator:
         return all(self.validation().values())
 
     def validation(self):
-        validation_results = {'path_exists': self.path_exists}
+        validation_results = {
+            # 'resolved_path': self.target_path,  #
+            'path_exists': self.path_exists,
+        }
 
         if self.VALIDATION_TESTS and self.path_exists:
             for test_name in self.VALIDATION_TESTS:
@@ -145,15 +199,11 @@ class DataValidator:
 
     def report_validation(self):
         val_name = self.name.removesuffix('Validator')
-        is_file = self.target_path_resolved.is_file()
-        proxy = 'file' if is_file else 'directory'
         resolved_target_name = self.target_path_resolved.relative_to(self.smp_dir)
         if not self.is_valid:
-            raise ValidationError(
-                f'G4X-helpers requires a valid {val_name} {proxy}: {resolved_target_name}\nReason: {self.validation()}'
-            )
+            print(f'[!invalid] {val_name} {self.TYPE}: {resolved_target_name} Reason: {self.validation()}')
         else:
-            print(f'Found valid {val_name} {proxy}: {resolved_target_name}')
+            print(f'[valid] {val_name} {self.TYPE}: {resolved_target_name}')
 
 
 def validation_test(func):
@@ -163,6 +213,7 @@ def validation_test(func):
 
 class SampleMetadata(DataValidator):
     DEFAULT_TARGET_PATH = c.REQUIRED_SMP_META
+    TYPE = 'file'
 
     SCHEMA = [
         'sample_id',
@@ -188,6 +239,7 @@ class SampleMetadata(DataValidator):
 
 class Segmentation(DataValidator):
     DEFAULT_TARGET_PATH = c.REQUIRED_SEG_MASK
+    TYPE = 'file'
 
     @validation_test
     def correct_keys(self):
@@ -197,6 +249,7 @@ class Segmentation(DataValidator):
 
 class BeadMask(DataValidator):
     DEFAULT_TARGET_PATH = c.REQUIRED_BEAD_MASK
+    TYPE = 'file'
 
     @validation_test
     def correct_keys(self):
@@ -206,14 +259,17 @@ class BeadMask(DataValidator):
 
 class QCSummary(DataValidator):
     DEFAULT_TARGET_PATH = c.REQUIRED_SUMMARY
+    TYPE = 'file'
 
 
 class SampleSheet(DataValidator):
     DEFAULT_TARGET_PATH = c.REQUIRED_SSHEET
+    TYPE = 'file'
 
 
 class RawFeatures(DataValidator):
-    DEFAULT_TARGET_PATH = 'rna/raw_features.parquet'
+    DEFAULT_TARGET_PATH = c.REQUIRED_RAW_FEATURES
+    TYPE = 'file'
 
     SCHEMA = [
         'TXUID',
@@ -231,8 +287,19 @@ class RawFeatures(DataValidator):
         return lf_schema == self.SCHEMA
 
 
+class TranscriptTable(DataValidator):
+    DEFAULT_TARGET_PATH = c.FILE_TX_TABLE
+    TYPE = 'file'
+
+
+class ViewerZarr(DataValidator):
+    DEFAULT_TARGET_PATH = c.FILE_VIEWER_ZARR
+    TYPE = 'file'
+
+
 class TranscriptPanel(DataValidator):
     DEFAULT_TARGET_PATH = c.REQUIRED_TX_PANEL
+    TYPE = 'file'
 
     SCHEMA = ['probe_name', 'gene_name', 'panel_type']
 
@@ -246,6 +313,7 @@ class TranscriptPanel(DataValidator):
 
 class ProteinPanel(DataValidator):
     DEFAULT_TARGET_PATH = c.REQUIRED_PR_PANEL
+    TYPE = 'file'
 
     SCHEMA = ['target', 'panel_type']
 
@@ -264,6 +332,7 @@ class ProteinPanel(DataValidator):
 
 class ProteinFolder(DataValidator):
     DEFAULT_TARGET_PATH = c.REQUIRED_PR_DIR
+    TYPE = 'directory'
 
     IMG_SUFFIX = c.REQUIRED_PR_SUFFIX
 
@@ -288,6 +357,7 @@ class ProteinFolder(DataValidator):
 
 class HnEFolder(DataValidator):
     DEFAULT_TARGET_PATH = c.REQUIRED_HE_DIR
+    TYPE = 'directory'
 
     REQUIRED_IMAGES = [
         c.REQUIRED_NUC_IMG,
@@ -304,46 +374,40 @@ class HnEFolder(DataValidator):
         return all(existing_files.values())
 
 
-# def validate_raw_data(sample_dir: str):
-#     # gather validators
-#     meta_validator = SampleMetadata(sample_dir)
+class CellMetadata(DataValidator):
+    DEFAULT_TARGET_PATH = c.FILE_CELL_METADATA
+    TYPE = 'file'
 
-#     validators = [
-#         meta_validator,
-#         SampleSheet(sample_dir),
-#         Segmentation(sample_dir),
-#         BeadMask(sample_dir),
-#         QCSummary(sample_dir),
-#         HnEFolder(sample_dir),
-#         TranscriptPanel(sample_dir),
-#         RawFeatures(sample_dir),
-#         ProteinPanel(sample_dir),
-#         ProteinFolder(sample_dir),
-#     ]
 
-#     # run validators
-#     reports = {'tx_detected': False, 'pr_detected': False}
-#     if not meta_validator.is_valid:
-#         # fail early if metadata is invalid. We can't perform the next step without it
-#         return False, meta_validator.validation()
+class CellxGene(DataValidator):
+    DEFAULT_TARGET_PATH = c.FILE_CELL_X_GENE
+    TYPE = 'file'
 
-#     # inspect tx and pr presence from valid metadata
-#     with open(meta_validator.target_path_resolved, 'r') as f:
-#         smp_meta = json.load(f)
 
-#     if 'transcript_panel' in smp_meta:
-#         tx_val = TranscriptPanel(sample_dir)
-#         rw_val = RawFeatures(sample_dir)
-#         validators.extend([tx_val, rw_val])
-#         reports['tx_detected'] = True
+class CellxProtein(DataValidator):
+    DEFAULT_TARGET_PATH = c.FILE_CELL_X_PROTEIN
+    TYPE = 'file'
 
-#     if 'protein_panel' in smp_meta:
-#         px_val = ProteinPanel(sample_dir)
-#         pf_val = ProteinFolder(sample_dir)
-#         validators.extend([px_val, pf_val])
-#         reports['pr_detected'] = True
 
-#     reports.update({val.name: ('valid' if val.is_valid else val.validation()) for val in validators})
-#     all_valid = all([val.is_valid for val in validators])
+class SingleCellFolder(DataValidator):
+    DEFAULT_TARGET_PATH = c.DIRECTORY_SINGLE_CELL
+    TYPE = 'directory'
 
-#     return all_valid, reports
+    SUB_VALIDATORS = [
+        CellMetadata('.'),
+        CellxGene('.'),
+        CellxProtein('.'),
+    ]
+
+    def __init__(self, smp_dir):
+        super().__init__(smp_dir, self.DEFAULT_TARGET_PATH)
+        for val in self.SUB_VALIDATORS:
+            val.smp_dir = self.smp_dir
+            setattr(self, val.name, val)
+
+    @validation_test
+    def files_present(self):
+        existing_files = {}
+        for val in self.SUB_VALIDATORS:
+            existing_files[val.name] = val.is_valid
+        return all(existing_files.values())
