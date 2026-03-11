@@ -1,6 +1,7 @@
 from .utils import default_workers
 
 # System
+# TODO this isn't actually a constant, so it should go somewhere else
 DEFAULT_THREADS = default_workers(max_workers=16, reserve=1)
 
 # Files
@@ -9,12 +10,17 @@ REQUIRED_TX_PANEL = 'transcript_panel.csv'
 REQUIRED_PR_PANEL = 'protein_panel.csv'
 REQUIRED_RAW_FEATURES = 'rna/raw_features.parquet'
 REQUIRED_SEG_MASK = 'masks/segmentation_mask.npz'
+REQUIRED_BEAD_MASK = 'masks/bead_mask.npz'
 REQUIRED_SUMMARY = 'summary_*.html'
 REQUIRED_SSHEET = 'samplesheet.csv'
 
 REQUIRED_NUC_IMG = 'h_and_e/nuclear.ome.tiff'
 REQUIRED_CYT_IMG = 'h_and_e/cytoplasmic.ome.tiff'
 REQUIRED_HnE_IMG = 'h_and_e/h_and_e.ome.tiff'
+
+REQUIRED_HE_DIR = 'h_and_e'
+REQUIRED_PR_DIR = 'protein'
+REQUIRED_PR_SUFFIX = '.ome.tiff'
 
 FILE_TX_TABLE = 'transcript_table.csv.gz'
 FILE_VIEWER_ZARR = 'g4x-viewer.zarr'
@@ -23,6 +29,7 @@ FILE_CELL_X_GENE = 'cell_by_gene.csv.gz'
 FILE_CELL_X_PROTEIN = 'cell_by_protein.csv.gz'
 FILE_FEAT_MTX = 'feature_matrix.h5'
 FILE_CLUSTERING_UMAP = 'clustering_umap.csv.gz'
+
 
 # Physical
 PIXEL_SIZE_MICRONS = 0.3125
