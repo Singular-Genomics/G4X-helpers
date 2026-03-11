@@ -1,3 +1,4 @@
+import json
 import os
 from dataclasses import dataclass
 from functools import lru_cache
@@ -12,21 +13,22 @@ import tifffile
 from anndata import AnnData, read_h5ad
 from matplotlib.pyplot import imread
 
+from . import constants as c
 from . import io
 
-DATA_PATHS = {
-    'transcript_panel': 'transcript_panel.csv',
-    'transcript_table': 'rna/transcript_table.csv.gz',
-    'raw_features': 'rna/raw_features.parquet',
-    'segmentation': 'segmentation/segmentation_mask.npz',
-    'feature_matrix': 'single_cell_data/feature_matrix.h5',
-    'bead_mask': 'protein/bead_mask.npz',
-    'cell_x_gene': 'single_cell_data/cell_by_gene.csv.gz',
-    'cell_x_protein': 'single_cell_data/cell_by_protein.csv.gz',
-    'cell_metadata': 'single_cell_data/cell_metadata.csv.gz',
-    'clustering_umap': 'single_cell_data/clustering_umap.csv.gz',
-    'viewer_zarr': 'g4x-viewer.zarr',
-}
+# DATA_PATHS = {
+#     'transcript_panel': c.REQUIRED_TX_PANEL,
+#     'transcript_table': c.FILE_TX_TABLE,
+#     'raw_features': c.REQUIRED_RAW_FEATURES,
+#     'segmentation': c.REQUIRED_SEG_MASK,
+#     'feature_matrix': c.FILE_FEAT_MTX,
+#     'bead_mask': c.REQUIRED_BEAD_MASK,
+#     'cell_x_gene': c.FILE_CELL_X_GENE,
+#     'cell_x_protein': c.FILE_CELL_X_PROTEIN,
+#     'cell_metadata': c.FILE_CELL_METADATA,
+#     'clustering_umap': c.FILE_CLUSTERING_UMAP,
+#     'viewer_zarr': c.FILE_VIEWER_ZARR,
+# }
 
 
 @dataclass()
@@ -58,31 +60,36 @@ class G4Xoutput:
 
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
-        run_meta = io.validate_raw_data(self.data_dir)
+        self.tree = io.FileTree(self.data_dir)
 
-        self.run_meta = run_meta
+        if not self.tree.is_valid:
+            raise ValueError(f'Validation failed for raw data in {self.data_dir}. errors: {self.tree.errors}')
 
-        # TODO implement with ome.tiff
-        self.shape = glymur.Jp2k(self.data_dir / 'h_and_e' / 'nuclear.jp2').shape
+        with open(self.data_dir / c.REQUIRED_SMP_META, 'r') as f:
+            smp_meta = json.load(f)
+
+        self.run_meta = smp_meta
+
+        nuc_img = list((self.data_dir / 'h_and_e').glob('nuclear.*'))[0]
+        if nuc_img.suffix == '.tiff':
+            with tifffile.TiffFile(nuc_img) as tif:
+                series = tif.series[0]
+                self.shape = series.shape
+        elif nuc_img.suffix == '.jp2':
+            self.shape = glymur.Jp2k(nuc_img).shape
+        else:
+            raise ValueError(f'Unsupported image format: {nuc_img.suffix}')
 
         self.set_meta_attrs()
-        self.set_static_paths()
+        # self.set_static_paths()
 
-        # TODO ensure this is in the meta (happening in validator too)
-        self.includes_transcript = 'transcript_panel' in self.run_meta
-        self.includes_protein = 'protein_panel' in self.run_meta
-
-        if self.includes_transcript:
-            tx_panel_path = self.data_dir / 'transcript_panel.csv'
-
-            tx_panel = io.parse_input_manifest(tx_panel_path)
+        if self.tree.tx_detected:
+            tx_panel = io.parse_input_manifest(self.tree.TranscriptPanel.path)
             tx_panel = tx_panel.sort(by=['probe_type', 'probe_name'], descending=[True, False])
             self.genes = tx_panel['gene_name'].unique(maintain_order=True).to_list()
 
-        if self.includes_protein:
-            pr_panel_path = self.data_dir / 'protein_panel.csv'
-
-            protein_panel = pl.read_csv(pr_panel_path)
+        if self.tree.pr_detected:
+            protein_panel = pl.read_csv(self.tree.ProteinPanel.path)
             protein_panel.sort(by=['panel_type', pl.col('target').str.to_lowercase()], descending=[True, False])
             self.proteins = protein_panel['target'].to_list()
 
@@ -101,11 +108,9 @@ class G4Xoutput:
         repr_string += f'{"software version":<{gap}} - {self.software_version}\n\n'
 
         panels = [
-            ('Transcript panel', len(self.genes), 'genes', self.genes)
-            if self.includes_transcript
-            else (None, 0, '', []),
+            ('Transcript panel', len(self.genes), 'genes', self.genes) if self.tree.tx_detected else (None, 0, '', []),
             ('Protein panel', len(self.proteins), 'proteins', self.proteins)
-            if self.includes_protein
+            if self.tree.pr_detected
             else (None, 0, '', []),
         ]
 
@@ -121,10 +126,10 @@ class G4Xoutput:
         def format_panel(title, count, label, items):
             return f'{title:<{gap}} - {count} {label:<{max_pre - len(str(count)) - 1}}[{", ".join(items[0:5])} ... ]\n'
 
-        if self.includes_transcript:
+        if self.tree.tx_detected:
             repr_string += format_panel(*panels[0])
 
-        if self.includes_protein:
+        if self.tree.pr_detected:
             repr_string += format_panel(*panels[1])
 
         return repr_string
@@ -148,14 +153,14 @@ class G4Xoutput:
         for k in static_attrs:
             setattr(self, k, self.run_meta.get(k, 'unknown'))
 
-    def set_static_paths(self):
-        for k, p in DATA_PATHS.items():
-            setattr(self, f'{k}_path', self.data_dir / p)
+    # def set_static_paths(self):
+    #     for k, p in DATA_PATHS.items():
+    #         setattr(self, f'{k}_path', self.data_dir / p)
 
     @property
     def cell_labels(self) -> np.ndarray:
         nuc_mask = io.import_segmentation(
-            seg_path=self.segmentation_path,
+            seg_path=self.tree.Segmentation.path,
             expected_shape=self.shape,
             labels_key='nuclei',  # TODO nuclei is not always the key
             # use_cache=True,
@@ -259,16 +264,16 @@ class G4Xoutput:
     def load_segmentation(self, expanded: bool = True, key: str | None = None) -> np.ndarray:
         from .modules.segment import try_load_segmentation
 
-        arr = np.load(self.segmentation_path)
+        arr = np.load(self.tree.Segmentation.path)
         available_keys = list(arr.keys())
 
         if 'nuclei' and 'nuclei_exp' in available_keys:
             key = 'nuclei_exp' if expanded else 'nuclei'
 
-        return try_load_segmentation(cell_labels=self.segmentation_path, expected_shape=self.shape, labels_key=key)
+        return try_load_segmentation(cell_labels=self.tree.Segmentation.path, expected_shape=self.shape, labels_key=key)
 
     def load_bead_mask(self) -> np.ndarray:
-        return np.load(self.bead_mask_path)['bead_mask']
+        return np.load(self.tree.BeadMask.path)['bead_mask']
 
     # TODO: this is not used anywhere, consider removing. it's also broken
     def load_feature_table(
