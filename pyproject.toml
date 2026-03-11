@@ -35,7 +35,7 @@ dependencies = [
     "shapely ~= 2.1",
     "pyarrow ~= 23.0",
     "rich-click ~= 1.9",
-    "ome-zarr ~= 0.12",
+    "ome-zarr ~= 0.14",
     "igraph>=1.0.0",
     "imagecodecs>=2026.3.6",
 ]
