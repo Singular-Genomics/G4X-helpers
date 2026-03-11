@@ -1,4 +1,28 @@
-# Exclude the project virtual environment from image builds
-.venv
-.ruff_cache
-.site
+# VCS / editor / OS
+.git
+.github
+.gitignore
+.gitmodules
+.vscode
+.DS_Store
+
+# Python/cache artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# Local env/tooling
+.venv/
+.ruff_cache/
+site/
+
+# Not needed in runtime image
+docs/
+mkdocs.yml
+tests/
+.pre-commit-config.yaml
+.python-version
+.rich-codex.yml
