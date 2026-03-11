@@ -22,13 +22,16 @@ REQUIRED_HE_DIR = 'h_and_e'
 REQUIRED_PR_DIR = 'protein'
 REQUIRED_PR_SUFFIX = '.ome.tiff'
 
+DIRECTORY_SINGLE_CELL = 'single_cell_data'
+
 FILE_TX_TABLE = 'transcript_table.csv.gz'
 FILE_VIEWER_ZARR = 'g4x-viewer.zarr'
-FILE_CELL_METADATA = 'cell_metadata.csv.gz'
-FILE_CELL_X_GENE = 'cell_by_gene.csv.gz'
-FILE_CELL_X_PROTEIN = 'cell_by_protein.csv.gz'
-FILE_FEAT_MTX = 'feature_matrix.h5'
-FILE_CLUSTERING_UMAP = 'clustering_umap.csv.gz'
+
+FILE_CELL_METADATA = 'single_cell_data/cell_metadata.csv.gz'
+FILE_CELL_X_GENE = 'single_cell_data/cell_by_gene.csv.gz'
+FILE_CELL_X_PROTEIN = 'single_cell_data/cell_by_protein.csv.gz'
+FILE_FEAT_MTX = 'single_cell_data/feature_matrix.h5'
+FILE_CLUSTERING_UMAP = 'single_cell_data/clustering_umap.csv.gz'
 
 
 # Physical
