@@ -15,111 +15,15 @@ if TYPE_CHECKING:
 
     from ..g4x_output import G4Xoutput
 
+rapids = io.check_rapids()
+
 
 def cell_frame(g4x_obj: 'G4Xoutput', lazy: bool = True) -> int:
     lf = pl.LazyFrame(g4x_obj.cell_labels, schema={c.CELL_ID_NAME: pl.Int32}).sort(c.CELL_ID_NAME)
     return lf if lazy else lf.collect()
 
 
-# TODO addition of protein values is missing
-def create_adata(g4x_obj: 'G4Xoutput', cell_x_gene: pl.DataFrame, cell_metadata: pl.DataFrame | None = None):
-    from anndata import AnnData
-    from scipy.sparse import csr_matrix
-
-    X = cell_x_gene.drop(c.CELL_ID_NAME).to_numpy().astype(np.uint16)
-    X = csr_matrix(X)
-
-    if cell_metadata is None:
-        cell_metadata = create_cell_metadata(g4x_obj, mask=None)
-
-    obs_df = cell_metadata.to_pandas().set_index(c.CELL_ID_NAME)
-    obs_df.index = obs_df.index.astype(str)
-
-    gene_ids = pl.Series(name=c.GENE_ID_NAME, values=cell_x_gene.columns[1:])
-    var_df = pl.DataFrame(gene_ids).with_columns(pl.lit('tx').alias('modality'))
-
-    panel_type = (
-        io.parse_input_manifest(g4x_obj.data_dir / 'transcript_panel.csv')
-        .unique('gene_name')
-        .select('gene_name', 'probe_type')
-        .rename({'gene_name': c.GENE_ID_NAME})
-    )
-
-    var_df = (
-        var_df.join(
-            panel_type,
-            on=c.GENE_ID_NAME,
-            how='left',
-        )
-        .to_pandas()
-        .set_index(c.GENE_ID_NAME)
-    )
-
-    # # TODO I think the correct thing to do here is to set the index to the gene_id
-    # var_df.index = var_df.index.astype(str)
-    # .set_index('label')
-
-    adata = AnnData(X=X, obs=obs_df, var=var_df)
-    sc.pp.calculate_qc_metrics(adata, inplace=True, percent_top=None)
-    return adata.copy()
-
-
-def process_adata(adata: 'AnnData'):
-    ## 1. filter on cell size, remove top and bottom 1%
-    ## 2. remove genes not expressed by at least 5% of remaining cells
-    ## 3. filter on total transcripts and unique genes remove top 1% and bottom 5%
-
-    adata = filter_by_quantiles(adata, obs_key='nuclei_area_um', quantiles=(0.01, 0.99))
-
-    min_cells = int(0.05 * adata.n_obs)
-    sc.pp.filter_genes(adata, min_cells=min_cells, inplace=True)
-
-    adata = filter_by_quantiles(adata, obs_key='total_counts', quantiles=(0.05, 0.99))
-    adata = filter_by_quantiles(adata, obs_key='n_genes_by_counts', quantiles=(0.05, 0.99))
-
-    # normalize data
-    adata.layers['counts'] = adata.X
-    sc.pp.normalize_total(adata)
-    sc.pp.log1p(adata)
-    sc.pp.pca(adata)
-    sc.pp.neighbors(adata)
-
-    res = 1
-    sc.tl.leiden(
-        adata,
-        resolution=res,
-        objective_function='modularity',
-        n_iterations=-1,
-        random_state=42,
-        flavor='igraph',
-        key_added=f'leiden_{res:0.2f}',
-    )
-
-    sc.tl.umap(adata)
-
-    sc.tl.rank_genes_groups(
-        adata,
-        groupby=f'leiden_{res:0.2f}',
-        use_raw=False,
-        method='wilcoxon',
-        pts=True,
-        key_added=f'leiden_{res:0.2f}_rank_genes_groups',
-    )
-    return adata
-
-
-def reorder_clusters_by_size(clust_umap, key: str, prefix='C'):
-    clust_sorted = clust_umap.group_by(key).agg(pl.len()).sort('len', descending=True)
-    size_order = clust_sorted[key].to_list()
-    numeric_order = np.arange(len(size_order)).astype(str).tolist()
-
-    numeric_order = [prefix + str(uid) for uid in numeric_order]
-    order_map = dict(zip(size_order, numeric_order))
-
-    new_umap = clust_umap.with_columns(pl.col(key).replace(order_map)).sort('seg_cell_id')
-    return new_umap
-
-
+# region create files
 def create_cell_metadata(g4x_obj: 'G4Xoutput', mask: np.ndarray | None):
     cell_meta = init_cell_metadata(g4x_obj).collect()
 
@@ -139,73 +43,6 @@ def create_cell_metadata(g4x_obj: 'G4Xoutput', mask: np.ndarray | None):
         raise ValueError('The CELL_ID columns in cell_meta and mask_props do not match.')
 
     return cell_meta
-
-
-def init_cell_metadata(g4x_obj: 'G4Xoutput'):
-    df = cell_frame(g4x_obj)
-
-    df = df.with_columns(
-        pl.lit(g4x_obj.sample_id).alias('sample_id'),
-        pl.lit(g4x_obj.tissue_type).alias('tissue_type'),
-        pl.lit(g4x_obj.block).alias('block'),
-    )
-    return df
-
-
-def extract_cell_props(mask: np.ndarray, mask_name: str | None = None) -> pl.DataFrame:
-    props = measure.regionprops(mask)
-
-    prop_dict = []
-    # Loop through each region to get the area and centroid, with a progress bar
-
-    prefix = f' {mask_name} ' if mask_name else ' '
-    for prop in tqdm(props, desc=f'Extracting{prefix}mask properties'):
-        label = prop.label  # The label (mask id)
-
-        cell_y, cell_x = prop.centroid  # coordinate order: 'yx' (row, col)
-
-        px_to_um_area = c.PIXEL_SIZE_MICRONS**2
-        area_um = prop.area * px_to_um_area  # prop.area is in pixels
-
-        prop_dict.append(
-            {
-                c.CELL_ID_NAME: label,
-                'area_um': area_um,
-                c.CELL_COORD_X: cell_x,
-                c.CELL_COORD_Y: cell_y,
-            }
-        )
-    schema = {
-        c.CELL_ID_NAME: pl.Int32,
-        'area_um': pl.Float32,
-        c.CELL_COORD_X: pl.Float32,
-        c.CELL_COORD_Y: pl.Float32,
-    }
-    prop_dict_df = pl.DataFrame(prop_dict, schema=schema).sort(c.CELL_ID_NAME)
-    return prop_dict_df
-
-
-def extract_cell_props_g4x(g4x_obj: 'G4Xoutput') -> pl.DataFrame:
-    seg_mask = io.import_segmentation(
-        seg_path=g4x_obj.tree.Segmentation.path, expected_shape=g4x_obj.shape, labels_key='nuclei'
-    )
-    mask_props_nuc = extract_cell_props(mask=seg_mask, mask_name='nuclei')
-
-    seg_mask = io.import_segmentation(
-        seg_path=g4x_obj.tree.Segmentation.path, expected_shape=g4x_obj.shape, labels_key='nuclei_exp'
-    )
-    mask_props_exp = extract_cell_props(mask=seg_mask, mask_name='nuclei_exp')
-    del seg_mask
-
-    mask_props_nuc = mask_props_nuc.rename({'area_um': 'nuclei_area_um'})
-    mask_props_exp = mask_props_exp.rename({'area_um': 'wholecell_area_um'}).drop([c.CELL_COORD_X, c.CELL_COORD_Y])
-    mask_props = mask_props_nuc.join(mask_props_exp, on=c.CELL_ID_NAME)
-
-    mask_props = mask_props.select(
-        [c.CELL_ID_NAME, c.CELL_COORD_X, c.CELL_COORD_Y, 'nuclei_area_um', 'wholecell_area_um']
-    )
-
-    return mask_props
 
 
 def create_cell_x_gene(g4x_obj: 'G4Xoutput', return_lazy: bool = False) -> tuple[pl.DataFrame, pl.DataFrame]:
@@ -281,6 +118,94 @@ def create_cell_x_protein(
     return cf
 
 
+# TODO addition of protein values is missing
+def create_adata(g4x_obj: 'G4Xoutput', cell_x_gene: pl.DataFrame, cell_metadata: pl.DataFrame | None = None):
+    from anndata import AnnData
+    from scipy.sparse import csr_matrix
+
+    X = cell_x_gene.drop(c.CELL_ID_NAME).to_numpy().astype(np.uint16)
+    X = csr_matrix(X)
+
+    if cell_metadata is None:
+        cell_metadata = create_cell_metadata(g4x_obj, mask=None)
+
+    obs_df = cell_metadata.to_pandas().set_index(c.CELL_ID_NAME)
+    obs_df.index = obs_df.index.astype(str)
+
+    gene_ids = pl.Series(name=c.GENE_ID_NAME, values=cell_x_gene.columns[1:])
+    var_df = pl.DataFrame(gene_ids).with_columns(pl.lit('tx').alias('modality'))
+
+    panel_type = (
+        io.parse_input_manifest(g4x_obj.data_dir / 'transcript_panel.csv')
+        .unique('gene_name')
+        .select('gene_name', 'probe_type')
+        .rename({'gene_name': c.GENE_ID_NAME})
+    )
+
+    var_df = (
+        var_df.join(
+            panel_type,
+            on=c.GENE_ID_NAME,
+            how='left',
+        )
+        .to_pandas()
+        .set_index(c.GENE_ID_NAME)
+    )
+
+    # # TODO I think the correct thing to do here is to set the index to the gene_id
+    # var_df.index = var_df.index.astype(str)
+    # .set_index('label')
+
+    adata = AnnData(X=X, obs=obs_df, var=var_df)
+    sc.pp.calculate_qc_metrics(adata, inplace=True, percent_top=None)
+    return adata.copy()
+
+
+# region processing
+def process_adata(adata: 'AnnData'):
+    ## 1. filter on cell size, remove top and bottom 1%
+    ## 2. remove genes not expressed by at least 5% of remaining cells
+    ## 3. filter on total transcripts and unique genes remove top 1% and bottom 5%
+
+    adata = filter_by_quantiles(adata, obs_key='nuclei_area_um', quantiles=(0.01, 0.99))
+
+    min_cells = int(0.05 * adata.n_obs)
+    sc.pp.filter_genes(adata, min_cells=min_cells, inplace=True)
+
+    adata = filter_by_quantiles(adata, obs_key='total_counts', quantiles=(0.05, 0.99))
+    adata = filter_by_quantiles(adata, obs_key='n_genes_by_counts', quantiles=(0.05, 0.99))
+
+    # normalize data
+    adata.layers['counts'] = adata.X
+    sc.pp.normalize_total(adata)
+    sc.pp.log1p(adata)
+    sc.pp.pca(adata)
+    sc.pp.neighbors(adata)
+
+    res = 1
+    sc.tl.leiden(
+        adata,
+        resolution=res,
+        objective_function='modularity',
+        n_iterations=-1,
+        random_state=42,
+        flavor='igraph',
+        key_added=f'leiden_{res:0.2f}',
+    )
+
+    sc.tl.umap(adata)
+
+    sc.tl.rank_genes_groups(
+        adata,
+        groupby=f'leiden_{res:0.2f}',
+        use_raw=False,
+        method='wilcoxon',
+        pts=True,
+        key_added=f'leiden_{res:0.2f}_rank_genes_groups',
+    )
+    return adata
+
+
 def image_intensity_extraction(
     img: np.ndarray,
     mask_flat: np.ndarray,
@@ -312,6 +237,74 @@ def image_intensity_extraction(
     return means
 
 
+def extract_cell_props(mask: np.ndarray, mask_name: str | None = None) -> pl.DataFrame:
+    props = measure.regionprops(mask)
+
+    prop_dict = []
+    # Loop through each region to get the area and centroid, with a progress bar
+
+    prefix = f' {mask_name} ' if mask_name else ' '
+    for prop in tqdm(props, desc=f'Extracting{prefix}mask properties'):
+        label = prop.label  # The label (mask id)
+
+        cell_y, cell_x = prop.centroid  # coordinate order: 'yx' (row, col)
+
+        px_to_um_area = c.PIXEL_SIZE_MICRONS**2
+        area_um = prop.area * px_to_um_area  # prop.area is in pixels
+
+        prop_dict.append(
+            {
+                c.CELL_ID_NAME: label,
+                'area_um': area_um,
+                c.CELL_COORD_X: cell_x,
+                c.CELL_COORD_Y: cell_y,
+            }
+        )
+    schema = {
+        c.CELL_ID_NAME: pl.Int32,
+        'area_um': pl.Float32,
+        c.CELL_COORD_X: pl.Float32,
+        c.CELL_COORD_Y: pl.Float32,
+    }
+    prop_dict_df = pl.DataFrame(prop_dict, schema=schema).sort(c.CELL_ID_NAME)
+    return prop_dict_df
+
+
+def extract_cell_props_g4x(g4x_obj: 'G4Xoutput') -> pl.DataFrame:
+    seg_mask = io.import_segmentation(
+        seg_path=g4x_obj.tree.Segmentation.path, expected_shape=g4x_obj.shape, labels_key='nuclei'
+    )
+    mask_props_nuc = extract_cell_props(mask=seg_mask, mask_name='nuclei')
+
+    seg_mask = io.import_segmentation(
+        seg_path=g4x_obj.tree.Segmentation.path, expected_shape=g4x_obj.shape, labels_key='nuclei_exp'
+    )
+    mask_props_exp = extract_cell_props(mask=seg_mask, mask_name='nuclei_exp')
+    del seg_mask
+
+    mask_props_nuc = mask_props_nuc.rename({'area_um': 'nuclei_area_um'})
+    mask_props_exp = mask_props_exp.rename({'area_um': 'wholecell_area_um'}).drop([c.CELL_COORD_X, c.CELL_COORD_Y])
+    mask_props = mask_props_nuc.join(mask_props_exp, on=c.CELL_ID_NAME)
+
+    mask_props = mask_props.select(
+        [c.CELL_ID_NAME, c.CELL_COORD_X, c.CELL_COORD_Y, 'nuclei_area_um', 'wholecell_area_um']
+    )
+
+    return mask_props
+
+
+# region methods
+def init_cell_metadata(g4x_obj: 'G4Xoutput'):
+    df = cell_frame(g4x_obj)
+
+    df = df.with_columns(
+        pl.lit(g4x_obj.sample_id).alias('sample_id'),
+        pl.lit(g4x_obj.tissue_type).alias('tissue_type'),
+        pl.lit(g4x_obj.block).alias('block'),
+    )
+    return df
+
+
 def filter_by_quantiles(adata: 'AnnData', obs_key: str, quantiles: tuple[float, float] = (0.0, 1.0)):
     if obs_key not in adata.obs:
         raise ValueError(f"obs_key '{obs_key}' not found in adata.obs")
@@ -327,3 +320,15 @@ def intersect_tx_with_cells(tx_table, mask):
     tx_coords = tx_table.select(coord_order).collect().to_numpy().astype(int)
     cell_ids = mask[tx_coords[:, 0], tx_coords[:, 1]]
     return cell_ids
+
+
+def reorder_clusters_by_size(clust_umap, key: str, prefix='C'):
+    clust_sorted = clust_umap.group_by(key).agg(pl.len()).sort('len', descending=True)
+    size_order = clust_sorted[key].to_list()
+    numeric_order = np.arange(len(size_order)).astype(str).tolist()
+
+    numeric_order = [prefix + str(uid) for uid in numeric_order]
+    order_map = dict(zip(size_order, numeric_order))
+
+    new_umap = clust_umap.with_columns(pl.col(key).replace(order_map)).sort('seg_cell_id')
+    return new_umap
