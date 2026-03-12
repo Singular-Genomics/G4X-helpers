@@ -14,16 +14,18 @@ authors = [
     { name = "Kenneth Gouin III", email = "kennethg@singulargenomics.com" },
     { name = "Florian Raths", email = "flo.raths@singulargenomics.com" },
 ]
-requires-python = ">=3.11, <3.13"
 
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
+
+requires-python = ">=3.10, <3.12"
 
 dependencies = [
     "geopandas ~= 1.1",
@@ -31,20 +33,17 @@ dependencies = [
     "polars ~= 1.38",
     "rasterio >= 1.4",
     "scanpy ~= 1.11",
-    "scikit-image ~= 0.26",
+    "scikit-image ~= 0.25",
     "shapely ~= 2.1",
-    "pyarrow ~= 23.0",
+    "pyarrow ~= 19.0",
     "rich-click ~= 1.9",
-    "ome-zarr ~= 0.14",
-    "igraph>=1.0.0",
-    "imagecodecs>=2026.3.6",
+    "ome-zarr ~= 0.10",
+    "igraph >= 1.0.0",
+    "imagecodecs == 2025.3.30",
 ]
-
 
 [project.optional-dependencies]
-rapids = [
-  "rapids-singlecell[rapids12] ~=0.13; sys_platform == 'linux'",
-]
+rapids = ["rapids-singlecell[rapids12] ~=0.13; sys_platform == 'linux'"]
 
 [dependency-groups]
 dev = [
@@ -52,7 +51,7 @@ dev = [
     "ipywidgets ~= 8.1",
     "pre-commit ~= 4.5",
     "pytest ~= 9.0",
-    "ruff == 0.15.2",                     # pinned to match pre-commit version
+    "ruff == 0.15.2",               # pinned to match pre-commit version
     "mpl-spaceplot>=0.3.0",
     "dask[diagnostics]>=2024.11.2",
 ]
@@ -61,6 +60,8 @@ docs = ["mkdocs ~= 1.6", "mkdocs-material ~= 9.7", "rich-codex ~= 1.2"]
 [project.scripts]
 g4x-helpers = "g4x_helpers.cli.cli:cli"
 
+[[tool.uv.index]]
+url = "https://pypi.nvidia.com"
 
 [tool.uv]
 required-version = ">=0.9"
