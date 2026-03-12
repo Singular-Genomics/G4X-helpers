@@ -41,13 +41,14 @@ class G4Xoutput:
             raise ValueError(f'Unsupported image format: {nuc_img.suffix}')
 
         self.set_meta_attrs()
-        # self.set_static_paths()
 
+        self.genes = []
         if self.tree.tx_detected:
             tx_panel = io.parse_input_manifest(self.tree.TranscriptPanel.path)
             tx_panel = tx_panel.sort(by=['probe_type', 'probe_name'], descending=[True, False])
             self.genes = tx_panel['gene_name'].unique(maintain_order=True).to_list()
 
+        self.proteins = []
         if self.tree.pr_detected:
             protein_panel = pl.read_csv(self.tree.ProteinPanel.path)
             protein_panel.sort(by=['panel_type', pl.col('target').str.to_lowercase()], descending=[True, False])
@@ -126,12 +127,13 @@ class G4Xoutput:
 
     @property
     def is_demuxed(self):
-        return self.tree.TranscriptTable.is_valid
+        result = False if not self.tree.tx_detected else self.tree.TranscriptTable.is_valid
+        return result
 
     @property
     def is_aggregated(self):
-        cxg = self.tree.CellxGene.is_valid
-        cxp = self.tree.CellxProtein.is_valid
+        cxg = True if not self.tree.tx_detected else self.tree.CellxGene.is_valid
+        cxp = True if not self.tree.pr_detected else self.tree.CellxProtein.is_valid
         return cxg and cxp
 
     @property
