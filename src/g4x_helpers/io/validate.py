@@ -9,54 +9,88 @@ from .. import constants as c
 
 class FileTree:
     def __init__(self, sample_dir):
-        self.smp_dir = sample_dir
-        meta_validator = SampleMetadata(sample_dir)
+        self.smp_dir = Path(sample_dir)
 
-        self.raw_validators = [
-            meta_validator,
-            SampleSheet(sample_dir),
-            Segmentation(sample_dir),
-            BeadMask(sample_dir),
-            QCSummary(sample_dir),
-            HnEFolder(sample_dir),
-        ]
+        meta_validator = SampleMetadata(self.smp_dir)
+
+        self.raw_validators = [meta_validator]
+        self.secondary_validators = []
 
         self.tx_detected = False
         self.pr_detected = False
-        self.tx_validators = []
-        self.pr_validators = []
 
-        # TODO ensure these hooks are a good choice
         if meta_validator.is_valid:
-            # inspect tx and pr presence from valid metadata
-            with open(meta_validator.target_path_resolved, 'r') as f:
-                smp_meta = json.load(f)
+            self.detect_assay_type(meta_validator.target_path_resolved)
 
-            if 'transcript_panel' in smp_meta:
-                tx_val = TranscriptPanel(sample_dir)
-                rw_val = RawFeatures(sample_dir)
-                self.tx_validators = [tx_val, rw_val]
-                self.tx_detected = True
+            self.raw_validators.extend(
+                [
+                    SampleSheet(self.smp_dir),
+                    Segmentation(self.smp_dir),
+                    BeadMask(self.smp_dir),
+                    QCSummary(self.smp_dir),
+                    HnEFolder(self.smp_dir),
+                ]
+            )
 
-            if 'protein_panel' in smp_meta:
-                px_val = ProteinPanel(sample_dir)
-                pf_val = ProteinFolder(sample_dir)
-                self.pr_validators = [px_val, pf_val]
-                self.pr_detected = True
+            self.secondary_validators.extend(
+                [
+                    ViewerZarr(self.smp_dir),
+                    SingleCellFolder(self.smp_dir),
+                    CellMetadata(self.smp_dir),
+                    AdataH5(self.smp_dir),
+                ]
+            )
 
-        self.raw_validators.extend(self.tx_validators)
-        self.raw_validators.extend(self.pr_validators)
+            if self.tx_detected:
+                self.raw_validators.extend(
+                    [
+                        TranscriptPanel(self.smp_dir),
+                        RawFeatures(self.smp_dir),
+                    ]
+                )
+                self.secondary_validators.extend(
+                    [
+                        TranscriptTable(self.smp_dir),
+                        CellxGene(self.smp_dir),
+                    ]
+                )
 
-        self.secondary_validators = [
-            TranscriptTable(sample_dir),
-            ViewerZarr(sample_dir),
-            SingleCellFolder(sample_dir),
-        ]
+            if self.pr_detected:
+                self.raw_validators.extend(
+                    [
+                        ProteinPanel(self.smp_dir),
+                        ProteinFolder(self.smp_dir),
+                    ]
+                )
+                self.secondary_validators.extend(
+                    [
+                        CellxProtein(self.smp_dir),
+                    ]
+                )
 
         self.validators = self.raw_validators + self.secondary_validators
 
         for v in self.validators:
             setattr(self, v.name, v)
+
+    def detect_assay_type(self, meta_path):
+        with open(meta_path, 'r') as f:
+            smp_meta = json.load(f)
+
+        # TODO ensure these hooks are a good choice
+        # inspect tx and pr presence from valid metadata
+        self.tx_detected = 'transcript_panel' in smp_meta
+        self.pr_detected = 'protein_panel' in smp_meta
+
+        self.assay_type = (
+            'combined'
+            if self.tx_detected and self.pr_detected
+            else 'tx_only'
+            if self.tx_detected
+            else 'pr_only'
+            if self.pr_detected
+            else 'undefined'
+        )
 
     @property
     def is_valid_raw(self):
@@ -86,25 +120,25 @@ class FileTree:
                 print('G4X-data validation passed for:\n', self.smp_dir)
 
     def validation_report_full(self):
-
         if self.SampleMetadata.path_exists:
             print('Detected G4X-metadata file: ', self.SampleMetadata.target_path_resolved)
-            print('\n> Validating directory ...')
+            print(f'assay type: {self.assay_type}')
+            print('\n> Validating required raw data ...')
         else:
             self.SampleMetadata.report_validation()
 
         for v in self.raw_validators:
             v.report_validation()
 
-        if self.tx_detected:
-            print('\n> Detected transcript data, validating ...')
-            for v in self.tx_validators:
-                v.report_validation()
+        # if self.tx_detected:
+        #     print('\n> Detected transcript data, validating ...')
+        #     for v in self.tx_validators:
+        #         v.report_validation()
 
-        if self.pr_detected:
-            print('\n> Detected protein data, validating ...')
-            for v in self.pr_validators:
-                v.report_validation()
+        # if self.pr_detected:
+        #     print('\n> Detected protein data, validating ...')
+        #     for v in self.pr_validators:
+        #         v.report_validation()
 
         print('\n> Validating secondary data ...')
         for v in self.secondary_validators:
@@ -201,7 +235,10 @@ class DataValidator:
         val_name = self.name.removesuffix('Validator')
         resolved_target_name = self.target_path_resolved.relative_to(self.smp_dir)
         if not self.is_valid:
-            print(f'[!invalid] {val_name} {self.TYPE}: {resolved_target_name} Reason: {self.validation()}')
+            code = '[!invalid]'
+            msg = f'{code} {val_name} {self.TYPE}: {resolved_target_name}\n'
+            msg += f'{len(code) * " "} reason: {self.validation()}'
+            print(msg)
         else:
             print(f'[valid] {val_name} {self.TYPE}: {resolved_target_name}')
 
@@ -229,12 +266,24 @@ class SampleMetadata(DataValidator):
         'software_version',
     ]
 
+    def _try_load_json(self):
+        try:
+            with open(self.target_path_resolved, 'r') as f:
+                meta = json.load(f)
+        except Exception as _:
+            return {}
+        return meta
+
+    @validation_test
+    def is_readable(self):
+        return bool(self._try_load_json())
+
     @validation_test
     def correct_schema(self):
-        with open(self.target_path_resolved, 'r') as f:
-            smp_meta = json.load(f)
-
-        return set(self.SCHEMA).issubset(set(smp_meta.keys()))
+        if self.is_readable():
+            smp_meta = self._try_load_json()
+            return set(self.SCHEMA).issubset(set(smp_meta.keys()))
+        return False
 
 
 class Segmentation(DataValidator):
@@ -334,11 +383,22 @@ class ProteinFolder(DataValidator):
     DEFAULT_TARGET_PATH = c.REQUIRED_PR_DIR
     TYPE = 'directory'
 
-    IMG_SUFFIX = c.REQUIRED_PR_SUFFIX
+    IMG_SUFFIXES = [c.REQUIRED_PR_SUFFIX, c.ALT_PR_SUFFIX]
 
     def __init__(self, smp_dir):
         super().__init__(smp_dir)
         self.panel = ProteinPanel(self.smp_dir)
+        required_proteins = pl.read_csv(self.panel.target_path_resolved)['target'].to_list()
+
+        self.existing_files = {}
+        for pr in required_proteins:
+            img = None
+            for suffix in self.IMG_SUFFIXES:
+                candidate = (self.target_path_resolved / pr).with_suffix(suffix)
+                if candidate.exists():
+                    img = candidate
+                    break
+            self.existing_files[pr] = img  # is not None
 
     @validation_test
     def has_panel(self):
@@ -346,13 +406,7 @@ class ProteinFolder(DataValidator):
 
     @validation_test
     def images_match_panel(self):
-        required_proteins = pl.read_csv(self.panel.target_path_resolved)['target'].to_list()
-
-        existing_files = {}
-        for pr in required_proteins:
-            img = (self.target_path_resolved / pr).with_suffix(self.IMG_SUFFIX)
-            existing_files[pr] = img.exists()
-        return all(existing_files.values())
+        return all(self.existing_files.values())
 
 
 class HnEFolder(DataValidator):
@@ -389,6 +443,11 @@ class CellxProtein(DataValidator):
     TYPE = 'file'
 
 
+class AdataH5(DataValidator):
+    DEFAULT_TARGET_PATH = c.FILE_FEAT_MTX
+    TYPE = 'file'
+
+
 class SingleCellFolder(DataValidator):
     DEFAULT_TARGET_PATH = c.DIRECTORY_SINGLE_CELL
     TYPE = 'directory'
@@ -397,6 +456,7 @@ class SingleCellFolder(DataValidator):
         CellMetadata('.'),
         CellxGene('.'),
         CellxProtein('.'),
+        AdataH5('.'),
     ]
 
     def __init__(self, smp_dir):

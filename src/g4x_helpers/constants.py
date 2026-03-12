@@ -21,10 +21,11 @@ REQUIRED_HnE_IMG = 'h_and_e/h_and_e.ome.tiff'
 REQUIRED_HE_DIR = 'h_and_e'
 REQUIRED_PR_DIR = 'protein'
 REQUIRED_PR_SUFFIX = '.ome.tiff'
+ALT_PR_SUFFIX = '.jp2'
 
 DIRECTORY_SINGLE_CELL = 'single_cell_data'
 
-FILE_TX_TABLE = 'transcript_table.csv.gz'
+FILE_TX_TABLE = 'rna/transcript_table.csv.gz'
 FILE_VIEWER_ZARR = 'g4x-viewer.zarr'
 
 FILE_CELL_METADATA = 'single_cell_data/cell_metadata.csv.gz'
