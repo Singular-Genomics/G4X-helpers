@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -186,12 +187,12 @@ def extract_cell_props(mask: np.ndarray, mask_name: str | None = None) -> pl.Dat
 
 def extract_cell_props_g4x(g4x_obj: 'G4Xoutput') -> pl.DataFrame:
     seg_mask = io.import_segmentation(
-        seg_path=g4x_obj.segmentation_path, expected_shape=g4x_obj.shape, labels_key='nuclei'
+        seg_path=g4x_obj.tree.Segmentation.path, expected_shape=g4x_obj.shape, labels_key='nuclei'
     )
     mask_props_nuc = extract_cell_props(mask=seg_mask, mask_name='nuclei')
 
     seg_mask = io.import_segmentation(
-        seg_path=g4x_obj.segmentation_path, expected_shape=g4x_obj.shape, labels_key='nuclei_exp'
+        seg_path=g4x_obj.tree.Segmentation.path, expected_shape=g4x_obj.shape, labels_key='nuclei_exp'
     )
     mask_props_exp = extract_cell_props(mask=seg_mask, mask_name='nuclei_exp')
     del seg_mask
@@ -208,7 +209,7 @@ def extract_cell_props_g4x(g4x_obj: 'G4Xoutput') -> pl.DataFrame:
 
 
 def create_cell_x_gene(g4x_obj: 'G4Xoutput', return_lazy: bool = False) -> tuple[pl.DataFrame, pl.DataFrame]:
-    reads = pl.scan_csv(g4x_obj.transcript_table_path)
+    reads = pl.scan_csv(g4x_obj.tree.TranscriptTable.path)
 
     cell_by_gene = (
         reads.filter(pl.col(c.CELL_ID_NAME) != 0)
@@ -246,8 +247,10 @@ def create_cell_x_protein(
 
     # TODO eosin channel has been renamed
     channel_name_map = {protein: protein for protein in signal_list}
-    channel_name_map['nuclear'] = 'nuclearstain'
-    channel_name_map['eosin'] = 'cytoplasmicstain'
+    nuc_name = Path(c.REQUIRED_NUC_IMG).name.split('.')[0]
+    cyt_name = Path(c.REQUIRED_CYT_IMG).name.split('.')[0]
+    channel_name_map[nuc_name] = nuc_name + 'stain'
+    channel_name_map[cyt_name] = cyt_name + 'stain'
 
     # TODO return here when bead masking is implemented
     # bead_mask = g4x_obj.load_bead_mask()
@@ -258,14 +261,12 @@ def create_cell_x_protein(
     cf = cell_frame(g4x_obj, lazy=False)
 
     for signal_name in tqdm(signal_list, desc='Extracting protein signal'):
-        if signal_name not in ['nuclear', 'eosin']:
-            image_type = 'protein'
-            protein = signal_name
+        if signal_name == nuc_name:
+            signal_img = g4x_obj.load_nuclear_image(use_cache=cached)
+        elif signal_name == cyt_name:
+            signal_img = g4x_obj.load_cytoplasmic_image(use_cache=cached)
         else:
-            image_type = signal_name
-            protein = None
-
-        signal_img = g4x_obj.load_image_by_type(image_type, thumbnail=False, protein=protein, cached=cached)
+            signal_img = g4x_obj.load_protein_image(protein=signal_name, use_cache=cached)
 
         ch_label = f'{channel_name_map[signal_name]}_intensity_mean'
 

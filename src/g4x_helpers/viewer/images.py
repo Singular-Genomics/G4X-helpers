@@ -1,4 +1,5 @@
 import warnings
+from typing import Literal
 
 import dask
 import dask.array as da
@@ -81,11 +82,11 @@ def write_muliplex_img(smp, root_group):
     dtype = np.uint16
     channel_arrays = []
     for ch in channel_names:
-        arr = _load_image_dask(smp, img_type='protein', channel_name=ch, dtype=dtype)
+        arr = _load_image_dask(smp, img_type='protein', protein_name=ch, dtype=dtype)
         channel_arrays.append(arr)
 
-    for ch in ['nuclear', 'eosin']:
-        arr = _load_image_dask(smp, img_type=ch, channel_name=None, dtype=dtype)
+    for ch in ['nuclear', 'cytoplasmic']:
+        arr = _load_image_dask(smp, img_type=ch, protein_name=None, dtype=dtype)
         channel_arrays.append(arr)
 
     for arr in channel_arrays:
@@ -97,7 +98,13 @@ def write_muliplex_img(smp, root_group):
     for arr, name in zip(channel_arrays, channel_names):
         color = sat_cols2[channel_names.index(name) % len(sat_cols2)]
         active = True if name in DEFAULT_VISIBLE_CHANNELS else False
-        ic = ImageChannel(arr, label=name, dtype=np.uint16, omero_attrs={'color': color, 'active': active})
+        arr_max = int(arr.max().compute())
+        clip_vmax = float(da.percentile(arr, 99).compute())
+        clip_vmin = clip_vmax * 0.05
+        window = {'min': 0, 'max': arr_max, 'start': clip_vmin, 'end': clip_vmax}
+        ic = ImageChannel(
+            arr, label=name, dtype=np.uint16, omero_attrs={'color': color, 'active': active, 'window': window}
+        )
         channels.append(ic)
 
     img_group = root_group['images']['multiplex']
@@ -129,7 +136,7 @@ def write_channel_stack(img_group, channels):
 
 def write_he_img(smp, root_group):
     dtype = np.uint8
-    image = _load_image_dask(smp, img_type='h_and_e', channel_name=None, dtype=dtype)
+    image = _load_image_dask(smp, img_type='h_and_e', protein_name=None, dtype=dtype)
     image = _add_rgb_astronaut_to_img(image)
 
     if image.ndim == 3 and image.shape[-1] == 3:
@@ -168,14 +175,39 @@ def _write_image_withouth_storage_warning(*args, **kwargs):
         return oz_writer.write_image(*args, **kwargs)
 
 
-def _load_image_dask(smp, img_type, channel_name=None, dtype=np.uint16):
+def _load_image_dask(
+    smp,
+    img_type: str = Literal['protein', 'h_and_e', 'nuclear', 'cytoplasmic'],
+    protein_name: str | None = None,
+    dtype=np.uint16,
+    use_cache: bool = False,
+):
     shape = smp.shape + (3,) if img_type == 'h_and_e' else smp.shape
 
-    data = da.from_delayed(
-        dask.delayed(smp.load_image_by_type)(image_type=img_type, protein=channel_name, thumbnail=False, cached=False),
-        shape=shape,
-        dtype=dtype,
-    )
+    if img_type == 'protein':
+        data = da.from_delayed(
+            dask.delayed(smp.load_protein_image)(protein=protein_name, use_cache=use_cache),
+            shape=shape,
+            dtype=dtype,
+        )
+    elif img_type == 'h_and_e':
+        data = da.from_delayed(
+            dask.delayed(smp.load_he_image)(use_cache=use_cache),
+            shape=shape,
+            dtype=dtype,
+        )
+    elif img_type == 'nuclear':
+        data = da.from_delayed(
+            dask.delayed(smp.load_nuclear_image)(use_cache=use_cache),
+            shape=shape,
+            dtype=dtype,
+        )
+    elif img_type == 'cytoplasmic':
+        data = da.from_delayed(
+            dask.delayed(smp.load_cytoplasmic_image)(use_cache=use_cache),
+            shape=shape,
+            dtype=dtype,
+        )
 
     return data
 

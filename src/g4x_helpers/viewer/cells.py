@@ -125,7 +125,7 @@ def prepare_cell_group_input(smp):
     metadata = metadata.with_columns(pl.col('cluster_id').fill_null('unassigned'))
 
     # 5: load protein data if available
-    if smp.includes_protein:
+    if smp.tree.pr_detected:
         protein_data = pl.read_csv(smp.data_dir / 'single_cell_data' / 'cell_by_protein.csv.gz')
         metadata = metadata.join(protein_data, on=c.CELL_ID_NAME, how='left')
 
