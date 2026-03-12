@@ -1,10 +1,28 @@
 import json
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import polars as pl
 
 from .. import constants as c
+
+
+def kv_line_gap(key, value, gap=2):
+    value = '<undefined>' if not value else value
+    line = f'{key:<{gap}}'
+    line += ' - '
+    line += f'{value}'
+
+    return line
+
+
+def pretty_dict_str(d):
+    max_len = max([len(k) for k in d.keys()])
+    msg = ''
+    for k, v in d.items():
+        msg += kv_line_gap(k, v, gap=max_len) + '\n'
+    return msg
 
 
 class FileTree:
@@ -108,20 +126,28 @@ class FileTree:
     def reports(self):
         return {v.name: v.validation() for v in self.validators}
 
-    def validation_report_minimal(self, validate_all: bool = False, report_pass: bool = True):
-        gate = self.is_valid_raw if not validate_all else self.is_valid_all
+    def _val_report_minimal(self, raw_only: bool = True, report_pass: bool = True, raise_exception: bool = True):
+        gate = self.is_valid_raw if raw_only else self.is_valid_all
+        what = 'raw' if raw_only else 'all'
+        validation_title = f'G4X-[{what} data] validation'
         if not gate:
-            msg = 'G4X-data validation failed for:\n'
+            msg = f'{validation_title} failed for:\n'
             msg += f'{self.smp_dir}\n'
-            msg += f'errors: {self.errors}'
-            raise ValidationError(msg)
+
+            errs = pretty_dict_str(self.errors)
+            msg += f'\nErrors:\n{errs}'
+            if raise_exception:
+                raise ValidationError(msg)
+            else:
+                print(msg)
         else:
             if report_pass:
-                print('G4X-data validation passed for:\n', self.smp_dir)
+                print(f'{validation_title} passed for:\n{self.smp_dir}')
 
-    def validation_report_full(self):
+    def _val_report_verbose(self, raw_only: bool = False, raise_exception: bool = True):
+
         if self.SampleMetadata.path_exists:
-            print('Detected G4X-metadata file: ', self.SampleMetadata.target_path_resolved)
+            print(f'Detected G4X-metadata file:\n{self.SampleMetadata.target_path_resolved}')
             print(f'assay type: {self.assay_type}')
             print('\n> Validating required raw data ...')
         else:
@@ -130,19 +156,26 @@ class FileTree:
         for v in self.raw_validators:
             v.report_validation()
 
-        # if self.tx_detected:
-        #     print('\n> Detected transcript data, validating ...')
-        #     for v in self.tx_validators:
-        #         v.report_validation()
+        if not raw_only:
+            print('\n> Validating secondary data ...')
+            for v in self.secondary_validators:
+                v.report_validation()
+        print('')
+        self._val_report_minimal(raw_only=raw_only, raise_exception=raise_exception)
 
-        # if self.pr_detected:
-        #     print('\n> Detected protein data, validating ...')
-        #     for v in self.pr_validators:
-        #         v.report_validation()
-
-        print('\n> Validating secondary data ...')
-        for v in self.secondary_validators:
-            v.report_validation()
+    def validation_report(
+        self,
+        format: Literal['verbose', 'minimal'] = 'verbose',
+        raw_only: bool = False,
+        report_pass: bool = True,
+        raise_exception: bool = True,
+    ):
+        if format == 'verbose':
+            self._val_report_verbose(raw_only=raw_only, raise_exception=raise_exception)
+        elif format == 'minimal':
+            self._val_report_minimal(raw_only=raw_only, report_pass=report_pass, raise_exception=raise_exception)
+        else:
+            raise ValueError(f"Invalid format: {format}. Expected 'full' or 'minimal'.")
 
 
 class ValidationError(Exception):

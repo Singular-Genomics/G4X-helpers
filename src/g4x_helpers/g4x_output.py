@@ -25,7 +25,7 @@ class G4Xoutput:
         self.data_dir = Path(data_dir)
         self.tree = io.FileTree(self.data_dir)
 
-        self.tree.validation_report_minimal(report_pass=False)
+        self.tree.validation_report(format='minimal', raw_only=True, report_pass=False, raise_exception=False)
 
         with open(self.tree.SampleMetadata.path, 'r') as f:
             self.smp_meta = json.load(f)
