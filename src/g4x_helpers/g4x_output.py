@@ -1,8 +1,6 @@
 import json
 import os
-from functools import lru_cache
 from pathlib import Path
-from typing import Literal
 
 import glymur
 import numpy as np
@@ -10,7 +8,6 @@ import pandas as pd
 import polars as pl
 import tifffile
 from anndata import AnnData, read_h5ad
-from matplotlib.pyplot import imread
 
 from . import io
 
@@ -116,10 +113,6 @@ class G4Xoutput:
         for k in static_attrs:
             setattr(self, k, self.smp_meta.get(k, 'unknown'))
 
-    # def set_static_paths(self):
-    #     for k, p in DATA_PATHS.items():
-    #         setattr(self, f'{k}_path', self.data_dir / p)
-
     @property
     def cell_labels(self) -> np.ndarray:
         nuc_mask = io.import_segmentation(
@@ -133,24 +126,25 @@ class G4Xoutput:
 
     @property
     def is_demuxed(self):
-        return self.tree.TranscriptTable.path_exists
+        return self.tree.TranscriptTable.is_valid
 
     @property
     def is_aggregated(self):
-        cxg = self.cell_x_gene_path.exists()
-        cxp = self.cell_x_protein_path.exists()
+        cxg = self.tree.CellxGene.is_valid
+        cxp = self.tree.CellxProtein.is_valid
         return cxg and cxp
 
     @property
     def is_scprocessed(self):
-        umap = self.clustering_umap_path.exists()
-        meta = self.cell_metadata_path.exists()
-        fm = self.feature_matrix_path.exists()
-        return umap and meta and fm
+        # umap = self.tree.clustering_umap_path.exists()
+        # meta = self.tree.cell_metadata_path.exists()
+        fm = self.tree.AdataH5.is_valid
+        return fm
+        # return umap and meta and fm
 
     @property
     def is_viewer(self):
-        return self.viewer_zarr_path.exists()
+        return self.tree.ViewerZarr.is_valid
 
     # region methods
     def load_adata(self, *, remove_nontargeting: bool = True, load_clustering: bool = True) -> AnnData:
@@ -179,49 +173,25 @@ class G4Xoutput:
         adata.obs_names = f'{self.sample_id}-' + adata.obs['cell_id'].str.split('-').str[1]
         return adata
 
-    def load_image_by_type(
-        self,
-        image_type: Literal['protein', 'h_and_e', 'nuclear', 'eosin'],
-        *,
-        thumbnail: bool = False,
-        protein: str | None = None,
-        cached: bool = False,
-    ) -> np.ndarray:
-        if image_type == 'protein':
-            if not self.includes_protein:
-                print('No protein results.')
-                return None
-            if protein is None or protein not in self.proteins:
-                print(f'{protein} not in protein panel.')
-                return None
-            pattern = f'{protein}_thumbnail.*' if thumbnail else f'{protein}.*'
-            directory = 'protein'
-        else:
-            pattern_base = {'h_and_e': 'h_and_e', 'nuclear': 'nuclear', 'eosin': 'eosin'}.get(image_type)
+    def load_protein_image(self, protein: str, use_cache: bool = False) -> np.ndarray:
+        img_path = self.tree.ProteinFolder.existing_files.get(protein)
+        if img_path is None:
+            print(f'Protein image for {protein} not found.')
+            return None
 
-            if not pattern_base:
-                print(f'Unknown image type: {image_type}')
-                return None
+        return io.load_image(img_path=img_path, use_cache=use_cache)
 
-            pattern = f'{pattern_base}_thumbnail.*' if thumbnail else f'{pattern_base}.*'
-            directory = 'h_and_e'
+    def load_he_image(self, use_cache: bool = False) -> np.ndarray:
+        img_path = self.tree.HnEFolder.path / 'h_and_e.ome.tiff'
+        return io.load_image(img_path=img_path, use_cache=use_cache)
 
-        if cached:
-            return self._load_image_cached(self.data_dir, directory, pattern)
-        else:
-            return self._load_image(self.data_dir, directory, pattern)
+    def load_nuclear_image(self, use_cache: bool = False) -> np.ndarray:
+        img_path = self.tree.HnEFolder.path / 'nuclear.ome.tiff'
+        return io.load_image(img_path=img_path, use_cache=use_cache)
 
-    def load_protein_image(self, protein: str, thumbnail: bool = False, cached: bool = False) -> np.ndarray:
-        return self.load_image_by_type('protein', thumbnail=thumbnail, protein=protein, cached=cached)
-
-    def load_he_image(self, thumbnail: bool = False, cached: bool = False) -> np.ndarray:
-        return self.load_image_by_type('h_and_e', thumbnail=thumbnail, cached=cached)
-
-    def load_nuclear_image(self, thumbnail: bool = False, cached: bool = False) -> np.ndarray:
-        return self.load_image_by_type('nuclear', thumbnail=thumbnail, cached=cached)
-
-    def load_eosin_image(self, thumbnail: bool = False, cached: bool = False) -> np.ndarray:
-        return self.load_image_by_type('eosin', thumbnail=thumbnail, cached=cached)
+    def load_cytoplasmic_image(self, use_cache: bool = False) -> np.ndarray:
+        img_path = self.tree.HnEFolder.path / 'cytoplasmic.ome.tiff'
+        return io.load_image(img_path=img_path, use_cache=use_cache)
 
     def load_segmentation(self, expanded: bool = True, key: str | None = None) -> np.ndarray:
         from .modules.segment import try_load_segmentation
@@ -246,7 +216,7 @@ class G4Xoutput:
         columns: list[str] | None = None,
         alt_file_path: str | None = None,
     ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
-        file_path = self.feature_table_path if alt_file_path is None else alt_file_path
+        file_path = self.tree.RawFeatures.path if alt_file_path is None else alt_file_path
         return self._load_table(file_path, return_polars, lazy, columns)
 
     def load_transcript_table(
@@ -257,7 +227,7 @@ class G4Xoutput:
         columns: list[str] | None = None,
         alt_file_path: str | None = None,
     ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
-        file_path = self.transcript_table_path if alt_file_path is None else alt_file_path
+        file_path = self.tree.TranscriptTable.path if alt_file_path is None else alt_file_path
         return self._load_table(file_path, return_polars, lazy, columns)
 
     def list_content(self, subdir=None):
@@ -277,28 +247,6 @@ class G4Xoutput:
         return contents
 
     # region internal
-    @staticmethod
-    def _load_image_base(data_dir: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
-        img_path = next((data_dir / parent_directory).glob(pattern), None)
-        if img_path is None:
-            raise FileNotFoundError(f'No file matching {pattern} found.')
-        if img_path.suffix == '.jp2' or img_path.suffix == '.jpg':
-            img = glymur.Jp2k(img_path)[:]
-        elif img_path.suffix == '.png':
-            img = imread(img_path)
-        else:
-            img = tifffile.imread(img_path)
-        return img
-
-    @staticmethod
-    @lru_cache(maxsize=None)
-    def _load_image_cached(data_dir: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
-        return G4Xoutput._load_image_base(data_dir, parent_directory, pattern)
-
-    @staticmethod
-    def _load_image(data_dir: str, parent_directory: str, pattern: str) -> tuple[np.ndarray, float, float]:
-        return G4Xoutput._load_image_base(data_dir, parent_directory, pattern)
-
     def _load_table(
         self, file_path: str, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
     ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
@@ -318,7 +266,3 @@ class G4Xoutput:
         if not return_polars:
             reads = reads.collect().to_pandas()
         return reads
-
-    def _clear_image_cache(self):
-        """Evict all cached images so subsequent calls re-read from disk."""
-        self._load_image.cache_clear()

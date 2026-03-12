@@ -3,18 +3,17 @@ from __future__ import annotations
 import json
 from functools import lru_cache, wraps
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import geopandas
+import glymur
 import numpy as np
 import polars as pl
 import polars.selectors as cs
+import tifffile
+from matplotlib.pyplot import imread
 
 from .. import constants, utils
 from . import convert
-
-if TYPE_CHECKING:
-    pass
 
 
 def optionally_cached(func):
@@ -88,6 +87,7 @@ def build_sample_metadata(sample_dir, save_file: bool = False):
     return out
 
 
+# TODO this belongs to migration logic
 def _infer_smp_id(sample_dir):
     summary_file = list(sample_dir.glob('summary*.html'))[0].stem
     core_metrics = sample_dir / 'metrics' / 'transcript_core_metrics.csv'
@@ -122,64 +122,6 @@ def _parse_samplesheet(ss_path: str):
     data_section = data_section.drop(cs.contains('_duplicated')).drop('').fill_null('none')
 
     return run_info, data_section
-
-
-# @optionally_cached
-def import_segmentation(seg_path: str, expected_shape: tuple[int], labels_key: str | None = None) -> np.ndarray:
-    SUPPORTED_MASK_FILETYPES = {'.npy', '.npz', '.geojson'}
-    ## load new segmentation
-    cell_labels = utils.validate_path(seg_path, must_exist=True, is_dir_ok=False, is_file_ok=True)
-    suffix = cell_labels.suffix.lower()
-
-    if suffix not in SUPPORTED_MASK_FILETYPES:
-        raise ValueError(f'{suffix} is not a supported file type.')
-
-    if suffix == '.npz':
-        with np.load(cell_labels) as labels:
-            available_keys = list(labels.keys())
-
-            if labels_key:  # if a key is specified
-                if labels_key not in labels:
-                    raise KeyError(f"Key '{labels_key}' not found in .npz; available keys: {available_keys}")
-                seg = labels[labels_key]
-
-            else:
-                if len(available_keys) != 1:
-                    raise ValueError(
-                        f"Found multiple keys in .npz: {available_keys}.\nPlease specify a key using 'labels_key'"
-                    )
-                seg = labels[available_keys[0]]
-
-    elif suffix == '.npy':
-        # .npy: directly returns the array, no context manager available
-        if labels_key is not None:
-            print('file is .npy, ignoring provided labels_key.')
-        seg = np.load(cell_labels, allow_pickle=False)
-
-    elif suffix == '.geojson':
-        gdf = geopandas.read_file(cell_labels)
-
-        if labels_key is not None:
-            if labels_key not in gdf.columns:
-                raise KeyError(f"Column '{labels_key}' not found in GeoJSON; available columns: {gdf.columns.tolist()}")
-
-            # ensure that a column named 'label' exists
-            gdf['label'] = gdf[labels_key]
-
-        else:
-            if 'label' not in gdf.columns:
-                raise ValueError(
-                    "No column named 'label' found in GeoJSON. Please specify which column to use for labels via labels_key."
-                )
-
-        print('Rasterizing provided GeoDataFrame.')
-        seg = convert.gdf_to_ndarray(gdf=gdf, target_shape=expected_shape)
-
-    # validate shape for final numpy arrays
-    if seg.shape != expected_shape:
-        raise ValueError(f'provided mask shape {seg.shape} does not match G4X sample shape {expected_shape}')
-
-    return seg
 
 
 def parse_input_manifest(file_path: Path, verbose: bool = False) -> pl.DataFrame:
@@ -250,3 +192,90 @@ def parse_input_manifest(file_path: Path, verbose: bool = False) -> pl.DataFrame
     )
 
     return manifest
+
+
+@optionally_cached
+def import_segmentation(seg_path: str, expected_shape: tuple[int], labels_key: str | None = None) -> np.ndarray:
+    SUPPORTED_MASK_FILETYPES = {'.npy', '.npz', '.geojson'}
+    ## load new segmentation
+    cell_labels = utils.validate_path(seg_path, must_exist=True, is_dir_ok=False, is_file_ok=True)
+    suffix = cell_labels.suffix.lower()
+
+    if suffix not in SUPPORTED_MASK_FILETYPES:
+        raise ValueError(f'{suffix} is not a supported file type.')
+
+    if suffix == '.npz':
+        with np.load(cell_labels) as labels:
+            available_keys = list(labels.keys())
+
+            if labels_key:  # if a key is specified
+                if labels_key not in labels:
+                    raise KeyError(f"Key '{labels_key}' not found in .npz; available keys: {available_keys}")
+                seg = labels[labels_key]
+
+            else:
+                if len(available_keys) != 1:
+                    raise ValueError(
+                        f"Found multiple keys in .npz: {available_keys}.\nPlease specify a key using 'labels_key'"
+                    )
+                seg = labels[available_keys[0]]
+
+    elif suffix == '.npy':
+        # .npy: directly returns the array, no context manager available
+        if labels_key is not None:
+            print('file is .npy, ignoring provided labels_key.')
+        seg = np.load(cell_labels, allow_pickle=False)
+
+    elif suffix == '.geojson':
+        gdf = geopandas.read_file(cell_labels)
+
+        if labels_key is not None:
+            if labels_key not in gdf.columns:
+                raise KeyError(f"Column '{labels_key}' not found in GeoJSON; available columns: {gdf.columns.tolist()}")
+
+            # ensure that a column named 'label' exists
+            gdf['label'] = gdf[labels_key]
+
+        else:
+            if 'label' not in gdf.columns:
+                raise ValueError(
+                    "No column named 'label' found in GeoJSON. Please specify which column to use for labels via labels_key."
+                )
+
+        print('Rasterizing provided GeoDataFrame.')
+        seg = convert.gdf_to_ndarray(gdf=gdf, target_shape=expected_shape)
+
+    # validate shape for final numpy arrays
+    if seg.shape != expected_shape:
+        raise ValueError(f'provided mask shape {seg.shape} does not match G4X sample shape {expected_shape}')
+
+    return seg
+
+
+@optionally_cached
+def load_image(img_path):
+    img_path = Path(img_path)
+    suffix = img_path.suffix.lower()
+
+    def _read_jp2(path):
+        return glymur.Jp2k(str(path))[:]
+
+    def _read_standard_image(path):
+        return imread(str(path))
+
+    def _read_tiff(path):
+        return tifffile.imread(path)
+
+    readers = {
+        '.jp2': _read_jp2,
+        '.png': _read_standard_image,
+        '.jpg': _read_standard_image,
+        '.jpeg': _read_standard_image,
+        '.tif': _read_tiff,
+        '.tiff': _read_tiff,
+    }
+
+    try:
+        return readers[suffix](img_path)
+    except KeyError:
+        raise ValueError(f'Unsupported image format: {suffix}') from None
