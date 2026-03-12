@@ -3,7 +3,7 @@ import polars as pl
 from numcodecs import Blosc
 
 from .. import constants as c
-from .setup import populate_zarr_metadata
+from .setup import create_array, populate_zarr_metadata
 
 
 def write_transcripts(smp, root_group):
@@ -134,6 +134,6 @@ def write_tx_zarr(tx_group, pyramid):
             gene_names = all_gene_names[idx].astype('U10')
             cell_ids = all_cell_ids[idx].astype(np.int32)
 
-            tile_group.create_array('position', data=coords, compressor=compressor)
-            tile_group.create_array('gene_name', data=gene_names, compressor=compressor)
-            tile_group.create_array('cell_id', data=cell_ids, compressor=compressor)
+            create_array(tile_group, 'position', data=coords, compressor=compressor)
+            create_array(tile_group, 'gene_name', data=gene_names, compressor=compressor)
+            create_array(tile_group, 'cell_id', data=cell_ids, compressor=compressor)

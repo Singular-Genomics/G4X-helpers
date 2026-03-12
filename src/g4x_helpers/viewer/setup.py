@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import shutil
 from pathlib import Path
 
@@ -83,8 +84,37 @@ def populate_zarr_metadata(
         root_group['transcripts'].attrs['layer_config'] = tx_layer_config
 
 
-# meta_path = smp.data_dir / c.FILE_SMP_META
-#     with open(meta_path, 'r') as f:
-#         run_metadata = json.load(f)
+def _supports_param(func, name):
+    try:
+        return name in inspect.signature(func).parameters
+    except (TypeError, ValueError):
+        return False
 
-# shutil.copy(smp.data_dir / c.FILE_SUMMARY, target_dir / 'misc' / c.FILE_SUMMARY)
+
+def _normalize_chunks(chunks):
+    if chunks == 'auto':
+        return None
+    return chunks
+
+
+def create_array(group, name, data, compressor=None, chunks=None):
+    kwargs = {}
+    chunks = _normalize_chunks(chunks)
+
+    create = getattr(group, 'create_array', None)
+    if create is None:
+        create = group.create_dataset
+
+    if chunks is not None:
+        if _supports_param(create, 'chunks'):
+            kwargs['chunks'] = chunks
+        elif _supports_param(create, 'chunk_shape'):
+            kwargs['chunk_shape'] = chunks
+
+    if compressor is not None:
+        if _supports_param(create, 'compressors'):
+            kwargs['compressors'] = [compressor]
+        elif _supports_param(create, 'compressor'):
+            kwargs['compressor'] = compressor
+
+    return create(name, data=data, **kwargs)

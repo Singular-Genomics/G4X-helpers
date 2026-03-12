@@ -5,16 +5,16 @@ from numcodecs import Blosc
 from .. import constants as c
 from .. import io
 from ..modules import single_cell as g4xsc
-from .setup import populate_zarr_metadata
+from .setup import create_array, populate_zarr_metadata
 
 
 def write_csr(group, csr, gene_names, compressor=None, chunks=None):
-    group.create_array('data', data=csr.data.astype('int16'), compressor=compressor, chunks=chunks)
-    group.create_array('indices', data=csr.indices.astype('int32'), compressor=compressor, chunks=chunks)
-    group.create_array('indptr', data=csr.indptr.astype('int64'), compressor=compressor, chunks=chunks)
+    create_array(group, 'data', data=csr.data.astype('int16'), compressor=compressor, chunks=chunks)
+    create_array(group, 'indices', data=csr.indices.astype('int32'), compressor=compressor, chunks=chunks)
+    create_array(group, 'indptr', data=csr.indptr.astype('int64'), compressor=compressor, chunks=chunks)
 
     # TODO find maybe better spot for dtype conversion
-    group.create_array('gene_names', data=np.array(gene_names).astype('U12'), compressor=compressor, chunks='auto')
+    create_array(group, 'gene_names', data=np.array(gene_names).astype('U12'), compressor=compressor, chunks='auto')
 
 
 def write_cells(smp, root_group):
@@ -30,29 +30,29 @@ def write_cells(smp, root_group):
 
     # write arrays for each attribute
     arr = metadata[c.CELL_ID_NAME].to_numpy().astype(np.uint32)
-    metadata_group.create_array('cell_id', data=arr, compressor=compressor)
+    create_array(metadata_group, 'cell_id', data=arr, compressor=compressor)
 
     arr = metadata['area_um'].to_numpy().astype(np.uint16)
-    metadata_group.create_array('area', data=arr, compressor=compressor)
+    create_array(metadata_group, 'area', data=arr, compressor=compressor)
 
     arr = metadata['cluster_id'].to_numpy().astype('U10')
-    metadata_group.create_array('cluster_id', data=arr, compressor=compressor)
+    create_array(metadata_group, 'cluster_id', data=arr, compressor=compressor)
 
     arr = metadata['total_counts'].to_numpy().astype(np.uint16)
-    metadata_group.create_array('total_counts', data=arr, compressor=compressor)
+    create_array(metadata_group, 'total_counts', data=arr, compressor=compressor)
 
     arr = metadata['n_genes_by_counts'].to_numpy().astype(np.uint16)
-    metadata_group.create_array('total_genes', data=arr, compressor=compressor)
+    create_array(metadata_group, 'total_genes', data=arr, compressor=compressor)
 
     protein_df = metadata.select(*[c for c in metadata.columns if '_intensity_mean' in c])
     arr = protein_df.to_numpy().astype(np.uint16)
-    protein_group.create_array('protein_values', data=arr, compressor=compressor)
+    create_array(protein_group, 'protein_values', data=arr, compressor=compressor)
     protein_names = np.array([s.removesuffix('_intensity_mean') for s in protein_df.columns]).astype('U50')
-    protein_group.create_array('protein_names', data=protein_names, compressor=compressor)
+    create_array(protein_group, 'protein_names', data=protein_names, compressor=compressor)
 
     umap = ['UMAP1', 'UMAP2']  # TODO <- remove hard code
     arr = metadata.select(umap).rename({umap[0]: 'umap_1', umap[1]: 'umap_2'}).to_numpy().astype(np.float16)
-    metadata_group.create_array('umap', data=arr, compressor=compressor)
+    create_array(metadata_group, 'umap', data=arr, compressor=compressor)
 
     # write ragged array of polygon vertices
     x_vert = metadata['vert_x'].to_numpy()
@@ -68,8 +68,8 @@ def write_cells(smp, root_group):
     y_long = np.concatenate(y_vert, axis=0)
     verts_xy = np.stack([x_long, y_long], axis=1)
 
-    polygon_group.create_array('polygon_offsets', data=offsets, compressor=compressor)
-    polygon_group.create_array('polygon_vertices_xy', data=verts_xy, compressor=compressor)
+    create_array(polygon_group, 'polygon_offsets', data=offsets, compressor=compressor)
+    create_array(polygon_group, 'polygon_vertices_xy', data=verts_xy, compressor=compressor)
 
     uids = sort_clusters(metadata)
     populate_zarr_metadata(root_group, gene_mtx_shape=gex.shape, cluster_ids=generate_cluster_palette(uids))
