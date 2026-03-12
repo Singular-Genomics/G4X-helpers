@@ -8,7 +8,7 @@ from numcodecs import Blosc
 from ome_zarr import scale as oz_scale
 from ome_zarr import writer as oz_writer
 
-colors = {
+saturated_colors = {
     'red': '#FF0000',
     'orange': '#FF8000',
     'yellow': '#FFFF00',
@@ -22,23 +22,6 @@ colors = {
     'magenta': '#FF00FF',
     'rose': '#FF0080',
     'white': '#FFFFFF',
-}
-
-
-saturated_colors = {
-    'red': 'FF0000',
-    'orange': 'FF8000',
-    'yellow': 'FFFF00',
-    'chartreuse': '80FF00',
-    'green': '00FF00',
-    'spring_green': '00FF80',
-    'cyan': '00FFFF',
-    'azure': '007FFF',
-    'blue': '0000FF',
-    'violet': '7F00FF',
-    'magenta': 'FF00FF',
-    'rose': 'FF0080',
-    'white': 'FFFFFF',
 }
 
 CHANNELS_SET_A = ['PanCK', 'aSMA', 'CD31', 'CD45']
@@ -94,12 +77,12 @@ class ImageChannel:
 
 def write_images(smp, root_group):
     write_muliplex_img(smp, root_group)
-    # write_he_img(smp, root_group)
+    write_he_img(smp, root_group)
 
 
 def default_window_recipe(arr):
     arr_max = int(arr.max().compute())
-    clip_vmax = int(da.percentile(arr, 99.5).compute())
+    clip_vmax = int(da.percentile(arr.ravel(), 99.5).compute())
     clip_vmin = int(clip_vmax * 0.10)
     window = {'min': 0, 'max': arr_max, 'start': clip_vmin, 'end': clip_vmax}
     return window
@@ -110,16 +93,18 @@ def write_muliplex_img(smp, root_group):
     # Sort proteins to have aSMA first and Isotype last
     channel_names = sorted(smp.proteins, key=str.lower)
 
-    if 'Isotype' in channel_names:
-        channel_names.remove('Isotype')
-        channel_names = channel_names + ['Isotype']
-
-    # Prepare dask arrays for each channel
     dtype = np.uint16
     channel_arrays = []
-    for ch in channel_names:
-        arr = _load_image_dask(smp, img_type='protein', protein_name=ch, dtype=dtype)
-        channel_arrays.append(arr)
+
+    # Prepare dask arrays for each channel
+    if smp.proteins:
+        if 'Isotype' in channel_names:
+            channel_names.remove('Isotype')
+            channel_names = channel_names + ['Isotype']
+
+        for ch in channel_names:
+            arr = _load_image_dask(smp, img_type='protein', protein_name=ch, dtype=dtype)
+            channel_arrays.append(arr)
 
     stain_channels = ['cytoplasmic', 'nuclear']
     channel_names.extend(stain_channels)
@@ -139,8 +124,10 @@ def write_muliplex_img(smp, root_group):
             color = saturated_colors[channel_color_map[name]]
         else:
             color = saturated_colors[list(saturated_colors.keys())[channel_names.index(name) % len(saturated_colors)]]
+        # TODO define what to do when t
         active = True if name in DEFAULT_VISIBLE_CHANNELS else False
         window = default_window_recipe(arr)
+        color = color.removeprefix('#')
         ic = ImageChannel(
             arr, label=name, dtype=np.uint16, omero_attrs={'color': color, 'active': active, 'window': window}
         )
