@@ -8,38 +8,66 @@ from numcodecs import Blosc
 from ome_zarr import scale as oz_scale
 from ome_zarr import writer as oz_writer
 
-DEFAULT_VISIBLE_CHANNELS = ['PanCK', 'aSMA', 'CD31', 'CD45']
+colors = {
+    'red': '#FF0000',
+    'orange': '#FF8000',
+    'yellow': '#FFFF00',
+    'chartreuse': '#80FF00',
+    'green': '#00FF00',
+    'spring_green': '#00FF80',
+    'cyan': '#00FFFF',
+    'azure': '#007FFF',
+    'blue': '#0000FF',
+    'violet': '#7F00FF',
+    'magenta': '#FF00FF',
+    'rose': '#FF0080',
+    'white': '#FFFFFF',
+}
 
-# TODO apply these properly to channels
-sat_cols = [
-    'FF0000',
-    'FF8000',
-    'FFFF00',
-    '80FF00',
-    '00FF00',
-    '00FF80',
-    '00FFFF',
-    '007FFF',
-    '0000FF',
-    '7F00FF',
-    'FF00FF',
-    'FF0080',
-]
 
-sat_cols2 = [
-    '00FFFF',
-    'FF8000',
-    '0000FF',
-    '80FF00',
-    'FF00FF',
-    '00FF80',
-    'FF0000',
-    '007FFF',
-    'FFFF00',
-    '7F00FF',
-    '00FF00',
-    'FF0080',
-]
+saturated_colors = {
+    'red': 'FF0000',
+    'orange': 'FF8000',
+    'yellow': 'FFFF00',
+    'chartreuse': '80FF00',
+    'green': '00FF00',
+    'spring_green': '00FF80',
+    'cyan': '00FFFF',
+    'azure': '007FFF',
+    'blue': '0000FF',
+    'violet': '7F00FF',
+    'magenta': 'FF00FF',
+    'rose': 'FF0080',
+    'white': 'FFFFFF',
+}
+
+CHANNELS_SET_A = ['PanCK', 'aSMA', 'CD31', 'CD45']
+CHANNELS_SET_B = ['ATPase', 'Isotype', 'cytoplasmic', 'nuclear']
+CHANNELS_SET_C = ['HLA-DR', 'CD68', 'CD11c', 'CD20']
+CHANNELS_SET_D = ['CD3', 'CD4', 'CD8', 'FOXP3']
+CHANNELS_SET_E = ['CD34', 'PanCadherin', 'KI67', 'PD1', 'PDL1']  # < most don't have colors yet
+
+DEFAULT_VISIBLE_CHANNELS = CHANNELS_SET_A
+
+channel_color_map = {
+    'aSMA': 'yellow',
+    'CD31': 'spring_green',
+    'PanCK': 'azure',
+    'CD45': 'magenta',
+    'HLA-DR': 'orange',
+    'CD68': 'violet',
+    'CD11c': 'cyan',
+    'CD20': 'yellow',
+    'CD3': 'spring_green',
+    'CD4': 'azure',
+    'CD8': 'magenta',
+    'FOXP3': 'red',
+    'KI67': 'chartreuse',
+    'ATPase': 'violet',
+    'Isotype': 'orange',
+    'cytoplasmic': 'rose',
+    'nuclear': 'white',
+}
 
 OMERO_DEFAULT = {
     'label': 'channel',
@@ -66,7 +94,15 @@ class ImageChannel:
 
 def write_images(smp, root_group):
     write_muliplex_img(smp, root_group)
-    write_he_img(smp, root_group)
+    # write_he_img(smp, root_group)
+
+
+def default_window_recipe(arr):
+    arr_max = int(arr.max().compute())
+    clip_vmax = int(da.percentile(arr, 99.5).compute())
+    clip_vmin = int(clip_vmax * 0.10)
+    window = {'min': 0, 'max': arr_max, 'start': clip_vmin, 'end': clip_vmax}
+    return window
 
 
 def write_muliplex_img(smp, root_group):
@@ -85,23 +121,26 @@ def write_muliplex_img(smp, root_group):
         arr = _load_image_dask(smp, img_type='protein', protein_name=ch, dtype=dtype)
         channel_arrays.append(arr)
 
-    for ch in ['nuclear', 'cytoplasmic']:
+    stain_channels = ['cytoplasmic', 'nuclear']
+    channel_names.extend(stain_channels)
+
+    for ch in stain_channels:
         arr = _load_image_dask(smp, img_type=ch, protein_name=None, dtype=dtype)
         channel_arrays.append(arr)
 
-    for arr in channel_arrays:
+    for i, arr in enumerate(channel_arrays):
         if arr.ndim == 2:
-            arr = arr[None, ...]  # add Z
+            channel_arrays[i] = arr[None, ...]  # add Z
 
     # build the channels and their metadata
     channels = []
     for arr, name in zip(channel_arrays, channel_names):
-        color = sat_cols2[channel_names.index(name) % len(sat_cols2)]
+        if name in channel_color_map:
+            color = saturated_colors[channel_color_map[name]]
+        else:
+            color = saturated_colors[list(saturated_colors.keys())[channel_names.index(name) % len(saturated_colors)]]
         active = True if name in DEFAULT_VISIBLE_CHANNELS else False
-        arr_max = int(arr.max().compute())
-        clip_vmax = float(da.percentile(arr, 99).compute())
-        clip_vmin = clip_vmax * 0.05
-        window = {'min': 0, 'max': arr_max, 'start': clip_vmin, 'end': clip_vmax}
+        window = default_window_recipe(arr)
         ic = ImageChannel(
             arr, label=name, dtype=np.uint16, omero_attrs={'color': color, 'active': active, 'window': window}
         )
