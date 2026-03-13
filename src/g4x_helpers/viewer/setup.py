@@ -72,12 +72,14 @@ def populate_zarr_metadata(
         root_group.attrs['run_metadata'] = {'Sample Information': sample_metadata}
 
     if cluster_ids is not None:
+        root_group['cells']['metadata'].attrs['clusterID_order'] = list(cluster_ids.keys())
         root_group['cells']['metadata'].attrs['clusterID_colors'] = cluster_ids
 
     if gene_mtx_shape is not None:
         root_group['cells']['genes'].attrs['shape'] = gene_mtx_shape
 
     if gene_colors is not None:
+        root_group['transcripts'].attrs['gene_order'] = list(gene_colors.keys())
         root_group['transcripts'].attrs['gene_colors'] = gene_colors
 
     if tx_layer_config is not None:

@@ -2,7 +2,6 @@ from importlib import import_module
 from importlib.metadata import PackageNotFoundError, version
 
 from . import constants as c
-from . import io
 
 try:
     __version__ = version('g4x_helpers')
