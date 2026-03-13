@@ -2,7 +2,7 @@ import shutil
 
 import polars as pl
 
-from ..input import build_sample_metadata
+from ..input import create_sample_g4x
 from .migrator import DataMigrator
 
 
@@ -13,7 +13,7 @@ class SampleMetaMigrator(DataMigrator):
         super().__init__(sample_dir, target_path, probes=self.probes)
 
     def _migrate_legacy_version_1(self):
-        _ = build_sample_metadata(self.smp_dir, save_file=True)
+        _ = create_sample_g4x(self.smp_dir, save_file=True)
 
 
 class CytoplasmicImageMigrator(DataMigrator):

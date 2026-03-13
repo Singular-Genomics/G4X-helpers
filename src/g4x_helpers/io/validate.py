@@ -6,6 +6,7 @@ import numpy as np
 import polars as pl
 
 from .. import constants as c
+from ..io.input import _parse_samplesheet
 
 
 def kv_line_gap(key, value, gap=2):
@@ -285,18 +286,28 @@ class SampleMetadata(DataValidator):
     DEFAULT_TARGET_PATH = c.REQUIRED_SMP_META
     TYPE = 'file'
 
-    SCHEMA = [
-        'sample_id',
+    KEYS = [
         'run_name',
+        'sample_position',
+        'sample_id',
+        'tissue_type',
+        'block',
+        'assay',
         'machine',
         'run_id',
-        'platform',
+        'fc_layout',
         'fc',
         'lane',
-        'sample_position',
+        'platform',
+        'user_name',
+        'user_email',
+        'run_notes',
         'time_of_creation',
+        'transcript_panel',
+        'protein_panel',
         'software',
         'software_version',
+        'output_version',
     ]
 
     def _try_load_json(self):
@@ -315,7 +326,7 @@ class SampleMetadata(DataValidator):
     def correct_schema(self):
         if self.is_readable():
             smp_meta = self._try_load_json()
-            return set(self.SCHEMA).issubset(set(smp_meta.keys()))
+            return set(self.KEYS).issubset(set(smp_meta.keys()))
         return False
 
 
@@ -347,6 +358,55 @@ class QCSummary(DataValidator):
 class SampleSheet(DataValidator):
     DEFAULT_TARGET_PATH = c.REQUIRED_SSHEET
     TYPE = 'file'
+
+    EXPECTED_KEYS_RUN_SECTION = [
+        'Date',
+        'Run Name',
+        'User Name',
+        'User Email',
+        'Workflow',
+        'Assay',
+        'Run Notes',
+        'Stage1',
+        'Stage2',
+        'FC Layout',
+    ]
+
+    EXPECTED_KEYS_DATA_SECTION = [
+        'Lane',
+        'Sample Position',
+        'Tissue Type',
+        'Block',
+        'Transcript Panel',
+        'Protein Panel',
+        'Transcript Custom',
+        'Protein Custom',
+    ]
+
+    def _try_parse_samplesheet(self):
+        try:
+            res = _parse_samplesheet(self.target_path_resolved)
+        except Exception as _:
+            return None
+        return res
+
+    @validation_test
+    def is_parsable(self):
+        return bool(self._try_parse_samplesheet())
+
+    @validation_test
+    def correct_keys(self):
+        run_section, data_section = self._try_parse_samplesheet()
+        if run_section is None or data_section is None:
+            return False
+
+        run_section_keys = run_section['Key']
+        data_section_keys = data_section.columns
+
+        run_section_valid = all(key in run_section_keys for key in self.EXPECTED_KEYS_RUN_SECTION)
+        data_section_valid = all(key in data_section_keys for key in self.EXPECTED_KEYS_DATA_SECTION)
+
+        return run_section_valid and data_section_valid
 
 
 class RawFeatures(DataValidator):
