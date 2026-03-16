@@ -315,14 +315,32 @@ def filter_by_quantiles(adata: 'AnnData', obs_key: str, quantiles: tuple[float, 
     return adata.copy()
 
 
-def intersect_tx_with_cells(tx_table, mask):
+def intersect_tx_with_cells(
+    tx_table: pl.DataFrame | pl.LazyFrame, mask: np.ndarray, column_name: str = c.CELL_ID_NAME
+) -> pl.DataFrame:
     coord_order = ['y_pixel_coordinate', 'x_pixel_coordinate']
     tx_coords = tx_table.select(coord_order).collect().to_numpy().astype(int)
     cell_ids = mask[tx_coords[:, 0], tx_coords[:, 1]]
-    return cell_ids
+    tx_table = tx_table.with_columns(pl.lit(cell_ids).alias(column_name))
+    return tx_table
 
 
-def reorder_clusters_by_size(clust_umap, key: str, prefix='C'):
+def intersect_tx_with_cells_g4x(g4x_obj: 'G4Xoutput', tx_table: pl.DataFrame | None = None) -> pl.DataFrame:
+    if tx_table is None:
+        tx_table = g4x_obj.load_transcript_table(lazy=True)
+
+    # Assign transcripts to segmentation labels
+    mask = g4x_obj.load_segmentation(expanded=True)
+    tx_table = intersect_tx_with_cells(tx_table, mask, column_name=c.CELL_ID_NAME)
+
+    mask = g4x_obj.load_segmentation(expanded=False)
+    tx_table = intersect_tx_with_cells(tx_table, mask, column_name='in_nucleus')
+    del mask
+
+    return tx_table
+
+
+def reorder_clusters_by_size(clust_umap, key: str, prefix='C') -> pl.DataFrame:
     clust_sorted = clust_umap.group_by(key).agg(pl.len()).sort('len', descending=True)
     size_order = clust_sorted[key].to_list()
     numeric_order = np.arange(len(size_order)).astype(str).tolist()
