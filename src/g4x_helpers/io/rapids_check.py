@@ -33,6 +33,7 @@ def check_rapids() -> bool:
     # --- Stage 1: metadata presence (fast) ---
     def report_current():
         res = RapidsCheck(status=status, rsc_version=ver, detail=detail)
+        print('--- Checking for availability of rapids-singlecell for GPU acceleration ---')
         print(res)
 
     ver = None
