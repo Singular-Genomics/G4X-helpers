@@ -11,18 +11,15 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
-from .. import utils
+from .. import c, utils
 from .workflow import OutSchema, workflow
 
 if TYPE_CHECKING:
     from ..g4x_output import G4Xoutput
 
-# BASE_ORDER = 'CTGA'
 LUT = np.zeros((256, 4), dtype=np.float32)
-LUT[ord('C'), 0] = 1.0
-LUT[ord('T'), 1] = 1.0
-LUT[ord('G'), 2] = 1.0
-LUT[ord('A'), 3] = 1.0
+for base, idx in zip(c.BASE_ORDER, range(4)):
+    LUT[ord(base), idx] = 1.0
 
 
 @workflow
@@ -31,7 +28,7 @@ def demux_raw_features(
     manifest: Path,
     out_dir: Path,
     *,
-    batch_size: int = 1_000_000,
+    batch_size: int = c.DEFAULT_BATCH_SIZE,
     logger: logging.Logger,
 ) -> None:
     logger.info('Validating input paths.')
@@ -65,7 +62,9 @@ def demux_raw_features(
     shutil.rmtree(out_tree.demux_batches)
 
 
-def batched_demuxing(feature_table_path, manifest, batch_dir, batch_size):
+def batched_demuxing(
+    feature_table_path: str, manifest: pl.DataFrame, batch_dir: str, batch_size: int = c.DEFAULT_BATCH_SIZE
+):
     probe_dict = dict(zip(manifest['probe_name'].to_list(), manifest['gene_name'].to_list()))
     probe_dict['UNDETERMINED'] = 'UNDETERMINED'
 
@@ -102,11 +101,12 @@ def batched_demuxing(feature_table_path, manifest, batch_dir, batch_size):
             feature_batch_read = feature_batch_read.drop(['sequence', 'read'])
             redemuxed_feature_batch.append(feature_batch_read)
 
+        batch_dir = Path(batch_dir)
         pl.concat(redemuxed_feature_batch).write_parquet(batch_dir / f'batch_{i}.parquet')
 
 
 def stream_features(
-    feature_table_path, batch_size: int, columns: str | list[str] | None = None
+    feature_table_path: str, batch_size: int = c.DEFAULT_BATCH_SIZE, columns: str | list[str] | None = None
 ) -> Iterator[pl.DataFrame]:
     df = pl.scan_parquet(feature_table_path)
     if columns:

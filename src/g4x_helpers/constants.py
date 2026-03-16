@@ -41,6 +41,8 @@ PIXEL_PER_MICRON = 3.2
 
 # Demux
 PROBE_PATTERN = r'^(.*?)-([ACGT]{2,30})-([^-]+)$'
+BASE_ORDER = 'CTGA'
+DEFAULT_BATCH_SIZE = 1_000_000
 
 primer_read_map = {
     'SP1': 1,
