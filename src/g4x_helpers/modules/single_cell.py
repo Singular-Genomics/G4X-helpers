@@ -84,8 +84,8 @@ def create_cell_x_protein(
 
     # TODO eosin channel has been renamed
     channel_name_map = {protein: protein for protein in signal_list}
-    nuc_name = Path(c.REQUIRED_NUC_IMG).name.split('.')[0]
-    cyt_name = Path(c.REQUIRED_CYT_IMG).name.split('.')[0]
+    nuc_name = Path(c.NUC_IMG).name.split('.')[0]
+    cyt_name = Path(c.CYT_IMG).name.split('.')[0]
     channel_name_map[nuc_name] = nuc_name + 'stain'
     channel_name_map[cyt_name] = cyt_name + 'stain'
 

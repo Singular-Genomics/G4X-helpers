@@ -37,11 +37,12 @@ def create_sample_g4x(sample_id: str, run_meta: dict, ssheet: str, out_path: str
     for key in missing_keys:
         print(f"Warning: Expected key '{key}' is missing from run_meta.")
 
-    run_meta_sanitized = {k: v for k, v in run_meta.items() if k in EXPECTED_KEYS_RUN_META}
+    run_meta_sanitized = {k: v for k, v in run_meta.items() if k in EXPECTED_KEYS_RUN_META and v is not None}
 
     ### extract samplesheet information into a dictionary
     sample_sheet_info = _extract_sample_sheet_info(sample_id, ssheet)
     sample_sheet_info = _format_keys(sample_sheet_info)
+    sample_sheet_info = {k: v for k, v in sample_sheet_info.items() if v is not None}
 
     ### create a single value for custom panels
     sample_g4x = _handle_custom_panels(sample_g4x, sample_sheet_info)
@@ -61,10 +62,20 @@ def _extract_sample_sheet_info(sample_id: str, ssheet: str) -> dict:
     run_info_section, data_section = _parse_samplesheet(ssheet)
 
     # sanitize columns and filter the data_section for the specific sample_id
-    data_section = data_section.select(EXPECTED_KEYS_SS_DATA_SECTION)
+    def format_keys(key):
+        return key.replace(' ', '_').replace('-', '_').lower()
+
+    exp_lower = [format_keys(c) for c in EXPECTED_KEYS_SS_DATA_SECTION]
+    data_section = data_section.rename({c: format_keys(c) for c in data_section.columns})
+
+    missing_keys = [c for c in exp_lower if c not in data_section.columns]
+    for key in missing_keys:
+        data_section = data_section.with_columns(pl.lit(None).alias(key))
+
+    data_section = data_section.select(exp_lower)
 
     data_section_dict = data_section.filter(
-        pl.col('Lane') == int(sample_id[-1]), pl.col('Sample Position') == sample_id[0]
+        pl.col('lane') == int(sample_id[-1]), pl.col('sample_position') == sample_id[0]
     ).to_dicts()[0]
 
     # sanitize run_info_section

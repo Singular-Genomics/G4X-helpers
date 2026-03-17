@@ -5,35 +5,38 @@ from .utils import default_workers
 DEFAULT_THREADS = default_workers(max_workers=16, reserve=1)
 
 # Files
-REQUIRED_SMP_META = 'sample.g4x'
-REQUIRED_TX_PANEL = 'transcript_panel.csv'
-REQUIRED_PR_PANEL = 'protein_panel.csv'
-REQUIRED_RAW_FEATURES = 'rna/raw_features.parquet'
-REQUIRED_SEG_MASK = 'masks/segmentation_mask.npz'
-REQUIRED_BEAD_MASK = 'masks/bead_mask.npz'
-REQUIRED_SUMMARY = 'summary_*.html'
-REQUIRED_SSHEET = 'samplesheet.csv'
+SMP_META = 'sample.g4x'
+TX_PANEL = 'transcript_panel.csv'
+PR_PANEL = 'protein_panel.csv'
+SUMMARY = 'summary_*.html'
+SSHEET = 'samplesheet.csv'
 
-REQUIRED_NUC_IMG = 'h_and_e/nuclear.ome.tiff'
-REQUIRED_CYT_IMG = 'h_and_e/cytoplasmic.ome.tiff'
-REQUIRED_HnE_IMG = 'h_and_e/h_and_e.ome.tiff'
+HE_DIR = 'h_and_e'
+NUC_IMG = f'{HE_DIR}/nuclear'
+CYT_IMG = f'{HE_DIR}/cytoplasmic'
+HNE_IMG = f'{HE_DIR}/h_and_e'
 
-REQUIRED_HE_DIR = 'h_and_e'
-REQUIRED_PR_DIR = 'protein'
-REQUIRED_PR_SUFFIX = '.ome.tiff'
-ALT_PR_SUFFIX = '.jp2'
+PR_DIR = 'protein'
 
-DIRECTORY_SINGLE_CELL = 'single_cell_data'
+RNA_DIR = 'rna'
+RAW_FEATURES = f'{RNA_DIR}/raw_features.parquet'
+FILE_TX_TABLE = f'{RNA_DIR}/transcript_table.csv.gz'
 
-FILE_TX_TABLE = 'rna/transcript_table.csv.gz'
+MASK_DIR = 'masks'
+SEG_MASK = f'{MASK_DIR}/segmentation_mask.npz'
+BEAD_MASK = f'{MASK_DIR}/bead_mask.npz'
+
 FILE_VIEWER_ZARR = 'g4x-viewer.zarr'
 
-FILE_CELL_METADATA = 'single_cell_data/cell_metadata.csv.gz'
-FILE_CELL_X_GENE = 'single_cell_data/cell_by_gene.csv.gz'
-FILE_CELL_X_PROTEIN = 'single_cell_data/cell_by_protein.csv.gz'
-FILE_FEAT_MTX = 'single_cell_data/feature_matrix.h5'
-FILE_CLUSTERING_UMAP = 'single_cell_data/clustering_umap.csv.gz'
+SINGLE_CELL_DIR = 'single_cell_data'
+FILE_CELL_METADATA = f'{SINGLE_CELL_DIR}/cell_metadata.csv.gz'
+FILE_CELL_X_GENE = f'{SINGLE_CELL_DIR}/cell_by_gene.csv.gz'
+FILE_CELL_X_PROTEIN = f'{SINGLE_CELL_DIR}/cell_by_protein.csv.gz'
+FILE_CLUSTERING_UMAP = f'{SINGLE_CELL_DIR}/clustering_umap.csv.gz'
+FILE_FEAT_MTX = f'{SINGLE_CELL_DIR}/feature_matrix.h5'
 
+PREFERRED_IMG_SUFFIX = '.ome.tiff'
+ALT_IMG_SUFFIX = '.jp2'
 
 # Physical
 PIXEL_SIZE_MICRONS = 0.3125

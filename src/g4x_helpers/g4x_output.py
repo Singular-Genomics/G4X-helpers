@@ -120,6 +120,7 @@ class G4Xoutput:
             seg_path=self.tree.Segmentation.path,
             expected_shape=self.shape,
             labels_key='nuclei',  # TODO figure out what to do with custom segmentations
+            use_cache=True,
         )
         nuc_labels = np.unique(nuc_mask)
 
@@ -176,7 +177,7 @@ class G4Xoutput:
         return adata
 
     def load_protein_image(self, protein: str, use_cache: bool = False) -> np.ndarray:
-        img_path = self.tree.ProteinFolder.existing_files.get(protein)
+        img_path = self.tree.ProteinDir.existing_files.get(protein)
         if img_path is None:
             print(f'Protein image for {protein} not found.')
             return None
@@ -184,15 +185,15 @@ class G4Xoutput:
         return io.load_image(img_path=img_path, use_cache=use_cache)
 
     def load_he_image(self, use_cache: bool = False) -> np.ndarray:
-        img_path = self.tree.HnEFolder.path / 'h_and_e.ome.tiff'
+        img_path = self.tree.HnEDir.path / 'h_and_e.ome.tiff'
         return io.load_image(img_path=img_path, use_cache=use_cache)
 
     def load_nuclear_image(self, use_cache: bool = False) -> np.ndarray:
-        img_path = self.tree.HnEFolder.path / 'nuclear.ome.tiff'
+        img_path = self.tree.HnEDir.path / 'nuclear.ome.tiff'
         return io.load_image(img_path=img_path, use_cache=use_cache)
 
     def load_cytoplasmic_image(self, use_cache: bool = False) -> np.ndarray:
-        img_path = self.tree.HnEFolder.path / 'cytoplasmic.ome.tiff'
+        img_path = self.tree.HnEDir.path / 'cytoplasmic.ome.tiff'
         return io.load_image(img_path=img_path, use_cache=use_cache)
 
     def load_segmentation(self, expanded: bool = True, key: str | None = None) -> np.ndarray:

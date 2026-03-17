@@ -46,13 +46,13 @@ class FileTree:
                     SampleSheet(self.smp_dir),
                     Segmentation(self.smp_dir),
                     BeadMask(self.smp_dir),
-                    QCSummary(self.smp_dir),
-                    HnEFolder(self.smp_dir),
+                    HnEDir(self.smp_dir),
                 ]
             )
 
             self.secondary_validators.extend(
                 [
+                    QCSummary(self.smp_dir),
                     ViewerZarr(self.smp_dir),
                     SingleCellFolder(self.smp_dir),
                     CellMetadata(self.smp_dir),
@@ -78,7 +78,7 @@ class FileTree:
                 self.raw_validators.extend(
                     [
                         ProteinPanel(self.smp_dir),
-                        ProteinFolder(self.smp_dir),
+                        ProteinDir(self.smp_dir),
                     ]
                 )
                 self.secondary_validators.extend(
@@ -239,9 +239,10 @@ class DataValidator:
             matches = sorted(self.smp_dir.glob(str(self.target_path)))
 
             if len(matches) != 1:
-                raise ValueError(
-                    f'{self.name}: Could not resolve wildcard, expected exactly 1 match for {self.target_path!s}, found {len(matches)}: {matches}'
-                )
+                # print(
+                #     f'{self.name}: Could not resolve wildcard, expected exactly 1 match for {self.target_path!s}, found {len(matches)}: {matches}'
+                # )
+                return self.target_path
             return matches[0].relative_to(self.smp_dir)
         else:
             return self.target_path
@@ -261,7 +262,7 @@ class DataValidator:
                 validation_results[test_name] = getattr(self, test_name)()
 
         if self.validate_absence:
-            validation_results['required_absent'] = not self.path_exists
+            validation_results['absent'] = not self.path_exists
 
         return validation_results
 
@@ -283,7 +284,7 @@ def validation_test(func):
 
 
 class SampleMetadata(DataValidator):
-    DEFAULT_TARGET_PATH = c.REQUIRED_SMP_META
+    DEFAULT_TARGET_PATH = c.SMP_META
     TYPE = 'file'
 
     KEYS = [
@@ -331,7 +332,7 @@ class SampleMetadata(DataValidator):
 
 
 class Segmentation(DataValidator):
-    DEFAULT_TARGET_PATH = c.REQUIRED_SEG_MASK
+    DEFAULT_TARGET_PATH = c.SEG_MASK
     TYPE = 'file'
 
     @validation_test
@@ -341,7 +342,7 @@ class Segmentation(DataValidator):
 
 
 class BeadMask(DataValidator):
-    DEFAULT_TARGET_PATH = c.REQUIRED_BEAD_MASK
+    DEFAULT_TARGET_PATH = c.BEAD_MASK
     TYPE = 'file'
 
     @validation_test
@@ -351,12 +352,12 @@ class BeadMask(DataValidator):
 
 
 class QCSummary(DataValidator):
-    DEFAULT_TARGET_PATH = c.REQUIRED_SUMMARY
+    DEFAULT_TARGET_PATH = c.SUMMARY
     TYPE = 'file'
 
 
 class SampleSheet(DataValidator):
-    DEFAULT_TARGET_PATH = c.REQUIRED_SSHEET
+    DEFAULT_TARGET_PATH = c.SSHEET
     TYPE = 'file'
 
     EXPECTED_KEYS_RUN_SECTION = [
@@ -410,7 +411,7 @@ class SampleSheet(DataValidator):
 
 
 class RawFeatures(DataValidator):
-    DEFAULT_TARGET_PATH = c.REQUIRED_RAW_FEATURES
+    DEFAULT_TARGET_PATH = c.RAW_FEATURES
     TYPE = 'file'
 
     SCHEMA = [
@@ -440,7 +441,7 @@ class ViewerZarr(DataValidator):
 
 
 class TranscriptPanel(DataValidator):
-    DEFAULT_TARGET_PATH = c.REQUIRED_TX_PANEL
+    DEFAULT_TARGET_PATH = c.TX_PANEL
     TYPE = 'file'
 
     SCHEMA = ['probe_name', 'gene_name', 'panel_type']
@@ -450,11 +451,11 @@ class TranscriptPanel(DataValidator):
         lf = pl.scan_csv(self.target_path_resolved)
         lf_names = lf.collect_schema().names()
 
-        return set(lf_names).issubset(self.SCHEMA)
+        return set(self.SCHEMA).issubset(lf_names)
 
 
 class ProteinPanel(DataValidator):
-    DEFAULT_TARGET_PATH = c.REQUIRED_PR_PANEL
+    DEFAULT_TARGET_PATH = c.PR_PANEL
     TYPE = 'file'
 
     SCHEMA = ['target', 'panel_type']
@@ -464,7 +465,7 @@ class ProteinPanel(DataValidator):
         lf = pl.scan_csv(self.target_path_resolved)
         lf_names = lf.collect_schema().names()
 
-        return set(lf_names).issubset(self.SCHEMA)
+        return set(self.SCHEMA).issubset(lf_names)
 
     @validation_test
     def folder_present(self):
@@ -472,19 +473,19 @@ class ProteinPanel(DataValidator):
         return folder.path_exists
 
 
-class ProteinFolder(DataValidator):
-    DEFAULT_TARGET_PATH = c.REQUIRED_PR_DIR
+class ProteinDir(DataValidator):
+    DEFAULT_TARGET_PATH = c.PR_DIR
     TYPE = 'directory'
 
-    IMG_SUFFIXES = [c.REQUIRED_PR_SUFFIX, c.ALT_PR_SUFFIX]
+    IMG_SUFFIXES = [c.PREFERRED_IMG_SUFFIX, c.ALT_IMG_SUFFIX]
 
     def __init__(self, smp_dir):
         super().__init__(smp_dir)
         self.panel = ProteinPanel(self.smp_dir)
-        required_proteins = pl.read_csv(self.panel.target_path_resolved)['target'].to_list()
+        proteins = pl.read_csv(self.panel.target_path_resolved)['target'].to_list()
 
         self.existing_files = {}
-        for pr in required_proteins:
+        for pr in proteins:
             img = None
             for suffix in self.IMG_SUFFIXES:
                 candidate = (self.target_path_resolved / pr).with_suffix(suffix)
@@ -502,22 +503,36 @@ class ProteinFolder(DataValidator):
         return all(self.existing_files.values())
 
 
-class HnEFolder(DataValidator):
-    DEFAULT_TARGET_PATH = c.REQUIRED_HE_DIR
+class HnEDir(DataValidator):
+    DEFAULT_TARGET_PATH = c.HE_DIR
     TYPE = 'directory'
 
-    REQUIRED_IMAGES = [
-        c.REQUIRED_NUC_IMG,
-        c.REQUIRED_CYT_IMG,
-        c.REQUIRED_HnE_IMG,
+    IMG_SUFFIXES = [c.PREFERRED_IMG_SUFFIX, c.ALT_IMG_SUFFIX]
+
+    IMAGES = [
+        c.NUC_IMG,
+        c.CYT_IMG,
+        c.HNE_IMG,
     ]
+
+    def __init__(self, smp_dir):
+        super().__init__(smp_dir)
+
+        self.existing_files = {}
+        for img in self.IMAGES:
+            img_path = Path(f'{img}__missing__')
+            for suffix in self.IMG_SUFFIXES:
+                candidate = (self.smp_dir / img).with_suffix(suffix)
+                if candidate.exists():
+                    img_path = candidate
+
+            self.existing_files[img] = img_path  # is not None
 
     @validation_test
     def images_present(self):
         existing_files = {}
-        for img_path in self.REQUIRED_IMAGES:
-            img = self.smp_dir / img_path
-            existing_files[img_path] = img.exists()
+        for img_name, img_path in self.existing_files.items():
+            existing_files[img_name] = img_path.exists()
         return all(existing_files.values())
 
 
@@ -542,7 +557,7 @@ class AdataH5(DataValidator):
 
 
 class SingleCellFolder(DataValidator):
-    DEFAULT_TARGET_PATH = c.DIRECTORY_SINGLE_CELL
+    DEFAULT_TARGET_PATH = c.SINGLE_CELL_DIR
     TYPE = 'directory'
 
     SUB_VALIDATORS = [
