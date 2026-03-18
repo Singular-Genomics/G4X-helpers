@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
+import pandas as pd
 import polars as pl
 import scanpy as sc
 from pandas.errors import PerformanceWarning
@@ -160,7 +161,7 @@ def create_adata(g4x_obj: 'G4Xoutput', cell_x_gene: pl.DataFrame, cell_metadata:
     ctrl_types = ['NCP', 'NCS', 'GCP']
     for ctrl_type in ctrl_types:
         adata.var[ctrl_type.lower()] = adata.var['probe_type'] == ctrl_type
-    
+
     ctrl_types_lower = [c.lower() for c in ctrl_types]
     sc.pp.calculate_qc_metrics(adata, qc_vars=ctrl_types_lower, inplace=True, percent_top=None)
 
@@ -356,16 +357,50 @@ def intersect_tx_with_cells_g4x(g4x_obj: 'G4Xoutput', tx_table: pl.DataFrame | N
     return tx_table
 
 
-def reorder_clusters_by_size(clust_umap, key: str, prefix='C') -> pl.DataFrame:
-    clust_sorted = clust_umap.group_by(key).agg(pl.len()).sort('len', descending=True)
-    size_order = clust_sorted[key].to_list()
-    numeric_order = np.arange(len(size_order)).astype(str).tolist()
+# def reorder_clusters_by_size(clust_umap, key: str, prefix='C') -> pl.DataFrame:
+#     clust_sorted = clust_umap.group_by(key).agg(pl.len()).sort('len', descending=True)
+#     size_order = clust_sorted[key].to_list()
+#     numeric_order = np.arange(len(size_order)).astype(str).tolist()
 
-    numeric_order = [prefix + str(uid) for uid in numeric_order]
+#     numeric_order = [prefix + str(uid) for uid in numeric_order]
+#     order_map = dict(zip(size_order, numeric_order))
+
+#     new_umap = clust_umap.with_columns(pl.col(key).replace(order_map)).sort('seg_cell_id')
+#     return new_umap
+
+
+def reorder_clusters_by_size(obs: pd.DataFrame, key: str, prefix: str = 'C') -> pd.DataFrame:
+    # Ensure consistent grouping behavior
+    clust_sorted = (
+        obs.groupby(key, observed=False)  # explicit to silence warning
+        .size()
+        .sort_values(ascending=False)
+    )
+
+    size_order = clust_sorted.index.tolist()
+
+    # Create new labels
+    numeric_order = [f'{prefix}{i}' for i in range(len(size_order))]
+
+    # Mapping old -> new labels
     order_map = dict(zip(size_order, numeric_order))
 
-    new_umap = clust_umap.with_columns(pl.col(key).replace(order_map)).sort('seg_cell_id')
-    return new_umap
+    reordered_obs = obs.copy()
+
+    # Handle categorical safely
+    if isinstance(reordered_obs[key].dtype, pd.CategoricalDtype):
+        # Convert to string (or object) before replacing
+        reordered_obs[key] = reordered_obs[key].astype(str)
+
+    reordered_obs[key] = reordered_obs[key].replace(order_map)
+
+    reordered_obs[key] = pd.Categorical(
+        reordered_obs[key],
+        categories=numeric_order,  # this defines the order!
+        ordered=True,
+    )
+
+    return reordered_obs
 
 
 def _filter_axis(
