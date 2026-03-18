@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache, wraps
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import geopandas
 import glymur
@@ -13,6 +14,11 @@ from matplotlib.pyplot import imread
 
 from .. import constants, utils
 from . import convert
+
+if TYPE_CHECKING:
+    from pandas import DataFrame as pdDF
+    from polars import DataFrame as plDF
+    from polars import LazyFrame as plLF
 
 
 def optionally_cached(func):
@@ -192,7 +198,26 @@ def import_segmentation(seg_path: str, expected_shape: tuple[int], labels_key: s
 
 
 @optionally_cached
-def load_image(img_path):
+def import_table(file_path: str, lazy: bool = False, columns: list[str] | None = None) -> 'pdDF | plDF | plLF':
+    file_path = Path(file_path)
+    if lazy:
+        if file_path.suffix == '.parquet':
+            reads = pl.scan_parquet(file_path)
+        else:
+            reads = pl.scan_csv(file_path)
+    else:
+        if file_path.suffix == '.parquet':
+            reads = pl.read_parquet(file_path)
+        else:
+            reads = pl.read_csv(file_path)
+    if columns:
+        reads = reads.select(columns)
+
+    return reads
+
+
+@optionally_cached
+def import_image(img_path):
     img_path = Path(img_path)
     suffix = img_path.suffix.lower()
 

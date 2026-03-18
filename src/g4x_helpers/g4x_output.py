@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import glymur
 import numpy as np
@@ -10,6 +11,10 @@ import tifffile
 from anndata import AnnData, read_h5ad
 
 from . import io
+
+if TYPE_CHECKING:
+    from polars import DataFrame as plDF
+    from polars import LazyFrame as plLF
 
 
 class G4Xoutput:
@@ -107,8 +112,6 @@ class G4Xoutput:
             'sample_id',
             'block',
             'tissue_type',
-            # 'assay',
-            # 'run_name',
         ]
 
         for k in static_attrs:
@@ -196,42 +199,34 @@ class G4Xoutput:
         img_path = self.tree.HnEDir.path / 'cytoplasmic.ome.tiff'
         return io.load_image(img_path=img_path, use_cache=use_cache)
 
-    def load_segmentation(self, expanded: bool = True, key: str | None = None) -> np.ndarray:
-        from .modules.segment import try_load_segmentation
-
-        arr = np.load(self.tree.Segmentation.path)
-        available_keys = list(arr.keys())
-
-        if 'nuclei' and 'nuclei_exp' in available_keys:
-            key = 'nuclei_exp' if expanded else 'nuclei'
-
-        return try_load_segmentation(cell_labels=self.tree.Segmentation.path, expected_shape=self.shape, labels_key=key)
+    def load_segmentation(self, expanded: bool = True, key: str | None = None, use_cache: bool = False) -> np.ndarray:
+        key = 'nuclei_exp' if expanded else 'nuclei'
+        return io.import_segmentation(
+            seg_path=self.tree.Segmentation.path, expected_shape=self.shape, labels_key=key, use_cache=use_cache
+        )
 
     def load_bead_mask(self) -> np.ndarray:
         return np.load(self.tree.BeadMask.path)['bead_mask']
 
-    # TODO: this is not used anywhere, consider removing. it's also broken
     def load_feature_table(
         self,
         *,
-        return_polars: bool = True,
         lazy: bool = False,
         columns: list[str] | None = None,
-        alt_file_path: str | None = None,
-    ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
-        file_path = self.tree.RawFeatures.path if alt_file_path is None else alt_file_path
-        return self._load_table(file_path, return_polars, lazy, columns)
+        use_cache: bool = False,
+    ) -> 'plDF | plLF':
+        file_path = self.tree.RawFeatures.path
+        return io.import_table(file_path, lazy=lazy, columns=columns, use_cache=use_cache)
 
     def load_transcript_table(
         self,
         *,
-        return_polars: bool = True,
         lazy: bool = False,
         columns: list[str] | None = None,
-        alt_file_path: str | None = None,
-    ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
-        file_path = self.tree.TranscriptTable.path if alt_file_path is None else alt_file_path
-        return self._load_table(file_path, return_polars, lazy, columns)
+        use_cache: bool = False,
+    ) -> 'plDF | plLF':
+        file_path = self.tree.TranscriptTable.path
+        return io.import_table(file_path, lazy=lazy, columns=columns, use_cache=use_cache)
 
     def list_content(self, subdir=None):
         if subdir is None:
@@ -248,24 +243,3 @@ class G4Xoutput:
                 contents['files'].append(item)
 
         return contents
-
-    # region internal
-    def _load_table(
-        self, file_path: str, return_polars: bool = True, lazy: bool = False, columns: list[str] | None = None
-    ) -> pd.DataFrame | pl.DataFrame | pl.LazyFrame:
-        file_path = Path(file_path)
-        if lazy:
-            if file_path.suffix == '.parquet':
-                reads = pl.scan_parquet(file_path)
-            else:
-                reads = pl.scan_csv(file_path)
-        else:
-            if file_path.suffix == '.parquet':
-                reads = pl.read_parquet(file_path)
-            else:
-                reads = pl.read_csv(file_path)
-        if columns:
-            reads = reads.select(columns)
-        if not return_polars:
-            reads = reads.collect().to_pandas()
-        return reads

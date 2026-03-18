@@ -119,64 +119,6 @@ def apply_segmentation(
     np.savez(seg_mask_out, cell_labels=labels)
 
 
-def try_load_segmentation(cell_labels: str, expected_shape: tuple[int], labels_key: str | None = None) -> np.ndarray:
-    SUPPORTED_MASK_FILETYPES = {'.npy', '.npz', '.geojson'}
-    ## load new segmentation
-    cell_labels = utils.validate_path(cell_labels, must_exist=True, is_dir_ok=False, is_file_ok=True)
-    suffix = cell_labels.suffix.lower()
-
-    if suffix not in SUPPORTED_MASK_FILETYPES:
-        raise ValueError(f'{suffix} is not a supported file type.')
-
-    if suffix == '.npz':
-        with np.load(cell_labels) as labels:
-            available_keys = list(labels.keys())
-
-            if labels_key:  # if a key is specified
-                if labels_key not in labels:
-                    raise KeyError(f"Key '{labels_key}' not found in .npz; available keys: {available_keys}")
-                seg = labels[labels_key]
-
-            else:
-                if len(available_keys) != 1:
-                    raise ValueError(
-                        f'Expected exactly one key in .npz but found {len(available_keys)}: {available_keys}. '
-                        "Please specify a key using 'labels_key'."
-                    )
-                seg = labels[available_keys[0]]
-
-    elif suffix == '.npy':
-        # .npy: directly returns the array, no context manager available
-        if labels_key is not None:
-            print('file is .npy, ignoring provided labels_key.')
-        seg = np.load(cell_labels, allow_pickle=False)
-
-    elif suffix == '.geojson':
-        gdf = geopandas.read_file(cell_labels)
-
-        if labels_key is not None:
-            if labels_key not in gdf.columns:
-                raise KeyError(f"Column '{labels_key}' not found in GeoJSON; available columns: {gdf.columns.tolist()}")
-
-            # ensure that a column named 'label' exists
-            gdf['label'] = gdf[labels_key]
-
-        else:
-            if 'label' not in gdf.columns:
-                raise ValueError(
-                    "No column named 'label' found in GeoJSON. Please specify which column to use for labels via labels_key."
-                )
-
-        print('Rasterizing provided GeoDataFrame.')
-        seg = rasterize_polygons(gdf=gdf, target_shape=expected_shape)
-
-    # validate shape for final numpy arrays
-    if seg.shape != expected_shape:
-        raise ValueError(f'provided mask shape {seg.shape} does not match G4X sample shape {expected_shape}')
-
-    return seg
-
-
 def get_cell_ids(sample_id: str, mask) -> pl.DataFrame:
     print('Getting cell-IDs from segmentation mask.')
     seg_ids = np.unique(mask[mask != 0])
