@@ -1,9 +1,11 @@
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 import polars as pl
 import scanpy as sc
+from pandas.errors import PerformanceWarning
 from skimage import measure
 from tqdm import tqdm
 
@@ -27,7 +29,7 @@ def cell_frame(g4x_obj: 'G4Xoutput', lazy: bool = True) -> int:
 def create_cell_metadata(g4x_obj: 'G4Xoutput', mask: np.ndarray | None):
     cell_meta = init_cell_metadata(g4x_obj).collect()
 
-    source = 'custom' if mask is not None else 'g4x'
+    source = 'custom' if mask is not None else 'g4x-default'
 
     # TODO this might break if someone changes the .npz file
     if mask is None:
@@ -35,7 +37,7 @@ def create_cell_metadata(g4x_obj: 'G4Xoutput', mask: np.ndarray | None):
     else:
         mask_props = extract_cell_props(mask)
 
-    mask_props = mask_props.with_columns(pl.lit(source).alias('source'))
+    mask_props = mask_props.with_columns(pl.lit(source).alias('seg_source'))
 
     if mask_props[c.CELL_ID_NAME].equals(cell_meta[c.CELL_ID_NAME]):
         cell_meta = cell_meta.join(mask_props, on=c.CELL_ID_NAME, how='left')
@@ -126,8 +128,8 @@ def create_adata(g4x_obj: 'G4Xoutput', cell_x_gene: pl.DataFrame, cell_metadata:
     X = cell_x_gene.drop(c.CELL_ID_NAME).to_numpy().astype(np.uint16)
     X = csr_matrix(X)
 
-    if cell_metadata is None:
-        cell_metadata = create_cell_metadata(g4x_obj, mask=None)
+    # if cell_metadata is None:
+    #     cell_metadata = create_cell_metadata(g4x_obj, mask=None)
 
     obs_df = cell_metadata.to_pandas().set_index(c.CELL_ID_NAME)
     obs_df.index = obs_df.index.astype(str)
@@ -136,7 +138,7 @@ def create_adata(g4x_obj: 'G4Xoutput', cell_x_gene: pl.DataFrame, cell_metadata:
     var_df = pl.DataFrame(gene_ids).with_columns(pl.lit('tx').alias('modality'))
 
     panel_type = (
-        io.parse_input_manifest(g4x_obj.data_dir / 'transcript_panel.csv')
+        io.parse_input_manifest(g4x_obj.tree.TranscriptPanel.path)
         .unique('gene_name')
         .select('gene_name', 'probe_type')
         .rename({'gene_name': c.GENE_ID_NAME})
@@ -151,13 +153,19 @@ def create_adata(g4x_obj: 'G4Xoutput', cell_x_gene: pl.DataFrame, cell_metadata:
         .to_pandas()
         .set_index(c.GENE_ID_NAME)
     )
-
-    # # TODO I think the correct thing to do here is to set the index to the gene_id
-    # var_df.index = var_df.index.astype(str)
-    # .set_index('label')
+    var_df.index = var_df.index.astype(str)
 
     adata = AnnData(X=X, obs=obs_df, var=var_df)
-    sc.pp.calculate_qc_metrics(adata, inplace=True, percent_top=None)
+
+    ctrl_types = ['NCP', 'NCS', 'GCP']
+    for ctrl_type in ctrl_types:
+        adata.var[ctrl_type.lower()] = adata.var['probe_type'] == ctrl_type
+    
+    ctrl_types_lower = [c.lower() for c in ctrl_types]
+    sc.pp.calculate_qc_metrics(adata, qc_vars=ctrl_types_lower, inplace=True, percent_top=None)
+
+    adata.var.drop(columns=ctrl_types_lower, inplace=True)
+
     return adata.copy()
 
 
@@ -167,17 +175,23 @@ def process_adata(adata: 'AnnData'):
     ## 2. remove genes not expressed by at least 5% of remaining cells
     ## 3. filter on total transcripts and unique genes remove top 1% and bottom 5%
 
-    adata = filter_by_quantiles(adata, obs_key='nuclei_area_um', quantiles=(0.01, 0.99))
+    adata = filter_by_qtiles(adata, obs_key='nuclei_area_um', quantiles=(0.01, 0.99))
 
     min_cells = int(0.05 * adata.n_obs)
     sc.pp.filter_genes(adata, min_cells=min_cells, inplace=True)
 
-    adata = filter_by_quantiles(adata, obs_key='total_counts', quantiles=(0.05, 0.99))
-    adata = filter_by_quantiles(adata, obs_key='n_genes_by_counts', quantiles=(0.05, 0.99))
+    sc.pp.filter_cells(adata, min_counts=10)
+
+    adata = filter_by_qtiles(adata, obs_key='total_counts', quantiles=(0.05, 0.99))
+    adata = filter_by_qtiles(adata, obs_key='n_genes_by_counts', quantiles=(0.05, 0.99))
 
     # normalize data
     adata.layers['counts'] = adata.X
+    print(adata.obs['total_counts'].min())
+
     sc.pp.normalize_total(adata)
+    return adata
+
     sc.pp.log1p(adata)
     sc.pp.pca(adata)
     sc.pp.neighbors(adata)
@@ -195,14 +209,16 @@ def process_adata(adata: 'AnnData'):
 
     sc.tl.umap(adata)
 
-    sc.tl.rank_genes_groups(
-        adata,
-        groupby=f'leiden_{res:0.2f}',
-        use_raw=False,
-        method='wilcoxon',
-        pts=True,
-        key_added=f'leiden_{res:0.2f}_rank_genes_groups',
-    )
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', PerformanceWarning)
+        sc.tl.rank_genes_groups(
+            adata,
+            groupby=f'leiden_{res:0.2f}',
+            use_raw=False,
+            method='wilcoxon',
+            pts=True,
+            key_added=f'leiden_{res:0.2f}_rank_genes_groups',
+        )
     return adata
 
 
@@ -305,14 +321,14 @@ def init_cell_metadata(g4x_obj: 'G4Xoutput'):
     return df
 
 
-def filter_by_quantiles(adata: 'AnnData', obs_key: str, quantiles: tuple[float, float] = (0.0, 1.0)):
-    if obs_key not in adata.obs:
-        raise ValueError(f"obs_key '{obs_key}' not found in adata.obs")
+# def filter_by_quantiles(adata: 'AnnData', obs_key: str, quantiles: tuple[float, float] = (0.0, 1.0)):
+#     if obs_key not in adata.obs:
+#         raise ValueError(f"obs_key '{obs_key}' not found in adata.obs")
 
-    qs = adata.obs[obs_key].quantile([quantiles[0], quantiles[1]]).to_numpy(dtype=int)
+#     qs = adata.obs[obs_key].quantile([quantiles[0], quantiles[1]]).to_numpy(dtype=int)
 
-    adata = adata[(adata.obs[obs_key] >= qs[0]) & (adata.obs[obs_key] <= qs[1])]
-    return adata.copy()
+#     adata = adata[(adata.obs[obs_key] >= qs[0]) & (adata.obs[obs_key] <= qs[1])]
+#     return adata.copy()
 
 
 def intersect_tx_with_cells(
@@ -350,3 +366,80 @@ def reorder_clusters_by_size(clust_umap, key: str, prefix='C') -> pl.DataFrame:
 
     new_umap = clust_umap.with_columns(pl.col(key).replace(order_map)).sort('seg_cell_id')
     return new_umap
+
+
+def _filter_axis(
+    adata,
+    axis: str,
+    key: str,
+    val_min: float | None = None,
+    val_max: float | None = None,
+):
+    if axis == 'obs':
+        df = adata.obs
+        values = df[key].to_numpy()
+        mask = np.ones(adata.n_obs, dtype=bool)
+    elif axis == 'var':
+        df = adata.var
+        values = df[key].to_numpy()
+        mask = np.ones(adata.n_vars, dtype=bool)
+    else:
+        raise ValueError("axis must be 'obs' or 'var'")
+
+    if key not in df:
+        raise ValueError(f"key '{key}' not found in adata.{axis}")
+
+    if val_min is not None:
+        mask &= values >= val_min
+    if val_max is not None:
+        mask &= values <= val_max
+
+    if axis == 'obs':
+        return adata[mask].copy()
+    else:
+        return adata[:, mask].copy()
+
+
+def filter_by_limits(
+    adata,
+    key: str,
+    axis: str = 'obs',
+    val_min: float | None = None,
+    val_max: float | None = None,
+):
+    return _filter_axis(
+        adata=adata,
+        axis=axis,
+        key=key,
+        val_min=val_min,
+        val_max=val_max,
+    )
+
+
+def filter_by_qtiles(
+    adata,
+    key: str,
+    axis: str = 'obs',
+    q_min: float = 0,
+    q_max: float = 1,
+):
+    if not (0 <= q_min <= 1 and 0 <= q_max <= 1):
+        raise ValueError('q_min and q_max must be between 0 and 1')
+    if q_min > q_max:
+        raise ValueError('q_min must be <= q_max')
+
+    df = adata.obs if axis == 'obs' else adata.var
+    if axis not in {'obs', 'var'}:
+        raise ValueError("axis must be 'obs' or 'var'")
+    if key not in df:
+        raise ValueError(f"key '{key}' not found in adata.{axis}")
+
+    val_min, val_max = df[key].quantile([q_min, q_max]).to_numpy()
+
+    return _filter_axis(
+        adata=adata,
+        axis=axis,
+        key=key,
+        val_min=val_min,
+        val_max=val_max,
+    )
