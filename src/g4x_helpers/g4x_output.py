@@ -3,14 +3,12 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import glymur
 import numpy as np
 import pandas as pd
 import polars as pl
-import tifffile
 from anndata import AnnData, read_h5ad
 
-from . import io
+from . import c, io, ut
 
 if TYPE_CHECKING:
     from polars import DataFrame as plDF
@@ -26,27 +24,23 @@ class G4Xoutput:
 
     """
 
-    def __init__(self, data_dir: str):
+    def __init__(self, data_dir: str, use_cache: bool = True):
         self.data_dir = Path(data_dir)
         self.tree = io.FileTree(self.data_dir)
+        self.use_cache = use_cache
 
         self.tree.validation_report(format='minimal', raw_only=True, report_pass=False, raise_exception=False)
 
         with open(self.tree.SampleMetadata.path, 'r') as f:
             self.smp_meta = json.load(f)
 
-        nuc_img = list((self.data_dir / 'h_and_e').glob('nuclear.*'))[0]
-        if nuc_img.suffix == '.tiff':
-            with tifffile.TiffFile(nuc_img) as tif:
-                series = tif.series[0]
-                self.shape = series.shape
-        elif nuc_img.suffix == '.jp2':
-            self.shape = glymur.Jp2k(nuc_img).shape
-        else:
-            raise ValueError(f'Unsupported image format: {nuc_img.suffix}')
+        nuc_img = self.tree.HnEDir.existing_files['h_and_e/nuclear']
+        self.shape = ut.get_image_shape(nuc_img)
 
         self.set_meta_attrs()
+        self.cache = {}
 
+        self.stains = [c.NUCLEAR_STAIN, c.CYTOPLASMIC_STAIN]
         self.genes = []
         if self.tree.tx_detected:
             tx_panel = io.parse_input_manifest(self.tree.TranscriptPanel.path)
@@ -57,7 +51,7 @@ class G4Xoutput:
         if self.tree.pr_detected:
             protein_panel = pl.read_csv(self.tree.ProteinPanel.path)
             protein_panel.sort(by=['panel_type', pl.col('target').str.to_lowercase()], descending=[True, False])
-            self.proteins = protein_panel['target'].to_list()
+            self.proteins = self.sort_proteins(protein_panel['target'].to_list())
 
     ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ###
     # region dunder
@@ -119,15 +113,23 @@ class G4Xoutput:
 
     @property
     def cell_labels(self) -> np.ndarray:
+        cache_key = 'cell_labels'
+        if self.use_cache and cache_key in self.cache:
+            return self.cache[cache_key].copy()
+
         nuc_mask = io.import_segmentation(
             seg_path=self.tree.Segmentation.path,
             expected_shape=self.shape,
             labels_key='nuclei',  # TODO figure out what to do with custom segmentations
-            use_cache=True,
+            use_cache=self.use_cache,
         )
         nuc_labels = np.unique(nuc_mask)
+        nuc_labels = nuc_labels[nuc_labels != 0]
 
-        return nuc_labels[nuc_labels != 0]
+        if self.use_cache:
+            self.cache[cache_key] = nuc_labels.copy()
+
+        return nuc_labels
 
     @property
     def is_demuxed(self):
@@ -185,19 +187,19 @@ class G4Xoutput:
             print(f'Protein image for {protein} not found.')
             return None
 
-        return io.load_image(img_path=img_path, use_cache=use_cache)
+        return io.import_image(img_path=img_path, use_cache=use_cache)
 
     def load_he_image(self, use_cache: bool = False) -> np.ndarray:
-        img_path = self.tree.HnEDir.path / 'h_and_e.ome.tiff'
-        return io.load_image(img_path=img_path, use_cache=use_cache)
+        img_path = self.tree.HnEDir.existing_files['h_and_e/h_and_e']
+        return io.import_image(img_path=img_path, use_cache=use_cache)
 
     def load_nuclear_image(self, use_cache: bool = False) -> np.ndarray:
-        img_path = self.tree.HnEDir.path / 'nuclear.ome.tiff'
-        return io.load_image(img_path=img_path, use_cache=use_cache)
+        img_path = self.tree.HnEDir.existing_files['h_and_e/nuclear']
+        return io.import_image(img_path=img_path, use_cache=use_cache)
 
     def load_cytoplasmic_image(self, use_cache: bool = False) -> np.ndarray:
-        img_path = self.tree.HnEDir.path / 'cytoplasmic.ome.tiff'
-        return io.load_image(img_path=img_path, use_cache=use_cache)
+        img_path = self.tree.HnEDir.existing_files['h_and_e/cytoplasmic']
+        return io.import_image(img_path=img_path, use_cache=use_cache)
 
     def load_segmentation(self, expanded: bool = True, key: str | None = None, use_cache: bool = False) -> np.ndarray:
         key = 'nuclei_exp' if expanded else 'nuclei'
@@ -243,3 +245,11 @@ class G4Xoutput:
                 contents['files'].append(item)
 
         return contents
+
+    def sort_proteins(self, proteins):
+        proteins = sorted(proteins, key=str.lower)
+
+        if 'Isotype' in proteins:
+            proteins.remove('Isotype')
+            proteins = proteins + ['Isotype']
+        return proteins

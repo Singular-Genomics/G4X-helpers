@@ -258,15 +258,15 @@ def symlink_original_files(g4x_obj, out_dir: Path | str) -> None:
             dst_file.symlink_to((Path(root) / f).resolve())
 
 
-def get_shape_ometiff(tiff_file):
-    import tifffile as tiff
+def get_image_shape(img_path):
+    import glymur
+    import tifffile
 
-    with tiff.TiffFile(tiff_file) as tif:
-        # Option 1: from series (recommended for OME-TIFF)
-        series = tif.series[0]
-        print('Shape:', series.shape)
-        print('Axes:', series.axes)
-
-        # Option 2: from first page (basic TIFF dimensions)
-        page = tif.pages[0]
-        print('YX shape:', page.shape)
+    if img_path.suffix == '.tiff':
+        with tifffile.TiffFile(img_path) as tif:
+            series = tif.series[0]
+            return series.shape
+    elif img_path.suffix == '.jp2':
+        return glymur.Jp2k(img_path).shape
+    else:
+        raise ValueError(f'Unsupported image format: {img_path.suffix}')

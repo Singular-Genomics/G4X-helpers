@@ -89,27 +89,17 @@ def default_window_recipe(arr):
 
 
 def write_muliplex_img(smp, root_group):
-    # TODO this should happen in the sample class
-    # Sort proteins to have aSMA first and Isotype last
-    channel_names = sorted(smp.proteins, key=str.lower)
 
     dtype = np.uint16
     channel_arrays = []
 
     # Prepare dask arrays for each channel
     if smp.proteins:
-        if 'Isotype' in channel_names:
-            channel_names.remove('Isotype')
-            channel_names = channel_names + ['Isotype']
-
-        for ch in channel_names:
+        for ch in smp.proteins:
             arr = _load_image_dask(smp, img_type='protein', protein_name=ch, dtype=dtype)
             channel_arrays.append(arr)
 
-    stain_channels = ['cytoplasmic', 'nuclear']
-    channel_names.extend(stain_channels)
-
-    for ch in stain_channels:
+    for ch in reversed(smp.stains):
         arr = _load_image_dask(smp, img_type=ch, protein_name=None, dtype=dtype)
         channel_arrays.append(arr)
 
@@ -118,12 +108,14 @@ def write_muliplex_img(smp, root_group):
             channel_arrays[i] = arr[None, ...]  # add Z
 
     # build the channels and their metadata
+    channel_order = smp.proteins + list(reversed(smp.stains))
     channels = []
-    for arr, name in zip(channel_arrays, channel_names):
+
+    for arr, name in zip(channel_arrays, channel_order):
         if name in channel_color_map:
             color = saturated_colors[channel_color_map[name]]
         else:
-            color = saturated_colors[list(saturated_colors.keys())[channel_names.index(name) % len(saturated_colors)]]
+            color = saturated_colors[list(saturated_colors.keys())[channel_order.index(name) % len(saturated_colors)]]
         # TODO define what to do when t
         active = True if name in DEFAULT_VISIBLE_CHANNELS else False
         window = default_window_recipe(arr)
