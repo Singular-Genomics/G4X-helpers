@@ -404,11 +404,7 @@ def reorder_clusters_by_size(obs: pd.DataFrame, key: str, prefix: str = 'C') -> 
 
 
 def _filter_axis(
-    adata,
-    axis: str,
-    key: str,
-    val_min: float | None = None,
-    val_max: float | None = None,
+    adata, axis: str, key: str, val_min: float | None = None, val_max: float | None = None, apply: bool = False
 ):
     if axis == 'obs':
         df = adata.obs
@@ -429,35 +425,21 @@ def _filter_axis(
     if val_max is not None:
         mask &= values <= val_max
 
-    if axis == 'obs':
-        return adata[mask].copy()
-    else:
-        return adata[:, mask].copy()
+    if apply:
+        if axis == 'obs':
+            return adata[mask].copy()
+        else:
+            return adata[:, mask].copy()
+    return mask
 
 
 def filter_by_limits(
-    adata,
-    key: str,
-    axis: str = 'obs',
-    val_min: float | None = None,
-    val_max: float | None = None,
+    adata, key: str, axis: str = 'obs', val_min: float | None = None, val_max: float | None = None, apply: bool = False
 ):
-    return _filter_axis(
-        adata=adata,
-        axis=axis,
-        key=key,
-        val_min=val_min,
-        val_max=val_max,
-    )
+    return _filter_axis(adata=adata, axis=axis, key=key, val_min=val_min, val_max=val_max, apply=apply)
 
 
-def filter_by_qtiles(
-    adata,
-    key: str,
-    axis: str = 'obs',
-    q_min: float = 0,
-    q_max: float = 1,
-):
+def filter_by_qtiles(adata, key: str, axis: str = 'obs', q_min: float = 0, q_max: float = 1, apply: bool = False):
     if not (0 <= q_min <= 1 and 0 <= q_max <= 1):
         raise ValueError('q_min and q_max must be between 0 and 1')
     if q_min > q_max:
@@ -471,10 +453,63 @@ def filter_by_qtiles(
 
     val_min, val_max = df[key].quantile([q_min, q_max]).to_numpy()
 
-    return _filter_axis(
-        adata=adata,
-        axis=axis,
-        key=key,
-        val_min=val_min,
-        val_max=val_max,
-    )
+    return _filter_axis(adata=adata, axis=axis, key=key, val_min=val_min, val_max=val_max, apply=apply)
+
+
+def summarize_filtering(n_total, results: dict):
+    series = [pl.Series(name, values) for name, values in results.items()]
+    df = pl.DataFrame(series).with_row_index()
+
+    df = df.group_by(results.keys()).agg(pl.len().alias('n_total')).sort('n_total', descending=True)
+    df = df.with_columns(((pl.col('n_total') / n_total) * 100).alias('pct'))
+    return df
+
+
+def filter_cells(adata):
+    n_obs = adata.n_obs
+    size_passed = filter_by_qtiles(adata, key='nuclei_area_um', axis='obs', q_min=0.01, q_max=0.995)
+
+    max_counts = filter_by_qtiles(adata, axis='obs', key='total_counts', q_min=0, q_max=0.995)
+    min_counts = filter_by_limits(adata, axis='obs', key='total_counts', val_min=1, val_max=None)
+    counts_passed = max_counts & min_counts
+
+    genes_passed = filter_by_limits(adata, axis='obs', key='n_genes_by_counts', val_min=5, val_max=None)
+
+    pct_counts_ncp = filter_by_limits(adata, axis='obs', key='pct_counts_ncp', val_min=0, val_max=5)
+    pct_counts_ncs = filter_by_limits(adata, axis='obs', key='pct_counts_ncs', val_min=0, val_max=5)
+    pct_counts_gcp = filter_by_limits(adata, axis='obs', key='pct_counts_gcp', val_min=0, val_max=5)
+    controls_passed = pct_counts_ncp & pct_counts_ncs & pct_counts_gcp
+
+    all_passed = counts_passed & genes_passed & controls_passed & size_passed
+    adata._inplace_subset_obs(all_passed)
+
+    results = {
+        'counts_ok': counts_passed,
+        'genes_ok': genes_passed,
+        'controls_ok': controls_passed,
+        'size_ok': size_passed,
+    }
+    cell_results = summarize_filtering(n_obs, results)
+
+    n_retained = sum(all_passed)
+    retained = n_retained / n_obs
+    print(f'Retained {n_retained:,} ({retained:.2%}) cells after filtering')
+
+    return cell_results
+
+
+def filter_genes(adata):
+    n_var = adata.n_vars
+    targeting_passed = adata.var['probe_type'] == 'targeting'
+    coverage_passed = filter_by_limits(adata, axis='var', key='n_cells_by_counts', val_min=100, val_max=None)
+    genes_all_passed = targeting_passed & coverage_passed
+    adata._inplace_subset_var(genes_all_passed)
+
+    results = {'targeting_ok': targeting_passed, 'coverage_ok': coverage_passed}
+    gene_results = summarize_filtering(n_var, results)
+
+    n_retained = sum(genes_all_passed)
+    retained = n_retained / n_var
+    print(f'Retained {n_retained:,} ({retained:.2%}) genes after filtering')
+
+    return gene_results
