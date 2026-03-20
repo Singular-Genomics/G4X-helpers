@@ -64,6 +64,7 @@ class G4Xoutput:
         shp = (np.array(self.shape) * 0.3125) / 1000
 
         repr_string += f'{"Sample ID":<{gap}} - {self.sample_id} of {mac_run_id}, {self.fc}\n'
+        repr_string += f'{"tissue, block":<{gap}} - {self.tissue_type}, {self.block}\n'
         repr_string += f'{"imaged area":<{gap}} - ({shp[1]:.2f} x {shp[0]:.2f}) mm\n'
         repr_string += f'{"software version":<{gap}} - {self.software_version}\n\n'
 
@@ -181,30 +182,30 @@ class G4Xoutput:
         adata.obs_names = f'{self.sample_id}-' + adata.obs['cell_id'].str.split('-').str[1]
         return adata
 
-    def load_protein_image(self, protein: str, use_cache: bool = False) -> np.ndarray:
+    def load_protein_image(self, protein: str) -> np.ndarray:
         img_path = self.tree.ProteinDir.existing_files.get(protein)
         if img_path is None:
             print(f'Protein image for {protein} not found.')
             return None
 
-        return io.import_image(img_path=img_path, use_cache=use_cache)
+        return io.import_image(img_path=img_path, use_cache=self.use_cache)
 
-    def load_he_image(self, use_cache: bool = False) -> np.ndarray:
+    def load_he_image(self) -> np.ndarray:
         img_path = self.tree.HnEDir.existing_files['h_and_e/h_and_e']
-        return io.import_image(img_path=img_path, use_cache=use_cache)
+        return io.import_image(img_path=img_path, use_cache=self.use_cache)
 
-    def load_nuclear_image(self, use_cache: bool = False) -> np.ndarray:
+    def load_nuclear_image(self) -> np.ndarray:
         img_path = self.tree.HnEDir.existing_files['h_and_e/nuclear']
-        return io.import_image(img_path=img_path, use_cache=use_cache)
+        return io.import_image(img_path=img_path, use_cache=self.use_cache)
 
-    def load_cytoplasmic_image(self, use_cache: bool = False) -> np.ndarray:
+    def load_cytoplasmic_image(self) -> np.ndarray:
         img_path = self.tree.HnEDir.existing_files['h_and_e/cytoplasmic']
-        return io.import_image(img_path=img_path, use_cache=use_cache)
+        return io.import_image(img_path=img_path, use_cache=self.use_cache)
 
-    def load_segmentation(self, expanded: bool = True, key: str | None = None, use_cache: bool = False) -> np.ndarray:
+    def load_segmentation(self, expanded: bool = True, key: str | None = None) -> np.ndarray:
         key = 'nuclei_exp' if expanded else 'nuclei'
         return io.import_segmentation(
-            seg_path=self.tree.Segmentation.path, expected_shape=self.shape, labels_key=key, use_cache=use_cache
+            seg_path=self.tree.Segmentation.path, expected_shape=self.shape, labels_key=key, use_cache=self.use_cache
         )
 
     def load_bead_mask(self) -> np.ndarray:
