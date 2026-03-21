@@ -40,11 +40,10 @@ dependencies = [
     "ome-zarr ~= 0.10",
     "igraph >= 1.0.0",
     "imagecodecs == 2025.3.30",
-    "rapids-singlecell[rapids12] ~=0.13; sys_platform == 'linux'",
 ]
 
-# [project.optional-dependencies]
-# rapids = ["rapids-singlecell[rapids12] ~=0.13; sys_platform == 'linux'"]
+[project.optional-dependencies]
+gpu = ["rapids-singlecell[rapids12] ~=0.13; sys_platform == 'linux'"]
 
 [dependency-groups]
 dev = [
