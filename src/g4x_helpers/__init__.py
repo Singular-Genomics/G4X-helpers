@@ -1,13 +1,14 @@
 from importlib import import_module
 from importlib.metadata import PackageNotFoundError, version
 
-from . import constants as c
-from . import utils as ut
-
 try:
     __version__ = version('g4x_helpers')
 except PackageNotFoundError:
     __version__ = 'unknown'
+
+from . import constants as c
+from . import io
+from . import utils as ut
 
 _LAZY_ATTRS = {
     'redemux': ('.main_features', 'redemux'),

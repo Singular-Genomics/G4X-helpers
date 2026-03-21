@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
 from importlib import metadata
+from typing import Any, Literal
 
 
 class RapidsStatus(str, Enum):
+    NOT_CHECKED = 'not_checked'
     NOT_INSTALLED = 'not_installed'
     IMPORT_FAILED = 'import_failed'
     NO_GPU = 'no_gpu'
@@ -33,7 +36,41 @@ class RapidsCheck:
         return repr_str
 
 
+@dataclass(frozen=True)
+class ComputeBackend:
+    kind: str
+    rapids: RapidsCheck
+    preference: str
+    cp: Any = None
+    rsc: Any = None
+
+    @property
+    def use_gpu(self) -> bool:
+        return self.kind == 'gpu' and self.rapids.available
+
+
 @lru_cache(maxsize=1)
+def get_backend(preference: Literal['cpu', 'gpu', 'auto'] = 'auto') -> ComputeBackend:
+
+    if preference == 'cpu':
+        rapids = RapidsCheck(
+            status=RapidsStatus.NOT_CHECKED,
+            detail='CPU backend requested. Rapids availability check was skipped.',
+        )
+
+    if preference in ['gpu', 'auto']:
+        rapids = check_rapids()
+        if rapids.available:
+            import cupy as cp
+            import rapids_singlecell as rsc
+
+            return ComputeBackend(kind='gpu', rapids=rapids, preference=preference, cp=cp, rsc=rsc)
+        else:
+            warnings.warn('GPU backend requested but unavailable, falling back to CPU')
+
+    return ComputeBackend(kind='cpu', rapids=rapids, preference=preference)
+
+
 def check_rapids() -> RapidsCheck:
     try:
         ver = metadata.version('rapids-singlecell')
