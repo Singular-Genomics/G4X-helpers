@@ -13,15 +13,9 @@ if TYPE_CHECKING:
     from ..g4x_output import G4Xoutput
 
 
-@lru_cache(maxsize=1)
-def cell_frame(g4x_obj: 'G4Xoutput', lazy: bool = True) -> int:
-    lf = pl.LazyFrame(g4x_obj.cell_labels, schema={c.CELL_ID_NAME: pl.Int32}).sort(c.CELL_ID_NAME)
-    return lf if lazy else lf.collect()
-
-
 # region metadata
 def create_cell_metadata(g4x_obj: 'G4Xoutput', mask: np.ndarray | None):
-    cell_meta = cell_frame(g4x_obj)
+    cell_meta = _cell_frame(g4x_obj)
 
     cell_meta = cell_meta.with_columns(
         pl.lit(g4x_obj.sample_id).alias('sample_id'),
@@ -76,8 +70,8 @@ def extract_cell_props(mask: np.ndarray, mask_name: str | None = None) -> pl.Dat
         c.CELL_COORD_X: pl.Float32,
         c.CELL_COORD_Y: pl.Float32,
     }
-    prop_dict_df = pl.DataFrame(prop_dict, schema=schema).sort(c.CELL_ID_NAME)
-    return prop_dict_df
+    mask_props = pl.DataFrame(prop_dict, schema=schema).sort(c.CELL_ID_NAME)
+    return mask_props
 
 
 def extract_cell_props_g4x(g4x_obj: 'G4Xoutput') -> pl.DataFrame:
@@ -104,6 +98,32 @@ def extract_cell_props_g4x(g4x_obj: 'G4Xoutput') -> pl.DataFrame:
 
 
 # region transcripts
+def create_cell_x_gene(g4x_obj: 'G4Xoutput', return_lazy: bool = False) -> tuple[pl.DataFrame, pl.DataFrame]:
+    reads = pl.scan_csv(g4x_obj.tree.TranscriptTable.path)
+
+    cell_by_gene = (
+        reads.filter(pl.col(c.CELL_ID_NAME) != 0)
+        .group_by(c.CELL_ID_NAME, 'gene_name')
+        .agg(pl.len().alias('counts'))
+        .sort('gene_name')
+        .pivot(on='gene_name', values='counts', index=c.CELL_ID_NAME, on_columns=g4x_obj.genes)
+    )
+
+    # Adding missing cells with zero counts
+    cell_by_gene = _cell_frame(g4x_obj).join(cell_by_gene, left_on='seg_cell_id', right_on=c.CELL_ID_NAME, how='left')
+
+    existing = cell_by_gene.collect_schema().names()
+    if not set(existing[1:]) == set(g4x_obj.genes):
+        raise ValueError('Mismatch between cell_by_gene columns and g4x_obj.genes')
+
+    cell_by_gene = cell_by_gene.select(['seg_cell_id'] + g4x_obj.genes)
+    cell_by_gene = cell_by_gene.fill_null(0)
+
+    if return_lazy:
+        return cell_by_gene
+    return cell_by_gene.collect()
+
+
 def intersect_tx_with_cells(
     tx_table: pl.DataFrame | pl.LazyFrame, mask: np.ndarray, column_name: str = c.CELL_ID_NAME
 ) -> pl.DataFrame:
@@ -129,32 +149,6 @@ def intersect_tx_with_cells_g4x(g4x_obj: 'G4Xoutput', tx_table: pl.DataFrame | N
     return tx_table
 
 
-def create_cell_x_gene(g4x_obj: 'G4Xoutput', return_lazy: bool = False) -> tuple[pl.DataFrame, pl.DataFrame]:
-    reads = pl.scan_csv(g4x_obj.tree.TranscriptTable.path)
-
-    cell_by_gene = (
-        reads.filter(pl.col(c.CELL_ID_NAME) != 0)
-        .group_by(c.CELL_ID_NAME, 'gene_name')
-        .agg(pl.len().alias('counts'))
-        .sort('gene_name')
-        .pivot(on='gene_name', values='counts', index=c.CELL_ID_NAME, on_columns=g4x_obj.genes)
-    )
-
-    # Adding missing cells with zero counts
-    cell_by_gene = cell_frame(g4x_obj).join(cell_by_gene, left_on='seg_cell_id', right_on=c.CELL_ID_NAME, how='left')
-
-    existing = cell_by_gene.collect_schema().names()
-    if not set(existing[1:]) == set(g4x_obj.genes):
-        raise ValueError('Mismatch between cell_by_gene columns and g4x_obj.genes')
-
-    cell_by_gene = cell_by_gene.select(['seg_cell_id'] + g4x_obj.genes)
-    cell_by_gene = cell_by_gene.fill_null(0)
-
-    if return_lazy:
-        return cell_by_gene
-    return cell_by_gene.collect()
-
-
 # region protein
 def create_cell_x_protein(
     g4x_obj: 'G4Xoutput',
@@ -173,7 +167,7 @@ def create_cell_x_protein(
     bead_mask_flat = bead_mask.ravel() if bead_mask is not None else None
     mask_flat = mask.ravel()
 
-    channel_df = cell_frame(g4x_obj, lazy=True)
+    channel_df = _cell_frame(g4x_obj, lazy=True)
 
     for signal_name in tqdm(signal_list, desc='Extracting protein signal'):
         if signal_name == c.NUCLEAR_STAIN:
@@ -200,15 +194,15 @@ def image_intensity_extraction(
     mask_flat: np.ndarray,
     bead_mask_flat: np.ndarray | None = None,
     ch_label: str = 'img_intensity_mean',
-    backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
+    compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
 ) -> tuple[np.ndarray, np.ndarray]:
 
-    compute_backend = io.get_backend(preference=backend)
+    backend = io.get_backend(which=compute_backend)
 
-    if compute_backend.use_gpu:
-        unique_labels, means = image_intensity_extraction_gpu(img, mask_flat, bead_mask_flat)
+    if backend.use_gpu:
+        unique_labels, means = _image_intensity_extraction_gpu(img, mask_flat, bead_mask_flat, backend=backend)
     else:
-        unique_labels, means = image_intensity_extraction_cpu(img, mask_flat, bead_mask_flat)
+        unique_labels, means = _image_intensity_extraction_cpu(img, mask_flat, bead_mask_flat)
 
     result = pl.LazyFrame(
         {
@@ -219,7 +213,7 @@ def image_intensity_extraction(
     return result
 
 
-def image_intensity_extraction_cpu(
+def _image_intensity_extraction_cpu(
     img: np.ndarray,
     mask_flat: np.ndarray,
     bead_mask_flat: np.ndarray | None = None,
@@ -255,12 +249,14 @@ def image_intensity_extraction_cpu(
     return all_labels, means
 
 
-def image_intensity_extraction_gpu(
-    img: np.ndarray, mask_flat: np.ndarray, bead_mask_flat: np.ndarray | None = None
+def _image_intensity_extraction_gpu(
+    img: np.ndarray,
+    mask_flat: np.ndarray,
+    bead_mask_flat: np.ndarray | None = None,
+    gpu_backend=io.get_backend(which='gpu'),
 ) -> tuple[np.ndarray, np.ndarray]:
 
-    backend = io.get_backend(preference='gpu')
-    cp = backend.cp
+    cp = gpu_backend.cp
 
     img_flat = cp.asarray(img).ravel()
     mask_flat_gpu = cp.asarray(mask_flat)
@@ -294,3 +290,10 @@ def image_intensity_extraction_gpu(
     means[idx] = present_means
 
     return cp.asnumpy(all_labels), cp.asnumpy(means)
+
+
+# region utilities
+@lru_cache(maxsize=1)
+def _cell_frame(g4x_obj: 'G4Xoutput', lazy: bool = True) -> int:
+    lf = pl.LazyFrame(g4x_obj.cell_labels, schema={c.CELL_ID_NAME: pl.Int32}).sort(c.CELL_ID_NAME)
+    return lf if lazy else lf.collect()
