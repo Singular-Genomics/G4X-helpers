@@ -8,7 +8,7 @@ import pandas as pd
 import polars as pl
 from anndata import AnnData, read_h5ad
 
-from . import c, io, ut
+from . import c, io, schema, ut
 
 if TYPE_CHECKING:
     from polars import DataFrame as plDF
@@ -26,7 +26,7 @@ class G4Xoutput:
 
     def __init__(self, data_dir: str, use_cache: bool = True):
         self.data_dir = Path(data_dir)
-        self.tree = io.FileTree(self.data_dir)
+        self.tree = schema.FileTree(self.data_dir)
         self.use_cache = use_cache
 
         self.tree.validation_report(format='minimal', raw_only=True, report_pass=False, raise_exception=False)

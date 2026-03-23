@@ -3,8 +3,8 @@ import json
 import polars as pl
 
 from .. import __version__
+from ..schema.definition import SampleMetadata, SampleSheet
 from .input import _parse_samplesheet
-from .validate import SampleMetadata, SampleSheet
 
 EXPECTED_KEYS_RUN_META = [
     'machine',
