@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -13,6 +14,8 @@ from . import c, io, schema, ut
 if TYPE_CHECKING:
     from polars import DataFrame as plDF
     from polars import LazyFrame as plLF
+
+LOGGER = logging.getLogger(__name__)
 
 
 class G4Xoutput:
