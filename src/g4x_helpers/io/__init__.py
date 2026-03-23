@@ -1,4 +1,4 @@
-from . import convert
+from . import convert, pathval
 from .compute_backend import get_backend
 from .input import import_image, import_segmentation, import_table, parse_input_manifest
 from .sample_g4x import create_sample_g4x
@@ -11,4 +11,5 @@ __all__ = [
     'import_table',
     'convert',
     'get_backend',
+    'pathval',
 ]
