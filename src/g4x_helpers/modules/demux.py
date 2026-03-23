@@ -1,9 +1,8 @@
-import json
 import logging
 import math
 import shutil
+import sys
 from collections.abc import Iterator
-from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -11,59 +10,83 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
-from .. import c, utils
-from .workflow import OutSchema, workflow
+from .. import c, io
+
+# from .workflow import workflow
 
 if TYPE_CHECKING:
     from ..g4x_output import G4Xoutput
 
-LUT = np.zeros((256, 4), dtype=np.float32)
-for base, idx in zip(c.BASE_ORDER, range(4)):
-    LUT[ord(base), idx] = 1.0
+LOGGER = logging.getLogger(__name__)
 
 
-@workflow
+# @workflow
 def demux_raw_features(
     g4x_obj: 'G4Xoutput',
-    manifest: Path,
-    out_dir: Path,
+    manifest: str | Path,
+    out_dir: str | Path,
     *,
+    override: bool = False,
     batch_size: int = c.DEFAULT_BATCH_SIZE,
-    logger: logging.Logger,
+    show_progress: bool | None = None,
+    logger: logging.Logger | None = None,
 ) -> None:
-    logger.info('Validating input paths.')
-    out_tree = OutSchema(out_dir, subdirs=['g4x_viewer', 'rna', 'demux_batches'])
-    manifest = utils.validate_path(manifest, must_exist=True, is_dir_ok=False, is_file_ok=True)
-    tx_table_out = out_tree.rna / 'transcript_table.csv'
 
-    ## update metadata and transcript panel file
-    logger.info('Updating metadata and transcript panel file.')
-    update_metadata_and_tx_file(g4x_obj, manifest, out_dir)
+    log = logger or LOGGER
+    log.info('Demuxing raw features from manifest: %s', manifest)
 
-    logger.info('Parsing input transcript manifest.')
-    manifest = utils.parse_input_manifest(file_path=manifest)
+    manifest = io.pathval.validate_file_path(manifest)
+    shutil.copy(manifest, out_dir / g4x_obj.tree.TranscriptPanel.path.name)
 
-    logger.info('Running batched re-demuxing.')
+    out_dir = io.pathval.ensure_dir(out_dir)
+    log.info('Output directory for demuxed features: %s', out_dir)
+
+    rna_dir = io.pathval.ensure_dir(out_dir / 'rna')
+    batch_dir = io.pathval.ensure_dir(out_dir / 'demux_batches')
+
+    tx_table_out = rna_dir / g4x_obj.tree.TranscriptTable.path.name
+    if tx_table_out.exists() and not override:
+        log.warning(f'Transcript table already exists at {tx_table_out}. Use override=True to overwrite.')
+        return
+
+    # TODO add file validation via validator before parsing
+    tx_panel = io.parse_input_manifest(file_path=manifest)
+
+    log.info('Starting batched demuxing of raw features')
+
+    if show_progress is None:
+        show_progress = sys.stderr.isatty()
+
     batched_demuxing(
-        feature_table_path=g4x_obj.feature_table_path,
-        manifest=manifest,
-        batch_dir=out_tree.demux_batches,
+        feature_table_path=g4x_obj.tree.RawFeatures.path,
+        manifest=tx_panel,
+        batch_dir=batch_dir,
         batch_size=batch_size,
+        show_progress=show_progress,
     )
 
-    logger.info('Compiling transcript table.')
-    tx_table = pl.scan_parquet(list(out_tree.demux_batches.glob('*.parquet')))
+    # Compile the demuxed transcript table
+    log.debug('Compiling demuxed transcript table from batches: %s', batch_dir)
+    tx_table = pl.scan_parquet(list(batch_dir.glob('*.parquet')))
     tx_table = tx_table.filter(pl.col('demuxed')).drop('demuxed')
 
-    logger.info('Writing updated transcript table.')
-    utils.write_csv_gz(tx_table, tx_table_out)
+    # Write the transcript table to a CSV file
+    log.info('Writing transcript table to CSV: %s', tx_table_out)
+    tx_table.sink_csv(tx_table_out, compression='gzip')
 
-    logger.info('Cleaning up temporary files.')
-    shutil.rmtree(out_tree.demux_batches)
+    # Remove temporary demux batches
+    log.debug('Removing temporary demux batches: %s', batch_dir)
+    shutil.rmtree(batch_dir)
+
+    log.info('Demuxing complete.')
 
 
 def batched_demuxing(
-    feature_table_path: str, manifest: pl.DataFrame, batch_dir: str, batch_size: int = c.DEFAULT_BATCH_SIZE
+    feature_table_path: str,
+    manifest: pl.DataFrame,
+    batch_dir: str,
+    batch_size: int = c.DEFAULT_BATCH_SIZE,
+    show_progress: bool | None = None,
 ):
     probe_dict = dict(zip(manifest['probe_name'].to_list(), manifest['gene_name'].to_list()))
     probe_dict['UNDETERMINED'] = 'UNDETERMINED'
@@ -75,13 +98,16 @@ def batched_demuxing(
     num_features = pl.scan_parquet(feature_table_path).select(pl.len()).collect().item()
     num_expected_batches = math.ceil(num_features / batch_size)
 
-    cols_to_select = ['TXUID', 'sequence', 'confidence_score', 'y_pixel_coordinate', 'x_pixel_coordinate', 'z_level']
+    LUT = np.zeros((256, 4), dtype=np.float32)
+    for base, idx in zip(c.BASE_ORDER, range(4)):
+        LUT[ord(base), idx] = 1.0
 
     for i, feature_batch in tqdm(
-        enumerate(stream_features(feature_table_path, batch_size, cols_to_select)),
+        enumerate(stream_features(feature_table_path, batch_size)),
         total=num_expected_batches,
         desc='Demuxing transcripts',
         position=0,
+        disable=not show_progress,
     ):
         feature_batch = feature_batch.with_columns(pl.col('TXUID').str.split('_').list.last().cast(int).alias('read'))
         redemuxed_feature_batch = []
@@ -96,7 +122,7 @@ def batched_demuxing(
             codes = manifest_read['sequence'].to_list()
             codebook_target_ids = np.array(manifest_read['probe_name'].to_list())
 
-            hammings = batched_dot_product_hamming_matrix(seqs, codes, batch_size=batch_size)
+            hammings = batched_dot_product_hamming_matrix(seqs, codes, lut=LUT, batch_size=batch_size)
             feature_batch_read = demux(hammings, feature_batch_read, codebook_target_ids, probe_dict)
             feature_batch_read = feature_batch_read.drop(['sequence', 'read'])
             redemuxed_feature_batch.append(feature_batch_read)
@@ -167,6 +193,7 @@ def demux(
 def batched_dot_product_hamming_matrix(
     reads: list[str],
     codebook: list[str],
+    lut: np.ndarray,
     batch_size: int,
 ) -> np.ndarray:
     """
@@ -177,17 +204,18 @@ def batched_dot_product_hamming_matrix(
     assert all(len(seq) == seq_len for seq in codebook), 'All codebook entries must be same length'
 
     # One-hot encode the codebook once
-    codebook_oh = one_hot_encode_str_array(codebook, seq_len)
+    codebook_oh = one_hot_encode_str_array(codebook, seq_len, lut)
     M = len(codebook)
 
     # Prepare final result
     N = len(reads)
     hamming_matrix = np.empty((N, M), dtype=np.uint8)
 
-    num_expected_batches = math.ceil(N / batch_size)
-    for i in tqdm(range(0, N, batch_size), total=num_expected_batches, desc='Demuxing batch', position=1, leave=False):
+    # num_expected_batches = math.ceil(N / batch_size)
+    # for i in tqdm(range(0, N, batch_size), total=num_expected_batches, desc='Demuxing batch', position=1, leave=False):
+    for i in range(0, N, batch_size):  # , total=num_expected_batches, desc='Demuxing batch', position=1, leave=False):
         batch_reads = reads[i : i + batch_size]
-        batch_oh = one_hot_encode_str_array(batch_reads, seq_len)
+        batch_oh = one_hot_encode_str_array(batch_reads, seq_len, lut)
         matches = batch_oh @ codebook_oh.T
         hamming = seq_len - matches
         hamming_matrix[i : i + len(batch_reads)] = hamming
@@ -195,7 +223,7 @@ def batched_dot_product_hamming_matrix(
     return hamming_matrix
 
 
-def one_hot_encode_str_array(seqs: list[str], seq_len: int) -> np.ndarray:
+def one_hot_encode_str_array(seqs: list[str], seq_len: int, lut: np.ndarray) -> np.ndarray:
     """
     Fast one-hot encoding using LUT.
     Returns: (N, seq_len * 4) float32 array
@@ -204,31 +232,32 @@ def one_hot_encode_str_array(seqs: list[str], seq_len: int) -> np.ndarray:
     # Flatten all sequences into a byte array and reshape to (N, seq_len)
     arr = np.frombuffer(''.join(seqs).encode('ascii'), dtype=np.uint8).reshape(N, seq_len)
     # Apply LUT: arr → (N, seq_len, 4), then flatten
-    return LUT[arr].reshape(N, seq_len * 4)
+    return lut[arr].reshape(N, seq_len * 4)
 
 
-def update_metadata_and_tx_file(g4x_obj: 'G4Xoutput', manifest, out_dir):
-    if not manifest == out_dir / 'transcript_panel.csv':
-        shutil.copy(manifest, out_dir / 'transcript_panel.csv')
+# TODO consider re-implementing this function if needed
+# def update_metadata_and_tx_file(g4x_obj: 'G4Xoutput', manifest, out_dir):
+#     if not manifest == out_dir / 'transcript_panel.csv':
+#         shutil.copy(manifest, out_dir / 'transcript_panel.csv')
 
-    panel_name = manifest.name
-    timestamp = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
-    ## add info to run_meta.json
-    with open(g4x_obj.data_dir / 'run_meta.json', 'r') as f:
-        meta = json.load(f)
+#     panel_name = manifest.name
+#     timestamp = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
+#     ## add info to run_meta.json
+#     with open(g4x_obj.data_dir / 'run_meta.json', 'r') as f:
+#         meta = json.load(f)
 
-    meta['transcript_panel'] = panel_name
-    meta['redemuxed_timestamp'] = timestamp
+#     meta['transcript_panel'] = panel_name
+#     meta['redemuxed_timestamp'] = timestamp
 
-    with open(out_dir / 'run_meta.json', 'w') as f:
-        json.dump(meta, f, indent=2)
+#     with open(out_dir / 'run_meta.json', 'w') as f:
+#         json.dump(meta, f, indent=2)
 
-    ## add info to run_meta.json in g4x_viewer
-    with open(g4x_obj.data_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_run_metadata.json', 'r') as f:
-        meta = json.load(f)
+#     ## add info to run_meta.json in g4x_viewer
+#     with open(g4x_obj.data_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_run_metadata.json', 'r') as f:
+#         meta = json.load(f)
 
-    meta['run_metadata']['transcript_panel'] = panel_name
-    meta['run_metadata']['redemuxed_timestamp'] = timestamp
+#     meta['run_metadata']['transcript_panel'] = panel_name
+#     meta['run_metadata']['redemuxed_timestamp'] = timestamp
 
-    with open(out_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_run_metadata.json', 'w') as f:
-        json.dump(meta, f, indent=2)
+#     with open(out_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_run_metadata.json', 'w') as f:
+#         json.dump(meta, f, indent=2)
