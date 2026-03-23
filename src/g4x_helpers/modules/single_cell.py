@@ -1,12 +1,11 @@
-# from pandas.errors import PerformanceWarning
-# import warnings
-
+import warnings
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
 import polars as pl
 import scanpy as sc
+from pandas.errors import PerformanceWarning
 
 from .. import constants as c
 from .. import io
@@ -300,57 +299,58 @@ def _summarize_filtering(n_total: int, results: dict) -> pl.DataFrame:
 #     new_umap = clust_umap.with_columns(pl.col(key).replace(order_map)).sort('seg_cell_id')
 #     return new_umap
 
+
 # region processing
-# def process_adata(adata: 'AnnData'):
-#     ## 1. filter on cell size, remove top and bottom 1%
-#     ## 2. remove genes not expressed by at least 5% of remaining cells
-#     ## 3. filter on total transcripts and unique genes remove top 1% and bottom 5%
+def process_adata(adata: 'AnnData'):
+    ## 1. filter on cell size, remove top and bottom 1%
+    ## 2. remove genes not expressed by at least 5% of remaining cells
+    ## 3. filter on total transcripts and unique genes remove top 1% and bottom 5%
 
-#     adata = filter_by_qtiles(adata, obs_key='nuclei_area_um', quantiles=(0.01, 0.99))
+    adata = filter_by_qtiles(adata, axis='obs', key='nuclei_area_um', q_min=0.01, q_max=0.99, apply=True)
 
-#     min_cells = int(0.05 * adata.n_obs)
-#     sc.pp.filter_genes(adata, min_cells=min_cells, inplace=True)
+    min_cells = int(0.05 * adata.n_obs)
+    sc.pp.filter_genes(adata, min_cells=min_cells, inplace=True)
 
-#     sc.pp.filter_cells(adata, min_counts=10)
+    sc.pp.filter_cells(adata, min_counts=10)
 
-#     adata = filter_by_qtiles(adata, obs_key='total_counts', quantiles=(0.05, 0.99))
-#     adata = filter_by_qtiles(adata, obs_key='n_genes_by_counts', quantiles=(0.05, 0.99))
+    adata = filter_by_qtiles(adata, axis='obs', key='total_counts', q_min=0.05, q_max=0.99, apply=True)
+    adata = filter_by_qtiles(adata, axis='obs', key='n_genes_by_counts', q_min=0.05, q_max=0.99, apply=True)
 
-#     # normalize data
-#     adata.layers['counts'] = adata.X
-#     print(adata.obs['total_counts'].min())
+    # normalize data
+    adata.layers['counts'] = adata.X
+    print(adata.obs['total_counts'].min())
 
-#     sc.pp.normalize_total(adata)
-#     return adata
+    sc.pp.normalize_total(adata)
 
-#     sc.pp.log1p(adata)
-#     sc.pp.pca(adata)
-#     sc.pp.neighbors(adata)
+    sc.pp.log1p(adata)
+    sc.pp.pca(adata)
+    sc.pp.neighbors(adata)
 
-#     res = 1
-#     sc.tl.leiden(
-#         adata,
-#         resolution=res,
-#         objective_function='modularity',
-#         n_iterations=-1,
-#         random_state=42,
-#         flavor='igraph',
-#         key_added=f'leiden_{res:0.2f}',
-#     )
+    res = 1
+    sc.tl.leiden(
+        adata,
+        resolution=res,
+        objective_function='modularity',
+        n_iterations=-1,
+        random_state=42,
+        flavor='igraph',
+        key_added=f'leiden_{res:0.2f}',
+    )
 
-#     sc.tl.umap(adata)
+    sc.tl.umap(adata)
 
-#     with warnings.catch_warnings():
-#         warnings.simplefilter('ignore', PerformanceWarning)
-#         sc.tl.rank_genes_groups(
-#             adata,
-#             groupby=f'leiden_{res:0.2f}',
-#             use_raw=False,
-#             method='wilcoxon',
-#             pts=True,
-#             key_added=f'leiden_{res:0.2f}_rank_genes_groups',
-#         )
-#     return adata
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', PerformanceWarning)
+        sc.tl.rank_genes_groups(
+            adata,
+            groupby=f'leiden_{res:0.2f}',
+            use_raw=False,
+            method='wilcoxon',
+            pts=True,
+            key_added=f'leiden_{res:0.2f}_rank_genes_groups',
+        )
+    return adata
+
 
 # def create_adata():
 # --- a more fine grained breakdown of control metrics ---

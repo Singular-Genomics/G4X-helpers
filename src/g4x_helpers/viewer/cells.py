@@ -4,8 +4,9 @@ from numcodecs import Blosc
 
 from .. import constants as c
 from .. import io
+from ..modules import aggregate
 from ..modules import single_cell as g4xsc
-from .setup import create_array, populate_zarr_metadata
+from .setup import create_array
 
 
 def write_csr(group, csr, gene_names, compressor=None, chunks=None):
@@ -17,8 +18,10 @@ def write_csr(group, csr, gene_names, compressor=None, chunks=None):
     create_array(group, 'gene_names', data=np.array(gene_names).astype('U12'), compressor=compressor, chunks='auto')
 
 
-def write_cells(smp, root_group):
+# TODO this needs to handle tx-loss properly
+def write_cells(smp, root_group, seg_name):
     cell_group = root_group['cells']
+    cell_group = cell_group[seg_name]
     metadata_group = cell_group['metadata']
     protein_group = cell_group['protein']
     polygon_group = cell_group['polygons']
@@ -28,6 +31,17 @@ def write_cells(smp, root_group):
 
     metadata, gex, gene_names = prepare_cell_group_input(smp)
 
+    for i in range(3):
+        shuffle_col = (
+            metadata.with_columns(pl.col('cluster_id').str.replace('C', 'Shuffle'))
+            .sample(fraction=1, shuffle=True)
+            .select('cluster_id')
+            .rename({'cluster_id': f'shuffle_{i}'})
+        )
+        metadata = metadata.with_columns(shuffle_col)
+
+    clusterings = ['cluster_id', 'shuffle_0', 'shuffle_1', 'shuffle_2']
+
     # write arrays for each attribute
     arr = metadata[c.CELL_ID_NAME].to_numpy().astype(np.uint32)
     create_array(metadata_group, 'cell_id', data=arr, compressor=compressor)
@@ -35,7 +49,8 @@ def write_cells(smp, root_group):
     arr = metadata['area_um'].to_numpy().astype(np.uint16)
     create_array(metadata_group, 'area', data=arr, compressor=compressor)
 
-    arr = metadata['cluster_id'].to_numpy().astype('U10')
+    # arr = metadata['cluster_id'].to_numpy().astype('U10')
+    arr = metadata.select(clusterings).to_numpy().astype('U10')
     create_array(metadata_group, 'cluster_id', data=arr, compressor=compressor)
 
     arr = metadata['total_counts'].to_numpy().astype(np.uint16)
@@ -71,14 +86,32 @@ def write_cells(smp, root_group):
     create_array(polygon_group, 'polygon_offsets', data=offsets, compressor=compressor)
     create_array(polygon_group, 'polygon_vertices_xy', data=verts_xy, compressor=compressor)
 
-    uids = sort_clusters(metadata)
-    populate_zarr_metadata(root_group, gene_mtx_shape=gex.shape, cluster_ids=generate_cluster_palette(uids))
+    # uids = sort_clusters(metadata)
+    # # populate_zarr_metadata(root_group, gene_mtx_shape=gex.shape, cluster_ids=generate_cluster_palette(uids))
+    # cluster_ids=generate_cluster_palette(uids)
+
+    cluster_labels_meta = {}
+    for i, key in enumerate(clusterings):
+        sorted_cluster_ids = sort_clusters(metadata, key=key)
+        cluster_color_map = generate_cluster_palette(sorted_cluster_ids)
+
+        cluster_labels_meta[key] = {
+            'index': i,
+            'clusterID_order': list(cluster_color_map.keys()),
+            'clusterID_colors': cluster_color_map,
+        }
+
+    cell_group['metadata'].attrs['cluster_labels'] = cluster_labels_meta
+    cell_group['metadata'].attrs['cluster_labels_order'] = clusterings
+
+    cell_group['genes'].attrs['shape'] = gex.shape
+
     write_csr(genes_group, csr=gex, gene_names=gene_names, compressor=compressor, chunks='auto')
 
 
-def sort_clusters(metadata):
-    uids = metadata.group_by('cluster_id').agg(pl.len())
-    uids = uids.sort('len', descending=True)['cluster_id'].to_list()
+def sort_clusters(metadata, key):
+    uids = metadata.group_by(key).agg(pl.len())
+    uids = uids.sort('len', descending=True)[key].to_list()
     if 'unassigned' in uids:
         uids.remove('unassigned')
 
@@ -91,7 +124,7 @@ def prepare_cell_group_input(smp):
     cell_x_gene = pl.read_csv(smp.data_dir / 'single_cell_data' / 'cell_by_gene.csv.gz')
 
     mask = smp.load_segmentation(expanded=True)
-    cell_metadata = g4xsc.create_cell_metadata(smp, mask=mask)
+    cell_metadata = aggregate.create_cell_metadata(smp, mask=mask)
     adata = g4xsc.create_adata(smp, cell_metadata=cell_metadata, cell_x_gene=cell_x_gene)
 
     gex = adata.X
@@ -105,7 +138,7 @@ def prepare_cell_group_input(smp):
     # 3: create metadata dataframe
     obs_df = (
         pl.from_pandas(adata.obs, include_index=True)
-        .drop('tissue_type', 'block', 'source')
+        .drop('tissue_type', 'block', 'seg_source')
         .cast({c.CELL_ID_NAME: pl.UInt32})
     )
     del adata
@@ -117,7 +150,13 @@ def prepare_cell_group_input(smp):
     # 4: load clustering and UMAP coordinates
     clust_umap = pl.read_csv(
         smp.data_dir / 'single_cell_data' / 'clustering_umap.csv.gz',
-        schema={c.CELL_ID_NAME: pl.UInt32, 'leiden_1.00': pl.Utf8, 'UMAP1': pl.Float32, 'UMAP2': pl.Float32},
+        schema={
+            'idx': pl.UInt16,
+            c.CELL_ID_NAME: pl.UInt32,
+            'leiden_1.00': pl.Utf8,
+            'UMAP1': pl.Float32,
+            'UMAP2': pl.Float32,
+        },
     )
     clust_umap = clust_umap.rename({'leiden_1.00': 'cluster_id'})  # TODO this is hard coded right now
 

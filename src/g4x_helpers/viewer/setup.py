@@ -26,10 +26,13 @@ def setup_zarr_tree(target_dir: str, store_name: str = c.FILE_VIEWER_ZARR, overw
     _ = root_group.create_group('transcripts', overwrite=overwrite)
 
     cell_group = root_group.create_group('cells', overwrite=overwrite)
-    _ = cell_group.create_group('metadata', overwrite=overwrite)
-    _ = cell_group.create_group('protein', overwrite=overwrite)
-    _ = cell_group.create_group('polygons', overwrite=overwrite)
-    _ = cell_group.create_group('genes', overwrite=overwrite)
+
+    for seg_name in ['default_segmentation', 'custom_segmentation']:
+        seg_group = cell_group.create_group(seg_name, overwrite=overwrite)
+        _ = seg_group.create_group('metadata', overwrite=overwrite)
+        _ = seg_group.create_group('protein', overwrite=overwrite)
+        _ = seg_group.create_group('polygons', overwrite=overwrite)
+        _ = seg_group.create_group('genes', overwrite=overwrite)
 
     (target_dir / 'misc').mkdir(parents=True, exist_ok=True)
 
@@ -71,12 +74,12 @@ def populate_zarr_metadata(
     if sample_metadata is not None:
         root_group.attrs['run_metadata'] = {'Sample Information': sample_metadata}
 
-    if cluster_ids is not None:
-        root_group['cells']['metadata'].attrs['clusterID_order'] = list(cluster_ids.keys())
-        root_group['cells']['metadata'].attrs['clusterID_colors'] = cluster_ids
+    # if cluster_ids is not None:
+    #     root_group['cells']['metadata'].attrs['clusterID_order'] = list(cluster_ids.keys())
+    #     root_group['cells']['metadata'].attrs['clusterID_colors'] = cluster_ids
 
-    if gene_mtx_shape is not None:
-        root_group['cells']['genes'].attrs['shape'] = gene_mtx_shape
+    # if gene_mtx_shape is not None:
+    #     root_group['cells']['genes'].attrs['shape'] = gene_mtx_shape
 
     if gene_colors is not None:
         root_group['transcripts'].attrs['gene_order'] = list(gene_colors.keys())
