@@ -4,6 +4,7 @@ from numcodecs import Blosc
 
 from .. import constants as c
 from .. import io
+from ..modules import aggregate
 from ..modules import single_cell as g4xsc
 from .setup import create_array, populate_zarr_metadata
 
@@ -91,7 +92,7 @@ def prepare_cell_group_input(smp):
     cell_x_gene = pl.read_csv(smp.data_dir / 'single_cell_data' / 'cell_by_gene.csv.gz')
 
     mask = smp.load_segmentation(expanded=True)
-    cell_metadata = g4xsc.create_cell_metadata(smp, mask=mask)
+    cell_metadata = aggregate.create_cell_metadata(smp, mask=mask)
     adata = g4xsc.create_adata(smp, cell_metadata=cell_metadata, cell_x_gene=cell_x_gene)
 
     gex = adata.X
@@ -105,7 +106,7 @@ def prepare_cell_group_input(smp):
     # 3: create metadata dataframe
     obs_df = (
         pl.from_pandas(adata.obs, include_index=True)
-        .drop('tissue_type', 'block', 'source')
+        .drop('tissue_type', 'block', 'seg_source')
         .cast({c.CELL_ID_NAME: pl.UInt32})
     )
     del adata
@@ -117,7 +118,13 @@ def prepare_cell_group_input(smp):
     # 4: load clustering and UMAP coordinates
     clust_umap = pl.read_csv(
         smp.data_dir / 'single_cell_data' / 'clustering_umap.csv.gz',
-        schema={c.CELL_ID_NAME: pl.UInt32, 'leiden_1.00': pl.Utf8, 'UMAP1': pl.Float32, 'UMAP2': pl.Float32},
+        schema={
+            'idx': pl.UInt16,
+            c.CELL_ID_NAME: pl.UInt32,
+            'leiden_1.00': pl.Utf8,
+            'UMAP1': pl.Float32,
+            'UMAP2': pl.Float32,
+        },
     )
     clust_umap = clust_umap.rename({'leiden_1.00': 'cluster_id'})  # TODO this is hard coded right now
 
