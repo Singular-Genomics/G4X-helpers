@@ -1,3 +1,5 @@
+import logging
+import sys
 from functools import lru_cache
 from typing import TYPE_CHECKING, Literal
 
@@ -12,9 +14,22 @@ from .. import io
 if TYPE_CHECKING:
     from ..g4x_output import G4Xoutput
 
+LOGGER = logging.getLogger(__name__)
+
 
 # region metadata
-def create_cell_metadata(g4x_obj: 'G4Xoutput', mask: np.ndarray | None):
+def create_cell_metadata(
+    g4x_obj: 'G4Xoutput',
+    mask: np.ndarray | None,
+    logger: logging.Logger | None = None,
+    show_progress: bool | None = None,
+):
+    log = logger or LOGGER
+
+    seg_source = 'g4x-default' if mask is None else 'custom'
+
+    log.info('Creating cell metadata from %s segmentation source', seg_source)
+
     cell_meta = _cell_frame(g4x_obj)
 
     cell_meta = cell_meta.with_columns(
@@ -23,32 +38,38 @@ def create_cell_metadata(g4x_obj: 'G4Xoutput', mask: np.ndarray | None):
         pl.lit(g4x_obj.block).alias('block'),
     ).collect()
 
-    source = 'custom' if mask is not None else 'g4x-default'
-
     # TODO this might break if someone changes the .npz file
     if mask is None:
-        mask_props = extract_cell_props_g4x(g4x_obj)
+        mask_props = extract_cell_props_g4x(g4x_obj, show_progress=show_progress)
     else:
-        mask_props = extract_cell_props(mask)
+        mask_props = extract_cell_props(mask, show_progress=show_progress)
 
-    mask_props = mask_props.with_columns(pl.lit(source).alias('seg_source'))
+    mask_props = mask_props.with_columns(pl.lit(seg_source).alias('seg_source'))
 
     if mask_props[c.CELL_ID_NAME].equals(cell_meta[c.CELL_ID_NAME]):
         cell_meta = cell_meta.join(mask_props, on=c.CELL_ID_NAME, how='left')
     else:
         raise ValueError('The CELL_ID columns in cell_meta and mask_props do not match.')
 
+    log.info('Cell metadata created successfully')
     return cell_meta
 
 
-def extract_cell_props(mask: np.ndarray, mask_name: str | None = None) -> pl.DataFrame:
+def extract_cell_props(
+    mask: np.ndarray,
+    mask_name: str | None = None,
+    show_progress: bool | None = None,
+) -> pl.DataFrame:
     props = regionprops(mask)
 
     prop_dict = []
     # Loop through each region to get the area and centroid, with a progress bar
 
+    if show_progress is None:
+        show_progress = sys.stderr.isatty()
+
     prefix = f' {mask_name} ' if mask_name else ' '
-    for prop in tqdm(props, desc=f'Extracting{prefix}mask properties'):
+    for prop in tqdm(props, desc=f'Extracting{prefix}mask properties', disable=not show_progress):
         label = prop.label  # The label (mask id)
 
         cell_y, cell_x = prop.centroid  # coordinate order: 'yx' (row, col)
@@ -74,16 +95,16 @@ def extract_cell_props(mask: np.ndarray, mask_name: str | None = None) -> pl.Dat
     return mask_props
 
 
-def extract_cell_props_g4x(g4x_obj: 'G4Xoutput') -> pl.DataFrame:
+def extract_cell_props_g4x(g4x_obj: 'G4Xoutput', show_progress: bool | None = None,) -> pl.DataFrame:
     seg_mask = io.import_segmentation(
         seg_path=g4x_obj.tree.Segmentation.path, expected_shape=g4x_obj.shape, labels_key='nuclei'
     )
-    mask_props_nuc = extract_cell_props(mask=seg_mask, mask_name='nuclei')
+    mask_props_nuc = extract_cell_props(mask=seg_mask, mask_name='nuclei', show_progress=show_progress)
 
     seg_mask = io.import_segmentation(
         seg_path=g4x_obj.tree.Segmentation.path, expected_shape=g4x_obj.shape, labels_key='nuclei_exp'
     )
-    mask_props_exp = extract_cell_props(mask=seg_mask, mask_name='nuclei_exp')
+    mask_props_exp = extract_cell_props(mask=seg_mask, mask_name='nuclei_exp', show_progress=show_progress)
     del seg_mask
 
     mask_props_nuc = mask_props_nuc.rename({'area_um': 'nuclei_area_um'})
@@ -98,7 +119,14 @@ def extract_cell_props_g4x(g4x_obj: 'G4Xoutput') -> pl.DataFrame:
 
 
 # region transcripts
-def create_cell_x_gene(g4x_obj: 'G4Xoutput', return_lazy: bool = False) -> tuple[pl.DataFrame, pl.DataFrame]:
+def create_cell_x_gene(
+    g4x_obj: 'G4Xoutput',
+    return_lazy: bool = False,
+    logger: logging.Logger | None = None,
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    log = logger or LOGGER
+    log.info('Creating cell x gene matrix')
+
     reads = pl.scan_csv(g4x_obj.tree.TranscriptTable.path)
 
     cell_by_gene = (
@@ -121,6 +149,8 @@ def create_cell_x_gene(g4x_obj: 'G4Xoutput', return_lazy: bool = False) -> tuple
 
     if return_lazy:
         return cell_by_gene
+
+    log.info('Cell x gene matrix created successfully')
     return cell_by_gene.collect()
 
 
@@ -155,13 +185,16 @@ def create_cell_x_protein(
     mask: np.ndarray,
     signal_list: list[str] | None = None,
     suffix: str = '_intensity_mean',
+    logger: logging.Logger | None = None,
     **kwargs,
 ) -> pl.LazyFrame:
+
+    log = logger or LOGGER
 
     if signal_list is None:
         signal_list = g4x_obj.stains + g4x_obj.proteins
 
-    print(f'Creating cell x protein matrix for {len(signal_list)} signals.')
+    log.info('Creating cell x protein matrix for %d signals.', len(signal_list))
 
     bead_mask = g4x_obj.load_bead_mask()
     bead_mask_flat = bead_mask.ravel() if bead_mask is not None else None
@@ -170,6 +203,7 @@ def create_cell_x_protein(
     channel_df = _cell_frame(g4x_obj, lazy=True)
 
     for signal_name in tqdm(signal_list, desc='Extracting protein signal'):
+        log.debug('Processing signal: %s', signal_name)
         if signal_name == c.NUCLEAR_STAIN:
             signal_img = g4x_obj.load_nuclear_image()
             signal_name += 'stain'
@@ -186,6 +220,7 @@ def create_cell_x_protein(
         )
         channel_df = channel_df.join(intensity_df, on=c.CELL_ID_NAME, how='left')
 
+    log.info('Cell x protein matrix created successfully')
     return channel_df
 
 
