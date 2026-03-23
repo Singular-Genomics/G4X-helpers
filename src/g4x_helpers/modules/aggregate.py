@@ -14,6 +14,7 @@ from .. import io
 if TYPE_CHECKING:
     from ..g4x_output import G4Xoutput
 
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -95,7 +96,10 @@ def extract_cell_props(
     return mask_props
 
 
-def extract_cell_props_g4x(g4x_obj: 'G4Xoutput', show_progress: bool | None = None,) -> pl.DataFrame:
+def extract_cell_props_g4x(
+    g4x_obj: 'G4Xoutput',
+    show_progress: bool | None = None,
+) -> pl.DataFrame:
     seg_mask = io.import_segmentation(
         seg_path=g4x_obj.tree.Segmentation.path, expected_shape=g4x_obj.shape, labels_key='nuclei'
     )
@@ -288,7 +292,7 @@ def _image_intensity_extraction_gpu(
     img: np.ndarray,
     mask_flat: np.ndarray,
     bead_mask_flat: np.ndarray | None = None,
-    gpu_backend=io.get_backend(which='gpu'),
+    gpu_backend='ComputeBackend',
 ) -> tuple[np.ndarray, np.ndarray]:
 
     cp = gpu_backend.cp

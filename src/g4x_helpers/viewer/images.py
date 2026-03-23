@@ -155,7 +155,7 @@ def write_channel_stack(img_group, channels):
 def write_he_img(smp, root_group):
     dtype = np.uint8
     image = _load_image_dask(smp, img_type='h_and_e', protein_name=None, dtype=dtype)
-    image = _add_rgb_astronaut_to_img(image)
+    # image = _add_rgb_astronaut_to_img(image)
 
     if image.ndim == 3 and image.shape[-1] == 3:
         image = da.moveaxis(image, -1, 0)
@@ -204,25 +204,25 @@ def _load_image_dask(
 
     if img_type == 'protein':
         data = da.from_delayed(
-            dask.delayed(smp.load_protein_image)(protein=protein_name, use_cache=use_cache),
+            dask.delayed(smp.load_protein_image)(protein=protein_name),
             shape=shape,
             dtype=dtype,
         )
     elif img_type == 'h_and_e':
         data = da.from_delayed(
-            dask.delayed(smp.load_he_image)(use_cache=use_cache),
+            dask.delayed(smp.load_he_image)(),
             shape=shape,
             dtype=dtype,
         )
     elif img_type == 'nuclear':
         data = da.from_delayed(
-            dask.delayed(smp.load_nuclear_image)(use_cache=use_cache),
+            dask.delayed(smp.load_nuclear_image)(),
             shape=shape,
             dtype=dtype,
         )
     elif img_type == 'cytoplasmic':
         data = da.from_delayed(
-            dask.delayed(smp.load_cytoplasmic_image)(use_cache=use_cache),
+            dask.delayed(smp.load_cytoplasmic_image)(),
             shape=shape,
             dtype=dtype,
         )
