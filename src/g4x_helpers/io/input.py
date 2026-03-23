@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 from functools import lru_cache, wraps
+from inspect import signature
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -12,26 +14,47 @@ import polars.selectors as cs
 import tifffile
 from matplotlib.pyplot import imread
 
-from .. import constants, utils
-from . import convert
+from .. import constants
+from . import convert, pathval
 
 if TYPE_CHECKING:
     from pandas import DataFrame as pdDF
     from polars import DataFrame as plDF
     from polars import LazyFrame as plLF
 
+LOGGER = logging.getLogger(__name__)
 
-def optionally_cached(func):
-    cached_func = lru_cache(maxsize=32)(func)
 
-    @wraps(func)
-    def wrapper(*args, use_cache=True, **kwargs):
-        if use_cache:
-            return cached_func(*args, **kwargs)
-        return func(*args, **kwargs)
+def optionally_cached(*, maxsize=32, ignore_kwargs=()):
+    ignore_kwargs = frozenset(ignore_kwargs)
 
-    wrapper.cache_clear = cached_func.cache_clear
-    return wrapper
+    def decorator(func):
+        sig = signature(func)
+
+        @lru_cache(maxsize=maxsize)
+        def cached_call(bound_args_items):
+            bound = sig.bind_partial()
+            bound.arguments.update(dict(bound_args_items))
+            return func(*bound.args, **bound.kwargs)
+
+        @wraps(func)
+        def wrapper(*args, use_cache=True, **kwargs):
+            if not use_cache:
+                return func(*args, **kwargs)
+
+            bound = sig.bind(*args, **kwargs)
+            bound.apply_defaults()
+
+            cache_dict = {k: v for k, v in bound.arguments.items() if k not in ignore_kwargs}
+
+            cache_key = tuple(cache_dict.items())
+            return cached_call(cache_key)
+
+        wrapper.cache_clear = cached_call.cache_clear
+        wrapper.cache_info = cached_call.cache_info
+        return wrapper
+
+    return decorator
 
 
 # TODO this belongs to migration logic
@@ -139,13 +162,19 @@ def parse_input_manifest(file_path: Path, verbose: bool = False) -> pl.DataFrame
     return manifest
 
 
-@optionally_cached
-def import_segmentation(seg_path: str, expected_shape: tuple[int], labels_key: str | None = None) -> np.ndarray:
+@optionally_cached(maxsize=2)
+def import_segmentation(
+    seg_path: str, expected_shape: tuple[int], labels_key: str | None = None, logger: logging.Logger | None = None
+) -> np.ndarray:
+
+    log = logger or LOGGER
+    log.info('Importing segmentation from %s with labels_key=%s', seg_path, labels_key)
+
     SUPPORTED_MASK_FILETYPES = {'.npy', '.npz', '.geojson'}
     ## load new segmentation
-    cell_labels = utils.validate_path(seg_path, must_exist=True, is_dir_ok=False, is_file_ok=True)
-    suffix = cell_labels.suffix.lower()
+    cell_labels = pathval.validate_file_path(seg_path, must_exist=True)
 
+    suffix = cell_labels.suffix.lower()
     if suffix not in SUPPORTED_MASK_FILETYPES:
         raise ValueError(f'{suffix} is not a supported file type.')
 
@@ -197,8 +226,8 @@ def import_segmentation(seg_path: str, expected_shape: tuple[int], labels_key: s
     return seg
 
 
-@optionally_cached
-def import_table(file_path: str, lazy: bool = False, columns: list[str] | None = None) -> 'pdDF | plDF | plLF':
+@optionally_cached(maxsize=2)
+def import_table(file_path: str, lazy: bool = False, columns: tuple[str] | None = None) -> 'pdDF | plDF | plLF':
     file_path = Path(file_path)
     if lazy:
         if file_path.suffix == '.parquet':
@@ -216,8 +245,8 @@ def import_table(file_path: str, lazy: bool = False, columns: list[str] | None =
     return reads
 
 
-@optionally_cached
-def import_image(img_path):
+@optionally_cached(maxsize=8)
+def import_image(img_path: str):
     img_path = Path(img_path)
     suffix = img_path.suffix.lower()
 
@@ -243,62 +272,3 @@ def import_image(img_path):
         return readers[suffix](img_path)
     except KeyError:
         raise ValueError(f'Unsupported image format: {suffix}') from None
-
-
-# def create_sample_g4x(sample_dir, save_file: bool = False):
-#     sample_dir = Path(sample_dir)
-
-#     meta_json = sample_dir / 'run_meta.json'
-#     sample_sheet = sample_dir / 'samplesheet.csv'
-
-#     with open(meta_json, 'r') as f:
-#         run_meta = json.load(f)
-
-#     if 'sample_id' in run_meta:
-#         sample_id = run_meta['sample_id']
-#     else:
-#         sample_id = _infer_smp_id(sample_dir)
-#         run_meta['sample_id'] = sample_id
-
-#     run_info, data_section = _parse_samplesheet(sample_sheet)
-
-#     ssheet_info = data_section.filter(
-#         pl.col('lane') == int(sample_id[-1]), pl.col('sample_position') == sample_id[0]
-#     ).to_dicts()[0]
-
-#     ri_keys = {'run_name', 'user_name', 'assay'}
-#     filtered = [d for d in run_info.to_dicts() if d['Key'] in ri_keys]
-#     run_info = {d['Key']: d['Value'] for d in filtered}
-
-#     run_meta.update(run_info)
-#     run_meta.update(ssheet_info)
-
-#     order = [
-#         'run_name',
-#         'sample_position',
-#         'sample_id',
-#         'tissue_type',
-#         'block',
-#         'assay',
-#         'machine',
-#         'run_id',
-#         'fc',
-#         'lane',
-#         'platform',
-#         'user_name',
-#         'time_of_creation',
-#         'transcript_panel',
-#         'transcript_custom',
-#         'protein_panel',
-#         'protein_custom',
-#         'software',
-#         'software_version',
-#         'output_version',
-#     ]
-
-#     out = {k: str(run_meta[k]) for k in order if k in run_meta}
-#     if save_file:
-#         with open(sample_dir / 'sample.g4x', 'w') as f:
-#             json.dump(out, f, indent=4)
-
-#     return out
