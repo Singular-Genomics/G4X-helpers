@@ -23,37 +23,48 @@ LOGGER = logging.getLogger(__name__)
 # @workflow
 def demux_raw_features(
     g4x_obj: 'G4Xoutput',
-    manifest: str | Path,
-    out_dir: str | Path,
+    out_dir: str,
+    manifest: str = '__g4x_default__',
     *,
     override: bool = False,
     batch_size: int = c.DEFAULT_BATCH_SIZE,
     show_progress: bool | None = None,
     logger: logging.Logger | None = None,
-) -> None:
+) -> pl.LazyFrame:
 
     log = logger or LOGGER
-    log.info('Demuxing raw features from manifest: %s', manifest)
 
-    manifest = io.pathval.validate_file_path(manifest)
-    shutil.copy(manifest, out_dir / g4x_obj.tree.TranscriptPanel.path.name)
-
-    out_dir = io.pathval.ensure_dir(out_dir)
+    out_dir = io.pathval.validate_dir_path(out_dir)
     log.info('Output directory for demuxed features: %s', out_dir)
 
     rna_dir = io.pathval.ensure_dir(out_dir / 'rna')
     batch_dir = io.pathval.ensure_dir(out_dir / 'demux_batches')
 
+    if manifest == '__g4x_default__':
+        log.debug('Using default transcript panel from G4X-output')
+        manifest_path = g4x_obj.tree.TranscriptPanel.path
+    else:
+        manifest_path = io.pathval.validate_file_path(manifest)
+
+        manifest_new_path = out_dir / g4x_obj.tree.TranscriptPanel.path.name
+        if manifest_new_path.exists() and not override:
+            log.warning(f'Transcript panel already exists at {manifest_new_path}. Use override=True to replace it.')
+        else:
+            shutil.copy(manifest_path, manifest_new_path)
+
+    log.info('Demuxing raw features from manifest: %s', manifest_path)
+
     tx_table_out = rna_dir / g4x_obj.tree.TranscriptTable.path.name
     if tx_table_out.exists() and not override:
-        log.warning(f'Transcript table already exists at {tx_table_out}. Use override=True to overwrite.')
-        return
+        log.warning(
+            f'Operation aborted! Transcript table already exists at {tx_table_out}. Use override=True to replace it.'
+        )
+        return pl.scan_csv(tx_table_out)
 
     # TODO add file validation via validator before parsing
-    tx_panel = io.parse_input_manifest(file_path=manifest)
+    tx_panel = io.parse_input_manifest_v2(file_path=manifest_path)
 
     log.info('Starting batched demuxing of raw features')
-
     if show_progress is None:
         show_progress = sys.stderr.isatty()
 
