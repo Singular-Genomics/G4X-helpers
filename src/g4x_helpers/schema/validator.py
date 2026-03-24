@@ -24,7 +24,6 @@ class DataValidator:
         self._target_path = Path(target_path) if target_path is not None else Path(type(self).DEFAULT_TARGET_PATH)
         self.name = type(self).__name__  # + 'Validator'
         self.validate_absence = validate_absence
-        self.backup_dir = self.smp_dir / 'g4x_helpers' / 'migration_backup'
 
     @property
     def target_path(self):

@@ -179,6 +179,42 @@ class TranscriptPanel(DataValidator):
 
         return set(self.SCHEMA).issubset(lf_names)
 
+    def parse(self, verbose: bool = False):
+        manifest = pl.read_csv(self.target_path_resolved)
+
+        col = 'probe_name'
+        if col not in manifest.columns:
+            raise ValueError(f"transcript manifest must contain column '{col}'")
+
+        for i, parsed_column in enumerate(['gene_name', 'sequence', 'primer']):
+            if parsed_column not in manifest.columns:
+                manifest = manifest.with_columns(
+                    [manifest[col].str.extract(c.PROBE_PATTERN, i + 1).alias(parsed_column)]
+                )
+
+        null_count = manifest.null_count()['sequence'][0]
+        if null_count > 0:
+            if verbose:
+                print(f'{null_count} probes with invalid sequence format will be ignored:')
+                null_seqs = manifest.filter(pl.col('sequence').is_null())['probe_name'].to_list()
+                for ns in null_seqs:
+                    print(f'- {ns}')
+
+        if 'probe_type' not in manifest.columns:
+            manifest = manifest.with_columns(
+                probe_type=(
+                    pl.when(pl.col('gene_name').str.to_lowercase() == 'gdna')
+                    .then(pl.lit('GCP'))
+                    .when(pl.col('gene_name').str.starts_with('NCS-'))
+                    .then(pl.lit('NCS'))
+                    .when(pl.col('gene_name').str.starts_with('NCP-'))
+                    .then(pl.lit('NCP'))
+                    .otherwise(pl.lit('targeting'))
+                )
+            )
+
+        return manifest.select(['probe_name', 'gene_name', 'sequence', 'primer', 'probe_type'])
+
 
 class ProteinPanel(DataValidator):
     DEFAULT_TARGET_PATH = c.PR_PANEL
