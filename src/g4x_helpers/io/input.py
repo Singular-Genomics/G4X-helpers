@@ -14,7 +14,7 @@ import polars.selectors as cs
 import tifffile
 from matplotlib.pyplot import imread
 
-from .. import constants
+from .. import c
 from . import convert, pathval
 
 if TYPE_CHECKING:
@@ -92,6 +92,53 @@ def _parse_samplesheet(ss_path: str):
     return run_info_section, data_section
 
 
+def parse_input_manifest_v2(file_path: str, verbose: bool = False):
+    manifest = pl.read_csv(file_path)
+
+    col = 'probe_name'
+    if col not in manifest.columns:
+        raise ValueError(f"transcript manifest must contain column '{col}'")
+
+    for i, parsed_column in enumerate(['gene_name', 'sequence', 'primer']):
+        if parsed_column not in manifest.columns:
+            manifest = manifest.with_columns([manifest[col].str.extract(c.PROBE_PATTERN, i + 1).alias(parsed_column)])
+
+    null_count = manifest.null_count()['sequence'][0]
+    if null_count > 0:
+        if verbose:
+            print(f'{null_count} probes with invalid sequence format will be ignored:')
+            null_seqs = manifest.filter(pl.col('sequence').is_null())['probe_name'].to_list()
+            for ns in null_seqs:
+                print(f'- {ns}')
+
+    if 'read' not in manifest.columns:
+        plist = manifest['primer'].unique().to_list()
+        ign_primer = [p for p in plist if p not in c.primer_read_map]
+        if len(ign_primer) > 0:
+            if verbose:
+                print('Warning: the following primer names are not known and will be ignored:')
+                for ip in ign_primer:
+                    print(f'- {ip}')
+        manifest = manifest.filter(pl.col('primer').is_in(c.primer_read_map.keys())).with_columns(
+            pl.col('primer').replace(c.primer_read_map).cast(pl.Int8).alias('read')
+        )
+
+    if 'probe_type' not in manifest.columns:
+        manifest = manifest.with_columns(
+            probe_type=(
+                pl.when(pl.col('gene_name').str.to_lowercase() == 'gdna')
+                .then(pl.lit('GCP'))
+                .when(pl.col('gene_name').str.starts_with('NCS-'))
+                .then(pl.lit('NCS'))
+                .when(pl.col('gene_name').str.starts_with('NCP-'))
+                .then(pl.lit('NCP'))
+                .otherwise(pl.lit('targeting'))
+            )
+        )
+
+    return manifest.select(['probe_name', 'gene_name', 'sequence', 'primer', 'read', 'probe_type'])
+
+
 def parse_input_manifest(file_path: Path, verbose: bool = False) -> pl.DataFrame:
     """
     Parse strings in `df[col]` of the form '<prefix>-<15mer>-<primer>'
@@ -107,9 +154,9 @@ def parse_input_manifest(file_path: Path, verbose: bool = False) -> pl.DataFrame
 
     parsed = df.with_columns(
         [
-            pl.col(col).str.extract(constants.PROBE_PATTERN, 1).alias('gene_name'),
-            pl.col(col).str.extract(constants.PROBE_PATTERN, 2).alias('sequence'),
-            pl.col(col).str.extract(constants.PROBE_PATTERN, 3).alias('primer'),
+            pl.col(col).str.extract(c.PROBE_PATTERN, 1).alias('gene_name'),
+            pl.col(col).str.extract(c.PROBE_PATTERN, 2).alias('sequence'),
+            pl.col(col).str.extract(c.PROBE_PATTERN, 3).alias('primer'),
         ]
     )
 
@@ -130,14 +177,14 @@ def parse_input_manifest(file_path: Path, verbose: bool = False) -> pl.DataFrame
         parsed = parsed.drop('read')
     else:
         plist = parsed['primer'].unique().to_list()
-        ign_primer = [p for p in plist if p not in constants.primer_read_map]
+        ign_primer = [p for p in plist if p not in c.primer_read_map]
         if len(ign_primer) > 0:
             if verbose:
                 print('Warning: the following primer names are not known and will be ignored:')
                 for ip in ign_primer:
                     print(f'- {ip}')
-        parsed = parsed.filter(pl.col('primer').is_in(constants.primer_read_map.keys())).with_columns(
-            pl.col('primer').replace(constants.primer_read_map).cast(pl.Int8).alias('read')
+        parsed = parsed.filter(pl.col('primer').is_in(c.primer_read_map.keys())).with_columns(
+            pl.col('primer').replace(c.primer_read_map).cast(pl.Int8).alias('read')
         )
 
     if 'gene_name' in df.columns:
