@@ -34,7 +34,7 @@ class G4Xoutput:
 
         self.tree.validation_report(format='minimal', raw_only=True, report_pass=False, raise_exception=False)
 
-        with open(self.tree.SampleMetadata.path, 'r') as f:
+        with open(self.tree.SampleMetadata.p, 'r') as f:
             self.smp_meta = json.load(f)
 
         nuc_img = self.tree.HnEDir.existing_files['h_and_e/nuclear']
@@ -46,13 +46,13 @@ class G4Xoutput:
         self.stains = [c.NUCLEAR_STAIN, c.CYTOPLASMIC_STAIN]
         self.genes = []
         if self.tree.tx_detected:
-            tx_panel = io.parse_input_manifest(self.tree.TranscriptPanel.path)
+            tx_panel = io.parse_input_manifest(self.tree.TranscriptPanel.p)
             tx_panel = tx_panel.sort(by=['probe_type', 'probe_name'], descending=[True, False])
             self.genes = tx_panel['gene_name'].unique(maintain_order=True).to_list()
 
         self.proteins = []
         if self.tree.pr_detected:
-            protein_panel = pl.read_csv(self.tree.ProteinPanel.path)
+            protein_panel = pl.read_csv(self.tree.ProteinPanel.p)
             protein_panel.sort(by=['panel_type', pl.col('target').str.to_lowercase()], descending=[True, False])
             self.proteins = self.sort_proteins(protein_panel['target'].to_list())
 
@@ -122,7 +122,7 @@ class G4Xoutput:
             return self.cache[cache_key].copy()
 
         nuc_mask = io.import_segmentation(
-            seg_path=self.tree.Segmentation.path,
+            seg_path=self.tree.Segmentation.p,
             expected_shape=self.shape,
             labels_key='nuclei',  # TODO figure out what to do with custom segmentations
             use_cache=self.use_cache,
@@ -208,11 +208,11 @@ class G4Xoutput:
     def load_segmentation(self, expanded: bool = True, key: str | None = None) -> np.ndarray:
         key = 'nuclei_exp' if expanded else 'nuclei'
         return io.import_segmentation(
-            seg_path=self.tree.Segmentation.path, expected_shape=self.shape, labels_key=key, use_cache=self.use_cache
+            seg_path=self.tree.Segmentation.p, expected_shape=self.shape, labels_key=key, use_cache=self.use_cache
         )
 
     def load_bead_mask(self) -> np.ndarray:
-        return np.load(self.tree.BeadMask.path)['bead_mask']
+        return np.load(self.tree.BeadMask.p)['bead_mask']
 
     def load_feature_table(
         self,
@@ -221,7 +221,7 @@ class G4Xoutput:
         columns: list[str] | None = None,
         use_cache: bool = False,
     ) -> 'plDF | plLF':
-        file_path = self.tree.RawFeatures.path
+        file_path = self.tree.RawFeatures.p
         return io.import_table(file_path, lazy=lazy, columns=columns, use_cache=use_cache)
 
     def load_transcript_table(
@@ -231,7 +231,7 @@ class G4Xoutput:
         columns: list[str] | None = None,
         use_cache: bool = False,
     ) -> 'plDF | plLF':
-        file_path = self.tree.TranscriptTable.path
+        file_path = self.tree.TranscriptTable.p
         return io.import_table(file_path, lazy=lazy, columns=columns, use_cache=use_cache)
 
     def list_content(self, subdir=None):

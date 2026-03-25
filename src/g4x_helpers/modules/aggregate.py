@@ -42,10 +42,10 @@ def aggregate_cell_data(
 
     log.info('Output directory data: %s', out_dir)
 
-    tx_table_out = out_dir / g4x_obj.tree.TranscriptTable.target_path
-    metadata_out = out_dir / g4x_obj.tree.CellMetadata.target_path
-    cxg_out = out_dir / g4x_obj.tree.CellxGene.target_path
-    cxp_out = out_dir / g4x_obj.tree.CellxProtein.target_path
+    tx_table_out = out_dir / g4x_obj.tree.TranscriptTable.p
+    metadata_out = out_dir / g4x_obj.tree.CellMetadata.p
+    cxg_out = out_dir / g4x_obj.tree.CellxGene.p
+    cxp_out = out_dir / g4x_obj.tree.CellxProtein.p
 
     for path in [tx_table_out, metadata_out, cxg_out, cxp_out]:
         if path.exists() and not override:
@@ -54,7 +54,7 @@ def aggregate_cell_data(
 
     if tx_table == '__g4x_default__':
         log.debug('Using default transcript table from G4X-output')
-        tx_table_path = g4x_obj.tree.TranscriptTable.path
+        tx_table_path = g4x_obj.tree.TranscriptTable.p
     else:
         tx_table_path = io.pathval.validate_file_path(tx_table)
         log.debug('Using transcript table from %s', tx_table_path)

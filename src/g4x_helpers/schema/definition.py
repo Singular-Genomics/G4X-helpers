@@ -6,12 +6,11 @@ import polars as pl
 
 from .. import c
 from ..io.input import _parse_samplesheet
-from .validator import DataValidator, validation_test
+from .validator import BaseValidator, validation_test
 
 
-class SampleMetadata(DataValidator):
+class SampleMetadata(BaseValidator):
     DEFAULT_TARGET_PATH = c.SMP_META
-    TYPE = 'file'
 
     KEYS = [
         'run_name',
@@ -39,7 +38,7 @@ class SampleMetadata(DataValidator):
 
     def _try_load_json(self):
         try:
-            with open(self.target_path_resolved, 'r') as f:
+            with open(self.target_path, 'r') as f:
                 meta = json.load(f)
         except Exception as _:
             return {}
@@ -57,34 +56,30 @@ class SampleMetadata(DataValidator):
         return False
 
 
-class Segmentation(DataValidator):
+class Segmentation(BaseValidator):
     DEFAULT_TARGET_PATH = c.SEG_MASK
-    TYPE = 'file'
 
     @validation_test
     def correct_keys(self):
-        path = self.target_path_resolved
+        path = self.target_path
         return list(np.load(path).keys()) == ['nuclei', 'nuclei_exp']
 
 
-class BeadMask(DataValidator):
+class BeadMask(BaseValidator):
     DEFAULT_TARGET_PATH = c.BEAD_MASK
-    TYPE = 'file'
 
     @validation_test
     def correct_keys(self):
-        path = self.target_path_resolved
+        path = self.target_path
         return list(np.load(path).keys()) == ['bead_mask']
 
 
-class QCSummary(DataValidator):
+class QCSummary(BaseValidator):
     DEFAULT_TARGET_PATH = c.SUMMARY
-    TYPE = 'file'
 
 
-class SampleSheet(DataValidator):
+class SampleSheet(BaseValidator):
     DEFAULT_TARGET_PATH = c.SSHEET
-    TYPE = 'file'
 
     EXPECTED_KEYS_RUN_SECTION = [
         'Date',
@@ -112,7 +107,7 @@ class SampleSheet(DataValidator):
 
     def _try_parse_samplesheet(self):
         try:
-            res = _parse_samplesheet(self.target_path_resolved)
+            res = _parse_samplesheet(self.target_path)
         except Exception as _:
             return None
         return res
@@ -136,9 +131,8 @@ class SampleSheet(DataValidator):
         return run_section_valid and data_section_valid
 
 
-class RawFeatures(DataValidator):
+class RawFeatures(BaseValidator):
     DEFAULT_TARGET_PATH = c.RAW_FEATURES
-    TYPE = 'file'
 
     SCHEMA = [
         'TXUID',
@@ -151,36 +145,33 @@ class RawFeatures(DataValidator):
 
     @validation_test
     def correct_schema(self):
-        lf = pl.scan_parquet(self.target_path_resolved)
+        lf = pl.scan_parquet(self.target_path)
         lf_schema = lf.collect_schema().names()
         return lf_schema == self.SCHEMA
 
 
-class TranscriptTable(DataValidator):
+class TranscriptTable(BaseValidator):
     DEFAULT_TARGET_PATH = c.FILE_TX_TABLE
-    TYPE = 'file'
 
 
-class ViewerZarr(DataValidator):
+class ViewerZarr(BaseValidator):
     DEFAULT_TARGET_PATH = c.FILE_VIEWER_ZARR
-    TYPE = 'file'
 
 
-class TranscriptPanel(DataValidator):
+class TranscriptPanel(BaseValidator):
     DEFAULT_TARGET_PATH = c.TX_PANEL
-    TYPE = 'file'
 
     SCHEMA = ['probe_name', 'gene_name', 'panel_type']
 
     @validation_test
     def correct_schema(self):
-        lf = pl.scan_csv(self.target_path_resolved)
+        lf = pl.scan_csv(self.target_path)
         lf_names = lf.collect_schema().names()
 
         return set(self.SCHEMA).issubset(lf_names)
 
     def parse(self, verbose: bool = False):
-        manifest = pl.read_csv(self.target_path_resolved)
+        manifest = pl.read_csv(self.target_path)
 
         col = 'probe_name'
         if col not in manifest.columns:
@@ -216,41 +207,39 @@ class TranscriptPanel(DataValidator):
         return manifest.select(['probe_name', 'gene_name', 'sequence', 'primer', 'probe_type'])
 
 
-class ProteinPanel(DataValidator):
+class ProteinPanel(BaseValidator):
     DEFAULT_TARGET_PATH = c.PR_PANEL
-    TYPE = 'file'
 
     SCHEMA = ['target', 'panel_type']
 
     @validation_test
     def correct_schema(self):
-        lf = pl.scan_csv(self.target_path_resolved)
+        lf = pl.scan_csv(self.target_path)
         lf_names = lf.collect_schema().names()
 
         return set(self.SCHEMA).issubset(lf_names)
 
     @validation_test
     def folder_present(self):
-        folder = ProteinPanel(self.smp_dir)
+        folder = ProteinPanel(self.root)
         return folder.path_exists
 
 
-class ProteinDir(DataValidator):
+class ProteinDir(BaseValidator):
     DEFAULT_TARGET_PATH = c.PR_DIR
-    TYPE = 'directory'
 
     IMG_SUFFIXES = [c.PREFERRED_IMG_SUFFIX, c.ALT_IMG_SUFFIX]
 
-    def __init__(self, smp_dir):
-        super().__init__(smp_dir)
-        self.panel = ProteinPanel(self.smp_dir)
-        proteins = pl.read_csv(self.panel.target_path_resolved)['target'].to_list()
+    def __init__(self, root):
+        super().__init__(root=root)
+        self.panel = ProteinPanel(root=self.root)
+        proteins = pl.read_csv(self.panel.target_path)['target'].to_list()
 
         self.existing_files = {}
         for pr in proteins:
             img = None
             for suffix in self.IMG_SUFFIXES:
-                candidate = (self.target_path_resolved / pr).with_suffix(suffix)
+                candidate = (self.target_path / pr).with_suffix(suffix)
                 if candidate.exists():
                     img = candidate
                     break
@@ -265,9 +254,8 @@ class ProteinDir(DataValidator):
         return all(self.existing_files.values())
 
 
-class HnEDir(DataValidator):
+class HnEDir(BaseValidator):
     DEFAULT_TARGET_PATH = c.HE_DIR
-    TYPE = 'directory'
 
     IMG_SUFFIXES = [c.PREFERRED_IMG_SUFFIX, c.ALT_IMG_SUFFIX]
 
@@ -277,14 +265,14 @@ class HnEDir(DataValidator):
         c.HNE_IMG,
     ]
 
-    def __init__(self, smp_dir):
-        super().__init__(smp_dir)
+    def __init__(self, root):
+        super().__init__(root=root)
 
         self.existing_files = {}
         for img in self.IMAGES:
             img_path = Path(f'{img}__missing__')
             for suffix in self.IMG_SUFFIXES:
-                candidate = (self.smp_dir / img).with_suffix(suffix)
+                candidate = (self.root / img).with_suffix(suffix)
                 if candidate.exists():
                     img_path = candidate
 
@@ -298,29 +286,24 @@ class HnEDir(DataValidator):
         return all(existing_files.values())
 
 
-class CellMetadata(DataValidator):
+class CellMetadata(BaseValidator):
     DEFAULT_TARGET_PATH = c.FILE_CELL_METADATA
-    TYPE = 'file'
 
 
-class CellxGene(DataValidator):
+class CellxGene(BaseValidator):
     DEFAULT_TARGET_PATH = c.FILE_CELL_X_GENE
-    TYPE = 'file'
 
 
-class CellxProtein(DataValidator):
+class CellxProtein(BaseValidator):
     DEFAULT_TARGET_PATH = c.FILE_CELL_X_PROTEIN
-    TYPE = 'file'
 
 
-class AdataH5(DataValidator):
+class AdataH5(BaseValidator):
     DEFAULT_TARGET_PATH = c.FILE_FEAT_MTX
-    TYPE = 'file'
 
 
-class SingleCellFolder(DataValidator):
+class SingleCellFolder(BaseValidator):
     DEFAULT_TARGET_PATH = c.SINGLE_CELL_DIR
-    TYPE = 'directory'
 
     SUB_VALIDATORS = [
         CellMetadata('.'),
@@ -329,10 +312,10 @@ class SingleCellFolder(DataValidator):
         AdataH5('.'),
     ]
 
-    def __init__(self, smp_dir):
-        super().__init__(smp_dir, self.DEFAULT_TARGET_PATH)
+    def __init__(self, root):
+        super().__init__(self.DEFAULT_TARGET_PATH)
         for val in self.SUB_VALIDATORS:
-            val.smp_dir = self.smp_dir
+            val.root = self.root
             setattr(self, val.name, val)
 
     @validation_test

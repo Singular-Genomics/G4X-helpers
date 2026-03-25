@@ -27,7 +27,7 @@ class FileTree:
     def __init__(self, sample_dir):
         self.smp_dir = Path(sample_dir)
 
-        meta_validator = SampleMetadata(self.smp_dir)
+        meta_validator = SampleMetadata(root=self.smp_dir)
 
         self.raw_validators = [meta_validator]
         self.secondary_validators = []
@@ -36,51 +36,51 @@ class FileTree:
         self.pr_detected = False
 
         if meta_validator.is_valid:
-            self.detect_assay_type(meta_validator.target_path_resolved)
+            self.detect_assay_type(meta_validator.target_path)
 
             self.raw_validators.extend(
                 [
-                    SampleSheet(self.smp_dir),
-                    Segmentation(self.smp_dir),
-                    BeadMask(self.smp_dir),
-                    HnEDir(self.smp_dir),
+                    SampleSheet(root=self.smp_dir),
+                    Segmentation(root=self.smp_dir),
+                    BeadMask(root=self.smp_dir),
+                    HnEDir(root=self.smp_dir),
                 ]
             )
 
             self.secondary_validators.extend(
                 [
-                    QCSummary(self.smp_dir),
-                    ViewerZarr(self.smp_dir),
-                    SingleCellFolder(self.smp_dir),
-                    CellMetadata(self.smp_dir),
-                    AdataH5(self.smp_dir),
+                    QCSummary(root=self.smp_dir),
+                    ViewerZarr(root=self.smp_dir),
+                    SingleCellFolder(root=self.smp_dir),
+                    CellMetadata(root=self.smp_dir),
+                    AdataH5(root=self.smp_dir),
                 ]
             )
 
             if self.tx_detected:
                 self.raw_validators.extend(
                     [
-                        TranscriptPanel(self.smp_dir),
-                        RawFeatures(self.smp_dir),
+                        TranscriptPanel(root=self.smp_dir),
+                        RawFeatures(root=self.smp_dir),
                     ]
                 )
                 self.secondary_validators.extend(
                     [
-                        TranscriptTable(self.smp_dir),
-                        CellxGene(self.smp_dir),
+                        TranscriptTable(root=self.smp_dir),
+                        CellxGene(root=self.smp_dir),
                     ]
                 )
 
             if self.pr_detected:
                 self.raw_validators.extend(
                     [
-                        ProteinPanel(self.smp_dir),
-                        ProteinDir(self.smp_dir),
+                        ProteinPanel(root=self.smp_dir),
+                        ProteinDir(root=self.smp_dir),
                     ]
                 )
                 self.secondary_validators.extend(
                     [
-                        CellxProtein(self.smp_dir),
+                        CellxProtein(root=self.smp_dir),
                     ]
                 )
 
@@ -145,7 +145,7 @@ class FileTree:
     def _val_report_verbose(self, raw_only: bool = False, raise_exception: bool = True):
 
         if self.SampleMetadata.path_exists:
-            print(f'Detected G4X-metadata file:\n{self.SampleMetadata.target_path_resolved}')
+            print(f'Detected G4X-metadata file:\n{self.SampleMetadata.target_path}')
             print(f'assay type: {self.assay_type}')
             print('\n> Validating required raw data ...')
         else:
@@ -173,7 +173,7 @@ class FileTree:
         elif format == 'minimal':
             self._val_report_minimal(raw_only=raw_only, report_pass=report_pass, raise_exception=raise_exception)
         else:
-            raise ValueError(f"Invalid format: {format}. Expected 'full' or 'minimal'.")
+            raise ValueError(f"Invalid format: {format}. Expected 'verbose' or 'minimal'.")
 
 
 class ValidationError(Exception):
