@@ -23,7 +23,7 @@ LOGGER = logging.getLogger(__name__)
 # @workflow
 def demux_raw_features(
     g4x_obj: 'G4Xoutput',
-    out_dir: str,
+    out_dir: str = '__g4x_default__',
     manifest: str = '__g4x_default__',
     *,
     override: bool = False,
@@ -34,19 +34,21 @@ def demux_raw_features(
 
     log = logger or LOGGER
 
-    out_dir = io.pathval.validate_dir_path(out_dir)
+    if out_dir == '__g4x_default__':
+        out_dir = g4x_obj.data_dir
+    else:
+        out_dir = io.pathval.validate_dir_path(out_dir)
     log.info('Output directory for demuxed features: %s', out_dir)
 
     rna_dir = io.pathval.ensure_dir(out_dir / 'rna')
-    batch_dir = io.pathval.ensure_dir(out_dir / 'demux_batches')
 
     if manifest == '__g4x_default__':
         log.debug('Using default transcript panel from G4X-output')
-        manifest_path = g4x_obj.tree.TranscriptPanel.path
+        manifest_path = g4x_obj.tree.TranscriptPanel.p
     else:
         manifest_path = io.pathval.validate_file_path(manifest)
 
-        manifest_new_path = out_dir / g4x_obj.tree.TranscriptPanel.path.name
+        manifest_new_path = out_dir / g4x_obj.tree.TranscriptPanel.n
         if manifest_new_path.exists() and not override:
             log.warning(f'Transcript panel already exists at {manifest_new_path}. Use override=True to replace it.')
         else:
@@ -54,7 +56,7 @@ def demux_raw_features(
 
     log.info('Demuxing raw features from manifest: %s', manifest_path)
 
-    tx_table_out = rna_dir / g4x_obj.tree.TranscriptTable.path.name
+    tx_table_out = rna_dir / g4x_obj.tree.TranscriptTable.n
     if tx_table_out.exists() and not override:
         log.warning(
             f'Operation aborted! Transcript table already exists at {tx_table_out}. Use override=True to replace it.'
@@ -68,28 +70,31 @@ def demux_raw_features(
     if show_progress is None:
         show_progress = sys.stderr.isatty()
 
-    batched_demuxing(
-        feature_table_path=g4x_obj.tree.RawFeatures.path,
-        manifest=tx_panel,
-        batch_dir=batch_dir,
-        batch_size=batch_size,
-        show_progress=show_progress,
-    )
+    try:
+        batch_dir = io.pathval.ensure_dir(out_dir / 'demux_batches')
+        batched_demuxing(
+            feature_table_path=g4x_obj.tree.RawFeatures.p,
+            manifest=tx_panel,
+            batch_dir=batch_dir,
+            batch_size=batch_size,
+            show_progress=show_progress,
+        )
 
-    # Compile the demuxed transcript table
-    log.debug('Compiling demuxed transcript table from batches: %s', batch_dir)
-    tx_table = pl.scan_parquet(list(batch_dir.glob('*.parquet')))
-    tx_table = tx_table.filter(pl.col('demuxed')).drop('demuxed')
+        # Compile the demuxed transcript table
+        log.debug('Compiling demuxed transcript table from batches: %s', batch_dir)
+        tx_table = pl.scan_parquet(list(batch_dir.glob('*.parquet')))
+        tx_table = tx_table.filter(pl.col('demuxed')).drop('demuxed')
 
-    # Write the transcript table to a CSV file
-    log.info('Writing transcript table to CSV: %s', tx_table_out)
-    tx_table.sink_csv(tx_table_out, compression='gzip')
+        # Write the transcript table to a CSV file
+        log.info('Writing transcript table to CSV: %s', tx_table_out)
+        tx_table.sink_csv(tx_table_out, compression='gzip')
+        log.info('Demuxing complete.')
 
-    # Remove temporary demux batches
-    log.debug('Removing temporary demux batches: %s', batch_dir)
-    shutil.rmtree(batch_dir)
-
-    log.info('Demuxing complete.')
+    finally:
+        # Remove temporary demux batches
+        if batch_dir.exists():
+            log.debug('Removing temporary demux batches: %s', batch_dir)
+            shutil.rmtree(batch_dir)
 
 
 def batched_demuxing(
