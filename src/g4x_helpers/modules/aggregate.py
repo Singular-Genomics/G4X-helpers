@@ -20,12 +20,12 @@ LOGGER = logging.getLogger(__name__)
 # @workflow
 def aggregate_cell_data(
     g4x_obj: 'G4Xoutput',
-    out_dir: str = '__g4x_default__',
     segmentation_mask: str = '__g4x_default__',
+    out_dir: str = '__g4x_default__',
+    *,
     tx_table: str = '__g4x_default__',
     gene_list: list[str] = '__g4x_default__',
     protein_list: list[str] = '__g4x_default__',
-    *,
     mask_key: str | None = None,
     override: bool = False,
     show_progress: bool | None = None,

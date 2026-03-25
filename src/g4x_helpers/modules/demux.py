@@ -23,14 +23,14 @@ LOGGER = logging.getLogger(__name__)
 # @workflow
 def demux_raw_features(
     g4x_obj: 'G4Xoutput',
-    out_dir: str = '__g4x_default__',
     manifest: str = '__g4x_default__',
+    out_dir: str = '__g4x_default__',
     *,
     override: bool = False,
     batch_size: int = c.DEFAULT_BATCH_SIZE,
     show_progress: bool | None = None,
     logger: logging.Logger | None = None,
-) -> pl.LazyFrame:
+) -> None:
 
     log = logger or LOGGER
 
