@@ -4,8 +4,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from .. import c
-from ..io.input import _parse_samplesheet, parse_input_manifest_v2
+from .. import c, io
 from .validator import BaseValidator, validation_test
 
 
@@ -56,6 +55,13 @@ class SampleMetadata(BaseValidator):
             return set(self.KEYS).issubset(set(smp_meta.keys()))
         return False
 
+    def load(self):
+        if self.is_valid:
+            with open(self.target_path, 'r') as f:
+                smp_meta = json.load(f)
+            return smp_meta
+        return self.validation()
+
 
 class QCSummary(BaseValidator):
     DEFAULT_TARGET_PATH = c.SUMMARY
@@ -90,7 +96,7 @@ class SampleSheet(BaseValidator):
 
     def _try_parse_samplesheet(self):
         try:
-            res = _parse_samplesheet(self.target_path)
+            res = io.parse_samplesheet(self.target_path)
         except Exception as _:
             return None
         return res
@@ -128,7 +134,7 @@ class TranscriptPanel(BaseValidator):
 
     def parse(self):
         if self.is_valid:
-            return parse_input_manifest_v2(self.target_path)
+            return io.parse_input_manifest(self.target_path)
         return self.validation()
 
 
@@ -259,14 +265,56 @@ class HnEDir(BaseValidator):
 # region single cell
 class CellMetadata(BaseValidator):
     DEFAULT_TARGET_PATH = c.FILE_CELL_METADATA
+    SCHEMA = [c.CELL_ID_NAME]
+
+    @validation_test
+    def correct_schema(self):
+        lf = pl.scan_csv(self.target_path)
+        lf_names = lf.collect_schema().names()
+
+        return set(self.SCHEMA).issubset(lf_names)
+
+    def load(self, lazy: bool = False):
+        if self.is_valid:
+            return io.import_table(self.target_path, lazy=lazy)
+        else:
+            return self.validation()
 
 
 class CellxGene(BaseValidator):
     DEFAULT_TARGET_PATH = c.FILE_CELL_X_GENE
+    SCHEMA = [c.CELL_ID_NAME]
+
+    @validation_test
+    def correct_schema(self):
+        lf = pl.scan_csv(self.target_path)
+        lf_names = lf.collect_schema().names()
+
+        return set(self.SCHEMA).issubset(lf_names)
+
+    def load(self, lazy: bool = False):
+        if self.is_valid:
+            return io.import_table(self.target_path, lazy=lazy)
+        else:
+            return self.validation()
 
 
 class CellxProtein(BaseValidator):
     DEFAULT_TARGET_PATH = c.FILE_CELL_X_PROTEIN
+    SCHEMA = [c.CELL_ID_NAME]
+
+    @validation_test
+    def correct_schema(self):
+        lf = pl.scan_csv(self.target_path)
+        lf_names = lf.collect_schema().names()
+
+        return set(self.SCHEMA).issubset(lf_names)
+
+    def load(self, lazy: bool = False):
+        if self.is_valid:
+            return io.import_table(self.target_path, lazy=lazy)
+        else:
+            return self.validation()
 
 
 class AdataH5(BaseValidator):
@@ -276,8 +324,10 @@ class AdataH5(BaseValidator):
 class ClusteringUmap(BaseValidator):
     DEFAULT_TARGET_PATH = c.FILE_CLUSTERING_UMAP
 
+
 class Dgex(BaseValidator):
     DEFAULT_TARGET_PATH = c.FILE_DGEX
+
 
 class SingleCellFolder(BaseValidator):
     DEFAULT_TARGET_PATH = c.SINGLE_CELL_DIR

@@ -4,7 +4,7 @@ import polars as pl
 
 from .. import __version__
 from ..schema.definition import SampleMetadata, SampleSheet
-from .input import _parse_samplesheet
+from .input import parse_samplesheet
 
 EXPECTED_KEYS_RUN_META = [
     'machine',
@@ -58,7 +58,7 @@ def create_sample_g4x(sample_id: str, run_meta: dict, ssheet: str, out_path: str
 
 
 def _extract_sample_sheet_info(sample_id: str, ssheet: str) -> dict:
-    run_info_section, data_section = _parse_samplesheet(ssheet)
+    run_info_section, data_section = parse_samplesheet(ssheet)
 
     # sanitize columns and filter the data_section for the specific sample_id
     def format_keys(key):

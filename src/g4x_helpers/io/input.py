@@ -74,7 +74,7 @@ def _infer_smp_id(sample_dir):
     return smp_id
 
 
-def _parse_samplesheet(ss_path: str):
+def parse_samplesheet(ss_path: str):
     ss_df = pl.read_csv(ss_path, has_header=False, row_index_name='index')
 
     data_index = ss_df.filter(pl.col('column_1') == '[Data]')['index'][0]
@@ -93,7 +93,7 @@ def _parse_samplesheet(ss_path: str):
     return run_info_section, data_section
 
 
-def parse_input_manifest_v2(file_path: str, verbose: bool = False):
+def parse_input_manifest(file_path: str, verbose: bool = False):
     manifest = pl.read_csv(file_path)
 
     col = 'probe_name'
@@ -138,76 +138,6 @@ def parse_input_manifest_v2(file_path: str, verbose: bool = False):
         )
 
     return manifest.select(['probe_name', 'gene_name', 'sequence', 'primer', 'read', 'probe_type'])
-
-
-def parse_input_manifest(file_path: Path, verbose: bool = False) -> pl.DataFrame:
-    """
-    Parse strings in `df[col]` of the form '<prefix>-<15mer>-<primer>'
-    and add columns: gene_name, sequence, primer, primer_code, read.
-    Rows that don't match the pattern get nulls in the new columns.
-    """
-    # print(f'Parsing transcript manifest: {file_path.name}')
-    df = pl.read_csv(file_path)
-
-    col = 'probe_name'
-    if col not in df.columns:
-        raise ValueError(f"transcript manifest must contain column '{col}'")
-
-    parsed = df.with_columns(
-        [
-            pl.col(col).str.extract(c.PROBE_PATTERN, 1).alias('gene_name'),
-            pl.col(col).str.extract(c.PROBE_PATTERN, 2).alias('sequence'),
-            pl.col(col).str.extract(c.PROBE_PATTERN, 3).alias('primer'),
-        ]
-    )
-
-    null_count = parsed.null_count()['sequence'][0]
-    if null_count > 0:
-        if verbose:
-            print(f'{null_count} probes with invalid sequence format will be ignored:')
-            null_seqs = parsed.filter(pl.col('sequence').is_null())['probe_name'].to_list()
-            for ns in null_seqs:
-                print(f'- {ns}')
-
-    if 'panel_type' in df.columns:
-        parsed = parsed.drop('panel_type')
-
-    if 'read' in df.columns:
-        if verbose:
-            print("Using 'read' column provided by input manifest.")
-        parsed = parsed.drop('read')
-    else:
-        plist = parsed['primer'].unique().to_list()
-        ign_primer = [p for p in plist if p not in c.primer_read_map]
-        if len(ign_primer) > 0:
-            if verbose:
-                print('Warning: the following primer names are not known and will be ignored:')
-                for ip in ign_primer:
-                    print(f'- {ip}')
-        parsed = parsed.filter(pl.col('primer').is_in(c.primer_read_map.keys())).with_columns(
-            pl.col('primer').replace(c.primer_read_map).cast(pl.Int8).alias('read')
-        )
-
-    if 'gene_name' in df.columns:
-        if verbose:
-            print("Using 'gene_name' column provided by input manifest.")
-        parsed = parsed.drop('gene_name')
-
-    manifest = parsed.join(df, on=col, how='left')
-
-    manifest = manifest.with_columns(
-        probe_type=(
-            pl.when(pl.col('gene_name').str.to_lowercase() == 'gdna')
-            .then(pl.lit('GCP'))
-            .when(pl.col('gene_name').str.starts_with('NCS-'))
-            .then(pl.lit('NCS'))
-            .when(pl.col('gene_name').str.starts_with('NCP-'))
-            .then(pl.lit('NCP'))
-            .otherwise(pl.lit('targeting'))
-        )
-    )
-
-    return manifest
 
 
 @optionally_cached(maxsize=2)
@@ -320,3 +250,73 @@ def import_image(img_path: str):
         return readers[suffix](img_path)
     except KeyError:
         raise ValueError(f'Unsupported image format: {suffix}') from None
+
+
+# def parse_input_manifest(file_path: Path, verbose: bool = False) -> pl.DataFrame:
+#     """
+#     Parse strings in `df[col]` of the form '<prefix>-<15mer>-<primer>'
+#     and add columns: gene_name, sequence, primer, primer_code, read.
+#     Rows that don't match the pattern get nulls in the new columns.
+#     """
+#     # print(f'Parsing transcript manifest: {file_path.name}')
+#     df = pl.read_csv(file_path)
+
+#     col = 'probe_name'
+#     if col not in df.columns:
+#         raise ValueError(f"transcript manifest must contain column '{col}'")
+
+#     parsed = df.with_columns(
+#         [
+#             pl.col(col).str.extract(c.PROBE_PATTERN, 1).alias('gene_name'),
+#             pl.col(col).str.extract(c.PROBE_PATTERN, 2).alias('sequence'),
+#             pl.col(col).str.extract(c.PROBE_PATTERN, 3).alias('primer'),
+#         ]
+#     )
+
+#     null_count = parsed.null_count()['sequence'][0]
+#     if null_count > 0:
+#         if verbose:
+#             print(f'{null_count} probes with invalid sequence format will be ignored:')
+#             null_seqs = parsed.filter(pl.col('sequence').is_null())['probe_name'].to_list()
+#             for ns in null_seqs:
+#                 print(f'- {ns}')
+
+#     if 'panel_type' in df.columns:
+#         parsed = parsed.drop('panel_type')
+
+#     if 'read' in df.columns:
+#         if verbose:
+#             print("Using 'read' column provided by input manifest.")
+#         parsed = parsed.drop('read')
+#     else:
+#         plist = parsed['primer'].unique().to_list()
+#         ign_primer = [p for p in plist if p not in c.primer_read_map]
+#         if len(ign_primer) > 0:
+#             if verbose:
+#                 print('Warning: the following primer names are not known and will be ignored:')
+#                 for ip in ign_primer:
+#                     print(f'- {ip}')
+#         parsed = parsed.filter(pl.col('primer').is_in(c.primer_read_map.keys())).with_columns(
+#             pl.col('primer').replace(c.primer_read_map).cast(pl.Int8).alias('read')
+#         )
+
+#     if 'gene_name' in df.columns:
+#         if verbose:
+#             print("Using 'gene_name' column provided by input manifest.")
+#         parsed = parsed.drop('gene_name')
+
+#     manifest = parsed.join(df, on=col, how='left')
+
+#     manifest = manifest.with_columns(
+#         probe_type=(
+#             pl.when(pl.col('gene_name').str.to_lowercase() == 'gdna')
+#             .then(pl.lit('GCP'))
+#             .when(pl.col('gene_name').str.starts_with('NCS-'))
+#             .then(pl.lit('NCS'))
+#             .when(pl.col('gene_name').str.starts_with('NCP-'))
+#             .then(pl.lit('NCP'))
+#             .otherwise(pl.lit('targeting'))
+#         )
+#     )
+
+#     return manifest
