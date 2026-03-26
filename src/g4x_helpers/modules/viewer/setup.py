@@ -6,7 +6,7 @@ from pathlib import Path
 
 import zarr
 
-from .. import constants as c
+from ... import constants as c
 
 
 def setup_zarr_tree(target_dir: str, store_name: str = c.FILE_VIEWER_ZARR, overwrite: bool = True):

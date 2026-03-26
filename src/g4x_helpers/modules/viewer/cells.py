@@ -1,24 +1,20 @@
+import logging
+
 import numpy as np
 import polars as pl
 from numcodecs import Blosc
 
-from .. import constants as c
-from .. import io
-from ..modules import aggregate
-from ..modules import single_cell as g4xsc
+from ... import c, io
+from .. import single_cell
 from .setup import create_array, populate_zarr_metadata
 
-
-def write_csr(group, csr, gene_names, compressor=None, chunks=None):
-    create_array(group, 'data', data=csr.data.astype('int16'), compressor=compressor, chunks=chunks)
-    create_array(group, 'indices', data=csr.indices.astype('int32'), compressor=compressor, chunks=chunks)
-    create_array(group, 'indptr', data=csr.indptr.astype('int64'), compressor=compressor, chunks=chunks)
-
-    # TODO find maybe better spot for dtype conversion
-    create_array(group, 'gene_names', data=np.array(gene_names).astype('U12'), compressor=compressor, chunks='auto')
+LOGGER = logging.getLogger(__name__)
 
 
-def write_cells(smp, root_group):
+def write_cells(smp, root_group, logger: logging.Logger | None = None):
+    log = LOGGER or logger
+
+    log.info('Preparing cell data')
     cell_group = root_group['cells']
     metadata_group = cell_group['metadata']
     protein_group = cell_group['protein']
@@ -27,8 +23,10 @@ def write_cells(smp, root_group):
 
     compressor = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
 
+    log.info('Preparing cell group input')
     metadata, gex, gene_names = prepare_cell_group_input(smp)
 
+    log.info('Writing cell metadata arrays')
     # write arrays for each attribute
     arr = metadata[c.CELL_ID_NAME].to_numpy().astype(np.uint32)
     create_array(metadata_group, 'cell_id', data=arr, compressor=compressor)
@@ -77,6 +75,15 @@ def write_cells(smp, root_group):
     write_csr(genes_group, csr=gex, gene_names=gene_names, compressor=compressor, chunks='auto')
 
 
+def write_csr(group, csr, gene_names, compressor=None, chunks=None):
+    create_array(group, 'data', data=csr.data.astype('int16'), compressor=compressor, chunks=chunks)
+    create_array(group, 'indices', data=csr.indices.astype('int32'), compressor=compressor, chunks=chunks)
+    create_array(group, 'indptr', data=csr.indptr.astype('int64'), compressor=compressor, chunks=chunks)
+
+    # TODO find maybe better spot for dtype conversion
+    create_array(group, 'gene_names', data=np.array(gene_names).astype('U12'), compressor=compressor, chunks='auto')
+
+
 def sort_clusters(metadata):
     uids = metadata.group_by('cluster_id').agg(pl.len())
     uids = uids.sort('len', descending=True)['cluster_id'].to_list()
@@ -89,17 +96,18 @@ def sort_clusters(metadata):
 
 def prepare_cell_group_input(smp):
     # 1: create fresh adata with qc-values
-    cell_x_gene = pl.read_csv(smp.data_dir / 'single_cell_data' / 'cell_by_gene.csv.gz')
+    tx_panel = smp.tree.TranscriptPanel.p
+    cell_metadata = smp.tree.CellMetadata.p
+    cell_x_gene = smp.tree.CellxGene.p
 
-    mask = smp.load_segmentation(expanded=True)
-    cell_metadata = aggregate.create_cell_metadata(smp, mask=mask)
-    adata = g4xsc.create_adata(smp, cell_metadata=cell_metadata, cell_x_gene=cell_x_gene)
+    adata = single_cell.init_adata(smp, tx_panel=tx_panel, cell_metadata=cell_metadata, cell_x_gene=cell_x_gene)
 
     gex = adata.X
     del cell_x_gene
     gene_names = adata.var_names
 
     # 2: extract cell vertices
+    mask = smp.load_segmentation(expanded=True)
     vertices = extract_vertices(mask)
     del mask
 
@@ -117,7 +125,7 @@ def prepare_cell_group_input(smp):
 
     # 4: load clustering and UMAP coordinates
     clust_umap = pl.read_csv(
-        smp.data_dir / 'single_cell_data' / 'clustering_umap.csv.gz',
+        smp.tree.ClusteringUmap.p,
         schema={
             'idx': pl.UInt16,
             c.CELL_ID_NAME: pl.UInt32,

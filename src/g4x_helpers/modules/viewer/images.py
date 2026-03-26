@@ -1,3 +1,4 @@
+import logging
 import warnings
 from typing import Literal
 
@@ -7,6 +8,8 @@ import numpy as np
 from numcodecs import Blosc
 from ome_zarr import scale as oz_scale
 from ome_zarr import writer as oz_writer
+
+LOGGER = logging.getLogger(__name__)
 
 saturated_colors = {
     'red': '#FF0000',
@@ -75,9 +78,11 @@ class ImageChannel:
         self.omero.update(self.attrs)
 
 
-def write_images(smp, root_group):
-    write_muliplex_img(smp, root_group)
-    write_he_img(smp, root_group)
+def write_images(smp, root_group, logger: logging.Logger | None = None):
+    log = LOGGER or logger
+
+    write_muliplex_img(smp, root_group, logger=log)
+    write_he_img(smp, root_group, logger=log)
 
 
 def default_window_recipe(arr):
@@ -88,7 +93,10 @@ def default_window_recipe(arr):
     return window
 
 
-def write_muliplex_img(smp, root_group):
+def write_muliplex_img(smp, root_group, logger: logging.Logger | None = None):
+
+    log = LOGGER or logger
+    log.info('Preparing multiplex image')
 
     dtype = np.uint16
     channel_arrays = []
@@ -112,11 +120,12 @@ def write_muliplex_img(smp, root_group):
     channels = []
 
     for arr, name in zip(channel_arrays, channel_order):
+        log.debug(f'Processing channel: {name}')
         if name in channel_color_map:
             color = saturated_colors[channel_color_map[name]]
         else:
             color = saturated_colors[list(saturated_colors.keys())[channel_order.index(name) % len(saturated_colors)]]
-        # TODO define what to do when t
+        # TODO define what to do when channel is not in channel_color_map ?!?!
         active = True if name in DEFAULT_VISIBLE_CHANNELS else False
         window = default_window_recipe(arr)
         color = color.removeprefix('#')
@@ -125,8 +134,33 @@ def write_muliplex_img(smp, root_group):
         )
         channels.append(ic)
 
+    log.info('Writing multiplex image')
     img_group = root_group['images']['multiplex']
     write_channel_stack(img_group, channels)
+
+
+def write_he_img(smp, root_group, logger: logging.Logger | None = None):
+    log = LOGGER or logger
+    log.info('Preparing fH&E image')
+
+    dtype = np.uint8
+    image = _load_image_dask(smp, img_type='h_and_e', protein_name=None, dtype=dtype)
+    # image = _add_rgb_astronaut_to_img(image)
+
+    if image.ndim == 3 and image.shape[-1] == 3:
+        image = da.moveaxis(image, -1, 0)
+    elif image.ndim == 3 and image.shape[0] == 3:
+        pass
+    else:
+        raise ValueError(f'Unexpected H&E image shape: {image.shape}')
+
+    c1 = ImageChannel(image[0], label='R', omero_attrs={'color': 'FF0000', 'active': True})
+    c2 = ImageChannel(image[1], label='G', omero_attrs={'color': '00FF00', 'active': True})
+    c3 = ImageChannel(image[2], label='B', omero_attrs={'color': '0000FF', 'active': True})
+
+    log.info('Writing fH&E image')
+    img_group = root_group['images']['h_and_e']
+    write_channel_stack(img_group, [c1, c2, c3])
 
 
 def write_channel_stack(img_group, channels):
@@ -150,26 +184,6 @@ def write_channel_stack(img_group, channels):
         storage_options=storage_options,
         metadata={'omero': omero},
     )
-
-
-def write_he_img(smp, root_group):
-    dtype = np.uint8
-    image = _load_image_dask(smp, img_type='h_and_e', protein_name=None, dtype=dtype)
-    # image = _add_rgb_astronaut_to_img(image)
-
-    if image.ndim == 3 and image.shape[-1] == 3:
-        image = da.moveaxis(image, -1, 0)
-    elif image.ndim == 3 and image.shape[0] == 3:
-        pass
-    else:
-        raise ValueError(f'Unexpected H&E image shape: {image.shape}')
-
-    c1 = ImageChannel(image[0], label='R', omero_attrs={'color': 'FF0000', 'active': True})
-    c2 = ImageChannel(image[1], label='G', omero_attrs={'color': '00FF00', 'active': True})
-    c3 = ImageChannel(image[2], label='B', omero_attrs={'color': '0000FF', 'active': True})
-
-    img_group = root_group['images']['h_and_e']
-    write_channel_stack(img_group, [c1, c2, c3])
 
 
 # region helpers

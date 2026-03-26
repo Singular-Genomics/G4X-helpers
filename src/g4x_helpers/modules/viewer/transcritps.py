@@ -1,12 +1,19 @@
+import logging
+
 import numpy as np
 import polars as pl
 from numcodecs import Blosc
 
-from .. import constants as c
+from ... import constants as c
 from .setup import create_array, populate_zarr_metadata
 
+LOGGER = logging.getLogger(__name__)
 
-def write_transcripts(smp, root_group):
+
+def write_transcripts(smp, root_group, logger: logging.Logger | None = None):
+
+    log = LOGGER or logger
+    log.info('Preparing transcript data')
 
     aggregation_level = 'gene_name'
     keep_cols = ['x_pixel_coordinate', 'y_pixel_coordinate', c.CELL_ID_NAME, aggregation_level]
@@ -21,13 +28,13 @@ def write_transcripts(smp, root_group):
         target_points_per_tile=5000,
         min_tile_size=256,
     )
-    print(tile_specs)
+    log.info(f'Tile specs: {tile_specs}')
 
     # contstruct pyramid
     pyramid = build_tx_pyramid(tile_specs, image_resolution=img_resolution)
 
     for level, specs in pyramid.items():
-        print(f'Level {level}: tile_size: {specs["tile_size"]} - scale: {specs["scale_fct"]}')
+        log.info(f'Level {level}: tile_size: {specs["tile_size"]} - scale: {specs["scale_fct"]}')
 
     pyramid = construct_tile_dfs(df, pyramid)
 
@@ -49,7 +56,7 @@ def write_transcripts(smp, root_group):
 
     populate_zarr_metadata(root_group, gene_colors=gene_colors, tx_layer_config=layer_config)
 
-    # write
+    log.info('Writing transcript data')
     tx_group = root_group['transcripts']
     write_tx_zarr(tx_group, pyramid)
 
@@ -110,10 +117,12 @@ def construct_tile_dfs(df, pyramid):
     return pyramid
 
 
-def write_tx_zarr(tx_group, pyramid):
+def write_tx_zarr(tx_group, pyramid, logger: logging.Logger | None = None):
+    log = LOGGER or logger
     compressor = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
 
     for level in pyramid:
+        log.info(f'Writing transcript data for level {level}')
         tile_df = pyramid[level]['tile_df']
         all_coords = tile_df.select(['x_pixel_coordinate', 'y_pixel_coordinate']).to_numpy()
         all_cell_ids = tile_df.select(c.CELL_ID_NAME).to_numpy()
