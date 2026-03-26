@@ -5,10 +5,11 @@ import numpy as np
 import polars as pl
 
 from .. import c
-from ..io.input import _parse_samplesheet
+from ..io.input import _parse_samplesheet, parse_input_manifest_v2
 from .validator import BaseValidator, validation_test
 
 
+# region root
 class SampleMetadata(BaseValidator):
     DEFAULT_TARGET_PATH = c.SMP_META
 
@@ -54,24 +55,6 @@ class SampleMetadata(BaseValidator):
             smp_meta = self._try_load_json()
             return set(self.KEYS).issubset(set(smp_meta.keys()))
         return False
-
-
-class Segmentation(BaseValidator):
-    DEFAULT_TARGET_PATH = c.SEG_MASK
-
-    @validation_test
-    def correct_keys(self):
-        path = self.target_path
-        return list(np.load(path).keys()) == ['nuclei', 'nuclei_exp']
-
-
-class BeadMask(BaseValidator):
-    DEFAULT_TARGET_PATH = c.BEAD_MASK
-
-    @validation_test
-    def correct_keys(self):
-        path = self.target_path
-        return list(np.load(path).keys()) == ['bead_mask']
 
 
 class QCSummary(BaseValidator):
@@ -131,6 +114,62 @@ class SampleSheet(BaseValidator):
         return run_section_valid and data_section_valid
 
 
+class TranscriptPanel(BaseValidator):
+    DEFAULT_TARGET_PATH = c.TX_PANEL
+
+    SCHEMA = ['probe_name', 'gene_name', 'panel_type']
+
+    @validation_test
+    def correct_schema(self):
+        lf = pl.scan_csv(self.target_path)
+        lf_names = lf.collect_schema().names()
+
+        return set(self.SCHEMA).issubset(lf_names)
+
+    def parse(self):
+        if self.is_valid:
+            return parse_input_manifest_v2(self.target_path)
+        return self.validation()
+
+
+class ProteinPanel(BaseValidator):
+    DEFAULT_TARGET_PATH = c.PR_PANEL
+
+    SCHEMA = ['target', 'panel_type']
+
+    @validation_test
+    def correct_schema(self):
+        lf = pl.scan_csv(self.target_path)
+        lf_names = lf.collect_schema().names()
+
+        return set(self.SCHEMA).issubset(lf_names)
+
+    @validation_test
+    def folder_present(self):
+        folder = ProteinPanel(self.root)
+        return folder.path_exists
+
+
+# region masks
+class Segmentation(BaseValidator):
+    DEFAULT_TARGET_PATH = c.SEG_MASK
+
+    @validation_test
+    def correct_keys(self):
+        path = self.target_path
+        return list(np.load(path).keys()) == ['nuclei', 'nuclei_exp']
+
+
+class BeadMask(BaseValidator):
+    DEFAULT_TARGET_PATH = c.BEAD_MASK
+
+    @validation_test
+    def correct_keys(self):
+        path = self.target_path
+        return list(np.load(path).keys()) == ['bead_mask']
+
+
+# region rna
 class RawFeatures(BaseValidator):
     DEFAULT_TARGET_PATH = c.RAW_FEATURES
 
@@ -154,77 +193,7 @@ class TranscriptTable(BaseValidator):
     DEFAULT_TARGET_PATH = c.FILE_TX_TABLE
 
 
-class ViewerZarr(BaseValidator):
-    DEFAULT_TARGET_PATH = c.FILE_VIEWER_ZARR
-
-
-class TranscriptPanel(BaseValidator):
-    DEFAULT_TARGET_PATH = c.TX_PANEL
-
-    SCHEMA = ['probe_name', 'gene_name', 'panel_type']
-
-    @validation_test
-    def correct_schema(self):
-        lf = pl.scan_csv(self.target_path)
-        lf_names = lf.collect_schema().names()
-
-        return set(self.SCHEMA).issubset(lf_names)
-
-    def parse(self, verbose: bool = False):
-        manifest = pl.read_csv(self.target_path)
-
-        col = 'probe_name'
-        if col not in manifest.columns:
-            raise ValueError(f"transcript manifest must contain column '{col}'")
-
-        for i, parsed_column in enumerate(['gene_name', 'sequence', 'primer']):
-            if parsed_column not in manifest.columns:
-                manifest = manifest.with_columns(
-                    [manifest[col].str.extract(c.PROBE_PATTERN, i + 1).alias(parsed_column)]
-                )
-
-        null_count = manifest.null_count()['sequence'][0]
-        if null_count > 0:
-            if verbose:
-                print(f'{null_count} probes with invalid sequence format will be ignored:')
-                null_seqs = manifest.filter(pl.col('sequence').is_null())['probe_name'].to_list()
-                for ns in null_seqs:
-                    print(f'- {ns}')
-
-        if 'probe_type' not in manifest.columns:
-            manifest = manifest.with_columns(
-                probe_type=(
-                    pl.when(pl.col('gene_name').str.to_lowercase() == 'gdna')
-                    .then(pl.lit('GCP'))
-                    .when(pl.col('gene_name').str.starts_with('NCS-'))
-                    .then(pl.lit('NCS'))
-                    .when(pl.col('gene_name').str.starts_with('NCP-'))
-                    .then(pl.lit('NCP'))
-                    .otherwise(pl.lit('targeting'))
-                )
-            )
-
-        return manifest.select(['probe_name', 'gene_name', 'sequence', 'primer', 'probe_type'])
-
-
-class ProteinPanel(BaseValidator):
-    DEFAULT_TARGET_PATH = c.PR_PANEL
-
-    SCHEMA = ['target', 'panel_type']
-
-    @validation_test
-    def correct_schema(self):
-        lf = pl.scan_csv(self.target_path)
-        lf_names = lf.collect_schema().names()
-
-        return set(self.SCHEMA).issubset(lf_names)
-
-    @validation_test
-    def folder_present(self):
-        folder = ProteinPanel(self.root)
-        return folder.path_exists
-
-
+# region protein
 class ProteinDir(BaseValidator):
     DEFAULT_TARGET_PATH = c.PR_DIR
 
@@ -254,6 +223,7 @@ class ProteinDir(BaseValidator):
         return all(self.existing_files.values())
 
 
+# region hne
 class HnEDir(BaseValidator):
     DEFAULT_TARGET_PATH = c.HE_DIR
 
@@ -286,6 +256,7 @@ class HnEDir(BaseValidator):
         return all(existing_files.values())
 
 
+# region single cell
 class CellMetadata(BaseValidator):
     DEFAULT_TARGET_PATH = c.FILE_CELL_METADATA
 
@@ -301,6 +272,12 @@ class CellxProtein(BaseValidator):
 class AdataH5(BaseValidator):
     DEFAULT_TARGET_PATH = c.FILE_FEAT_MTX
 
+
+class ClusteringUmap(BaseValidator):
+    DEFAULT_TARGET_PATH = c.FILE_CLUSTERING_UMAP
+
+class Dgex(BaseValidator):
+    DEFAULT_TARGET_PATH = c.FILE_DGEX
 
 class SingleCellFolder(BaseValidator):
     DEFAULT_TARGET_PATH = c.SINGLE_CELL_DIR
@@ -324,3 +301,8 @@ class SingleCellFolder(BaseValidator):
         for val in self.SUB_VALIDATORS:
             existing_files[val.name] = val.is_valid
         return all(existing_files.values())
+
+
+# region viewer
+class ViewerZarr(BaseValidator):
+    DEFAULT_TARGET_PATH = c.FILE_VIEWER_ZARR

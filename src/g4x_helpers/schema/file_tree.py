@@ -8,6 +8,8 @@ from .definition import (
     CellMetadata,
     CellxGene,
     CellxProtein,
+    ClusteringUmap,
+    Dgex,
     HnEDir,
     ProteinDir,
     ProteinPanel,
@@ -54,6 +56,8 @@ class FileTree:
                     SingleCellFolder(root=self.smp_dir),
                     CellMetadata(root=self.smp_dir),
                     AdataH5(root=self.smp_dir),
+                    ClusteringUmap(root=self.smp_dir),
+                    Dgex(root=self.smp_dir),
                 ]
             )
 
