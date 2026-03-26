@@ -160,6 +160,10 @@ class BaseValidator:
         self._target_path = Path(value)
 
     @property
+    def target_rel(self):
+        return self.target_path.relative_to(self.root) if self.root is not None else self.target_path.name
+
+    @property
     def target_type(self):
         if self.target_path.is_file():
             return 'file'
@@ -194,8 +198,8 @@ class BaseValidator:
     def report_validation(self):
         if not self.is_valid:
             code = '[!invalid]'
-            msg = f'{code} {self.name} {self.target_type}: {self.target_name}\n'
+            msg = f'{code} {self.name} {self.target_type}: {self.target_rel}\n'
             msg += f'{len(code) * " "} reason: {self.validation()}'
-            print(msg)
+            return msg
         else:
-            print(f'[valid] {self.name} {self.target_type}: {self.target_name}')
+            return f'[valid] {self.name} {self.target_type}: {self.target_rel}'
