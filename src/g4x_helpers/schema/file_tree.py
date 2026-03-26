@@ -1,4 +1,5 @@
 import json
+import textwrap
 from pathlib import Path
 from typing import Literal
 
@@ -38,6 +39,7 @@ class FileTree:
         self.pr_detected = False
 
         if meta_validator.is_valid:
+            sample_id = meta_validator.load()['sample_id']
             self.detect_assay_type(meta_validator.target_path)
 
             self.raw_validators.extend(
@@ -51,7 +53,7 @@ class FileTree:
 
             self.secondary_validators.extend(
                 [
-                    QCSummary(root=self.smp_dir),
+                    QCSummary(root=self.smp_dir, format={'sample_id': sample_id}),
                     ViewerZarr(root=self.smp_dir),
                     SingleCellFolder(root=self.smp_dir),
                     CellMetadata(root=self.smp_dir),
@@ -128,6 +130,9 @@ class FileTree:
     def reports(self):
         return {v.name: v.validation() for v in self.validators}
 
+    def _return_indent(self, msg, prefix='    '):
+        return textwrap.indent(msg, prefix=prefix)
+
     def _val_report_minimal(self, raw_only: bool = True, report_pass: bool = True, raise_exception: bool = True):
         gate = self.is_valid_raw if raw_only else self.is_valid_all
         what = 'raw' if raw_only else 'all'
@@ -141,29 +146,31 @@ class FileTree:
             if raise_exception:
                 raise ValidationError(msg)
             else:
-                print(msg)
+                return msg
         else:
             if report_pass:
-                print(f'{validation_title} passed for:\n{self.smp_dir}')
+                return f'{validation_title} passed for:\n{self.smp_dir}'
 
     def _val_report_verbose(self, raw_only: bool = False, raise_exception: bool = True):
 
         if self.SampleMetadata.path_exists:
-            print(f'Detected G4X-metadata file:\n{self.SampleMetadata.target_path}')
-            print(f'assay type: {self.assay_type}')
-            print('\n> Validating required raw data ...')
+            msg = f'Detected G4X-metadata file:\n{self.SampleMetadata.target_path}'
+            msg += f'\nassay type: {self.assay_type}'
+            msg += '\n\n> Validating required raw data ...'
         else:
-            self.SampleMetadata.report_validation()
+            return self.SampleMetadata.report_validation()
 
         for v in self.raw_validators:
-            v.report_validation()
+            msg += f'\n{v.report_validation()}'
 
         if not raw_only:
-            print('\n> Validating secondary data ...')
+            msg += '\n\n> Validating secondary data ...'
             for v in self.secondary_validators:
-                v.report_validation()
-        print('')
-        self._val_report_minimal(raw_only=raw_only, raise_exception=raise_exception)
+                msg += f'\n{v.report_validation()}'
+
+        msg += '\n\n'
+        msg += self._val_report_minimal(raw_only=raw_only, raise_exception=raise_exception)
+        return msg
 
     def validation_report(
         self,
@@ -171,13 +178,19 @@ class FileTree:
         raw_only: bool = False,
         report_pass: bool = True,
         raise_exception: bool = True,
+        indent: str = '    ',
     ):
         if format == 'verbose':
-            self._val_report_verbose(raw_only=raw_only, raise_exception=raise_exception)
+            msg = self._val_report_verbose(raw_only=raw_only, raise_exception=raise_exception)
         elif format == 'minimal':
-            self._val_report_minimal(raw_only=raw_only, report_pass=report_pass, raise_exception=raise_exception)
+            msg = self._val_report_minimal(raw_only=raw_only, report_pass=report_pass, raise_exception=raise_exception)
         else:
             raise ValueError(f"Invalid format: {format}. Expected 'verbose' or 'minimal'.")
+
+        if msg is None:
+            return None
+
+        return self._return_indent(msg, prefix=indent)
 
 
 class ValidationError(Exception):
