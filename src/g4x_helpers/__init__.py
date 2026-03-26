@@ -7,7 +7,7 @@ except PackageNotFoundError:
     __version__ = 'unknown'
 
 from . import constants as c
-from . import io, schema
+from . import io, logging_utils, schema
 from . import utils as ut
 
 _LAZY_ATTRS = {
@@ -17,7 +17,7 @@ _LAZY_ATTRS = {
     'G4Xoutput': ('.g4x_output', 'G4Xoutput'),
 }
 
-__all__ = ['__version__', 'c', 'io', 'schema', 'ut', *sorted(_LAZY_ATTRS)]
+__all__ = ['__version__', 'c', 'io', 'schema', 'logging_utils', 'ut', *sorted(_LAZY_ATTRS)]
 
 
 def __getattr__(name):

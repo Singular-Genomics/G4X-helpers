@@ -10,14 +10,17 @@ from tqdm import tqdm
 from .. import constants as c
 from .. import io
 
+# from .workflow import g4x_workflow
+
 if TYPE_CHECKING:
     from ..g4x_output import G4Xoutput
 
 
 LOGGER = logging.getLogger(__name__)
+log_p_gap = 2 * ' ' + '> '
 
 
-# @workflow
+# @g4x_workflow
 def aggregate_cell_data(
     g4x_obj: 'G4Xoutput',
     segmentation_mask: str = '__g4x_default__',
@@ -40,7 +43,7 @@ def aggregate_cell_data(
     else:
         out_dir = io.pathval.validate_dir_path(out_dir)
 
-    log.info('Output directory data: %s', out_dir)
+    log.info('Output directory data:\n%s%s', log_p_gap, out_dir)
 
     tx_table_out = out_dir / g4x_obj.tree.TranscriptTable.p
     metadata_out = out_dir / g4x_obj.tree.CellMetadata.p
@@ -57,7 +60,7 @@ def aggregate_cell_data(
         tx_table_path = g4x_obj.tree.TranscriptTable.p
     else:
         tx_table_path = io.pathval.validate_file_path(tx_table)
-        log.debug('Using transcript table from %s', tx_table_path)
+        log.debug('Using transcript table from:\n%s%s', log_p_gap, tx_table_path)
 
     if segmentation_mask == '__g4x_default__':
         log.debug('Using default segmentation mask from G4X-output')
@@ -65,38 +68,55 @@ def aggregate_cell_data(
         cell_frame = _cell_frame(segmentation_mask=g4x_obj.load_segmentation(expanded=False))
     else:
         segmentation_mask_path = io.pathval.validate_file_path(segmentation_mask)
-        mask = io.import_segmentation(segmentation_mask_path, expected_shape=g4x_obj.shape, labels_key=mask_key)
-        log.info('Imported segmentation mask from %s', segmentation_mask_path)
+        log.info('Importing segmentation mask from:\n%s%s', log_p_gap, segmentation_mask_path)
+        mask = io.import_segmentation(
+            segmentation_mask_path,
+            expected_shape=g4x_obj.shape,
+            labels_key=mask_key,
+            logger=log,
+        )
         cell_frame = _cell_frame(segmentation_mask=mask)
 
     # log.info('Creating cell metadata')
     cell_metadata = create_cell_metadata(
-        g4x_obj, cell_frame=cell_frame, segmentation_mask=mask, show_progress=show_progress
+        g4x_obj,
+        cell_frame=cell_frame,
+        segmentation_mask=mask,
+        show_progress=show_progress,
+        logger=log,
     )
 
     # log.info('Creating cell x gene matrix')
     tx_table_df = pl.scan_csv(tx_table_path)
     cell_x_gene, tx_table_intersected = create_cell_x_gene(
-        g4x_obj=g4x_obj, tx_table=tx_table_df, segmentation_mask=segmentation_mask, gene_labels=gene_list
+        g4x_obj=g4x_obj,
+        tx_table=tx_table_df,
+        segmentation_mask=segmentation_mask,
+        gene_labels=gene_list,
+        logger=log,
     )
 
     # log.info('Creating cell x protein matrix')
     protein_list = g4x_obj.proteins if protein_list == '__g4x_default__' else protein_list
-    cell_mask = g4x_obj.load_segmentation(expanded=False) if segmentation_mask == '__g4x_default__' else mask
+    cell_mask = g4x_obj.load_segmentation(expanded=True) if segmentation_mask == '__g4x_default__' else mask
     cell_x_signal = create_cell_x_protein(
         g4x_obj=g4x_obj,
         mask=cell_mask,
         signal_list=g4x_obj.stains + protein_list,
+        logger=log,
     )
 
-    log.debug('Writing cell metadata to CSV')
+    log.debug('Writing transcript table to CSV:\n%s%s', log_p_gap, tx_table_out)
     if out_dir == g4x_obj.data_dir:
         tx_table_intersected.collect().write_csv(tx_table_out, compression='gzip')
     else:
         tx_table_intersected.sink_csv(tx_table_out, compression='gzip')
 
+    log.debug('Writing cell metadata to CSV:\n%s%s', log_p_gap, metadata_out)
     cell_metadata.sink_csv(metadata_out, compression='gzip')
+    log.debug('Writing cell x gene matrix to CSV:\n%s%s', log_p_gap, cxg_out)
     cell_x_gene.sink_csv(cxg_out, compression='gzip')
+    log.debug('Writing cell x protein matrix to CSV:\n%s%s', log_p_gap, cxp_out)
     cell_x_signal.sink_csv(cxp_out, compression='gzip')
 
     log.info('Completed aggregating cell data')
@@ -141,6 +161,7 @@ def create_cell_metadata(
     else:
         raise ValueError('The CELL_ID columns in cell_meta and mask_props do not match.')
 
+    cell_meta = cell_meta.sort(c.CELL_ID_NAME)
     log.info('Cell metadata created successfully')
 
     if return_lazy:
@@ -254,7 +275,7 @@ def create_cell_x_gene(
         raise ValueError('Mismatch between cell_by_gene columns and gene_labels')
 
     cell_by_gene = cell_by_gene.select([c.CELL_ID_NAME] + gene_labels)
-    cell_by_gene = cell_by_gene.fill_null(0)
+    cell_by_gene = cell_by_gene.fill_null(0).sort(c.CELL_ID_NAME)
 
     log.info('Cell x gene matrix created successfully')
 
@@ -273,24 +294,13 @@ def intersect_tx_with_cells(
     return tx_table
 
 
-# def intersect_tx_with_cells_g4x(g4x_obj: 'G4Xoutput', tx_table: pl.DataFrame | pl.LazyFrame) -> pl.DataFrame:
-#     # Assign transcripts to segmentation labels
-#     mask = g4x_obj.load_segmentation(expanded=True)
-#     tx_table = intersect_tx_with_cells(tx_table, mask, column_name=c.CELL_ID_NAME)
-
-#     mask = g4x_obj.load_segmentation(expanded=False)
-#     tx_table = intersect_tx_with_cells(tx_table, mask, column_name='in_nucleus')
-#     del mask
-
-#     return tx_table
-
-
 # region protein
 def create_cell_x_protein(
     g4x_obj: 'G4Xoutput',
     mask: np.ndarray,
     signal_list: list[str] | None = None,
     suffix: str = '_intensity_mean',
+    show_progress: bool | None = None,
     return_lazy: bool = True,
     logger: logging.Logger | None = None,
     **kwargs,
@@ -309,7 +319,10 @@ def create_cell_x_protein(
 
     channel_df = _cell_frame(mask)
 
-    for signal_name in tqdm(signal_list, desc='Extracting protein signal'):
+    if show_progress is None:
+        show_progress = sys.stderr.isatty()
+
+    for signal_name in tqdm(signal_list, desc='Extracting protein signal', disable=not show_progress):
         log.debug('Processing signal: %s', signal_name)
         if signal_name == c.NUCLEAR_STAIN:
             signal_img = g4x_obj.load_nuclear_image()
@@ -327,6 +340,7 @@ def create_cell_x_protein(
         )
         channel_df = channel_df.join(intensity_df, on=c.CELL_ID_NAME, how='left')
 
+    channel_df = channel_df.sort(c.CELL_ID_NAME)
     log.info('Cell x protein matrix created successfully')
     if return_lazy:
         return channel_df

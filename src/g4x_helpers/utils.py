@@ -120,96 +120,97 @@ class TruncatingFormatter(logging.Formatter):
         return super().format(record)
 
 
-def setup_logger(
-    logger_name: str,
-    *,
-    stream_logger: bool = True,
-    stream_level: int = 2,
-    file_logger: bool = True,
-    file_level: int = 2,
-    file_mode: str = 'a',
-    out_dir: Path | str | None = None,
-    format: str | None = None,
-    clear_handlers: bool = True,
-) -> logging.Logger:
-    """
-    Sets up a logger with configurable stream and file handlers.
+# def setup_logger(
+#     logger_name: str,
+#     *,
+#     stream_logger: bool = True,
+#     stream_level: int = 2,
+#     file_logger: bool = True,
+#     file_level: int = 2,
+#     file_mode: str = 'a',
+#     out_dir: Path | str | None = None,
+#     format: str | None = None,
+#     clear_handlers: bool = True,
+# ) -> logging.Logger:
+#     """
+#     Sets up a logger with configurable stream and file handlers.
 
-    Parameters
-    ----------
-    logger_name : str
-        Name of the logger.
-    stream_logger : bool, optional
-        Whether to enable logging to the console (default is True).
-    stream_level : int, optional
-        Logging level for the stream handler (default is logging.DEBUG).
-    file_logger : bool, optional
-        Whether to enable logging to a file (default is False).
-    file_level : int, optional
-        Logging level for the file handler (default is logging.DEBUG).
-    file_mode : str, optional
-        File mode for the log file. Common options: 'a' for append, 'w' for overwrite (default is 'a').
-    out_dir : Path or str, optional
-        Directory where the log file will be saved. Required if `file_logger` is True.
-    format : str, optional
-        Custom log message format. If not provided, a default format will be used.
-    clear_handlers : bool, optional
-        Whether to clear existing handlers from the logger before adding new ones (default is False).
+#     Parameters
+#     ----------
+#     logger_name : str
+#         Name of the logger.
+#     stream_logger : bool, optional
+#         Whether to enable logging to the console (default is True).
+#     stream_level : int, optional
+#         Logging level for the stream handler (default is logging.DEBUG).
+#     file_logger : bool, optional
+#         Whether to enable logging to a file (default is False).
+#     file_level : int, optional
+#         Logging level for the file handler (default is logging.DEBUG).
+#     file_mode : str, optional
+#         File mode for the log file. Common options: 'a' for append, 'w' for overwrite (default is 'a').
+#     out_dir : Path or str, optional
+#         Directory where the log file will be saved. Required if `file_logger` is True.
+#     format : str, optional
+#         Custom log message format. If not provided, a default format will be used.
+#     clear_handlers : bool, optional
+#         Whether to clear existing handlers from the logger before adding new ones (default is False).
 
-    Returns
-    -------
-    logging.Logger
-        Configured logger instance.
+#     Returns
+#     -------
+#     logging.Logger
+#         Configured logger instance.
 
-    """
+#     """
 
-    stream_level = verbose_to_log_level(stream_level)
-    file_level = verbose_to_log_level(file_level)
+#     stream_level = verbose_to_log_level(stream_level)
+#     file_level = verbose_to_log_level(file_level)
 
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(logging.DEBUG)
+#     logger = logging.getLogger(logger_name)
+#     logger.setLevel(logging.DEBUG)
+#     logger.propagate = False
 
-    if format is None:
-        # format = '[%(asctime)s | %(name)s | %(levelname)s: %(message)s'
-        format = '%(asctime)s | %(name)s | %(levelname)7s - %(message)s'
+#     if format is None:
+#         # format = '[%(asctime)s | %(name)s | %(levelname)s: %(message)s'
+#         format = '%(asctime)s | %(name)s | %(levelname)7s - %(message)s'
 
-    formatter = logging.Formatter(format, datefmt='%H:%M:%S')
-    # formatter = TruncatingFormatter(format, name_max=16, datefmt='%H:%M:%S')
+#     formatter = logging.Formatter(format, datefmt='%H:%M:%S')
+#     # formatter = TruncatingFormatter(format, name_max=16, datefmt='%H:%M:%S')
 
-    ## optionally clear existing handlers
-    if clear_handlers:
-        logger.handlers.clear()
+#     ## optionally clear existing handlers
+#     if clear_handlers:
+#         logger.handlers.clear()
 
-    if stream_logger:
-        h = logging.StreamHandler()
-        h.setLevel(stream_level)
-        h.setFormatter(formatter)
-        logger.addHandler(h)
+#     if stream_logger:
+#         h = logging.StreamHandler()
+#         h.setLevel(stream_level)
+#         h.setFormatter(formatter)
+#         logger.addHandler(h)
 
-    if file_logger:
-        assert out_dir is not None, 'out_dir must be provided if file_logger is True'
-        out_dir = Path(out_dir)
-        out_dir.mkdir(parents=True, exist_ok=True)
+#     if file_logger:
+#         assert out_dir is not None, 'out_dir must be provided if file_logger is True'
+#         out_dir = Path(out_dir)
+#         out_dir.mkdir(parents=True, exist_ok=True)
 
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        log_path = out_dir / f'{logger_name}_{timestamp}.log'
+#         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+#         log_path = out_dir / f'{logger_name}_{timestamp}.log'
 
-        prior_size = log_path.stat().st_size if log_path.exists() else 0
-        if file_mode == 'w':
-            prior_size = 0
+#         prior_size = log_path.stat().st_size if log_path.exists() else 0
+#         if file_mode == 'w':
+#             prior_size = 0
 
-        fh = logging.FileHandler(log_path, mode=file_mode, encoding='utf-8')
-        fh.setLevel(file_level)
-        fh.setFormatter(formatter)
-        logger.addHandler(fh)
+#         fh = logging.FileHandler(log_path, mode=file_mode, encoding='utf-8')
+#         fh.setLevel(file_level)
+#         fh.setFormatter(formatter)
+#         logger.addHandler(fh)
 
-        session_lines = ['log session created']
-        if prior_size > 0:
-            session_lines.insert(0, '')
-        fh.stream.write('\n'.join(session_lines) + '\n')
-        fh.flush()
+#         session_lines = ['log session created']
+#         if prior_size > 0:
+#             session_lines.insert(0, '')
+#         fh.stream.write('\n'.join(session_lines) + '\n')
+#         fh.flush()
 
-    return logger
+#     return logger
 
 
 class LoggerWriter:

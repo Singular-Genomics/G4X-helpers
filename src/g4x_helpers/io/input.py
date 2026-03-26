@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from polars import LazyFrame as plLF
 
 LOGGER = logging.getLogger(__name__)
+log_p_gap = 2 * ' ' + '> '
 
 
 def optionally_cached(*, maxsize=32, ignore_kwargs=()):
@@ -214,8 +215,8 @@ def import_segmentation(
     seg_path: str, expected_shape: tuple[int], labels_key: str | None = None, logger: logging.Logger | None = None
 ) -> np.ndarray:
 
-    log = logger or LOGGER
-    log.info('Importing segmentation from %s with labels_key=%s', seg_path, labels_key)
+    # log = logger or LOGGER
+    # log.info('Importing segmentation with labels_key=%s from:\n%s%s', labels_key, log_p_gap, seg_path)
 
     SUPPORTED_MASK_FILETYPES = {'.npy', '.npz', '.geojson'}
     ## load new segmentation
