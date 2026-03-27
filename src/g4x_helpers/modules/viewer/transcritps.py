@@ -1,4 +1,6 @@
 import logging
+import textwrap
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import polars as pl
@@ -7,20 +9,30 @@ from numcodecs import Blosc
 from ... import constants as c
 from .setup import create_array, populate_zarr_metadata
 
+if TYPE_CHECKING:
+    from zarr.hierarchy import Group as zGroup
+
+    from ...g4x_output import G4Xoutput
+
 LOGGER = logging.getLogger(__name__)
 
 
-def write_transcripts(smp, root_group, logger: logging.Logger | None = None):
+def write_transcripts(
+    g4x_obj: 'G4Xoutput',
+    root_group: 'zGroup',
+    override: bool = False,
+    logger: logging.Logger | None = None,
+) -> None:
 
     log = LOGGER or logger
     log.info('Preparing transcript data')
 
     aggregation_level = 'gene_name'
     keep_cols = ['x_pixel_coordinate', 'y_pixel_coordinate', c.CELL_ID_NAME, aggregation_level]
-    lf = smp.load_transcript_table(lazy=True, columns=keep_cols)
+    lf = g4x_obj.load_transcript_table(lazy=True, columns=keep_cols)
     df = lf.collect()
 
-    img_resolution = smp.shape
+    img_resolution = g4x_obj.shape
 
     tile_specs = choose_square_tiling(
         image_resolution_hw=img_resolution,
@@ -28,13 +40,16 @@ def write_transcripts(smp, root_group, logger: logging.Logger | None = None):
         target_points_per_tile=5000,
         min_tile_size=256,
     )
-    log.info(f'Tile specs: {tile_specs}')
 
     # contstruct pyramid
     pyramid = build_tx_pyramid(tile_specs, image_resolution=img_resolution)
 
+    msg = f'\n{tile_specs}\n'
     for level, specs in pyramid.items():
-        log.info(f'Level {level}: tile_size: {specs["tile_size"]} - scale: {specs["scale_fct"]}')
+        msg += f'Level {level}: tile_size: {specs["tile_size"]} - scale: {specs["scale_fct"]}\n'
+
+    formatted = textwrap.indent(str(msg), prefix='    ')
+    log.debug('Tile specs:\n%s', formatted)
 
     pyramid = construct_tile_dfs(df, pyramid)
 
@@ -49,8 +64,8 @@ def write_transcripts(smp, root_group, logger: logging.Logger | None = None):
     layer_config = {
         'layers': len(pyramid) - 1,
         'tile_size': pyramid[len(pyramid) - 1]['tile_size'],
-        'layer_height': smp.shape[0],
-        'layer_width': smp.shape[1],
+        'layer_height': g4x_obj.shape[0],
+        'layer_width': g4x_obj.shape[1],
         'coordinate_order': ['x_pixel_coordinate', 'y_pixel_coordinate'],
     }
 
@@ -58,10 +73,13 @@ def write_transcripts(smp, root_group, logger: logging.Logger | None = None):
 
     log.info('Writing transcript data')
     tx_group = root_group['transcripts']
-    write_tx_zarr(tx_group, pyramid)
+
+    write_tx_zarr(tx_group, pyramid, override=override)
 
 
-def choose_square_tiling(image_resolution_hw, total_points, target_points_per_tile, min_tile_size=64):
+def choose_square_tiling(
+    image_resolution_hw: tuple[int, int], total_points: int, target_points_per_tile: int, min_tile_size=64
+):
     tiles_needed = np.ceil(total_points / target_points_per_tile).astype(int)
 
     H, W = image_resolution_hw  # (H, W)
@@ -86,7 +104,7 @@ def choose_square_tiling(image_resolution_hw, total_points, target_points_per_ti
     return res
 
 
-def build_tx_pyramid(tile_specs, image_resolution):
+def build_tx_pyramid(tile_specs: dict[str, Any], image_resolution: tuple[int, int]) -> dict[int, dict[str, Any]]:
     pyramid = {}
     level = 0
     tile_size = tile_specs['tile_size']
@@ -102,7 +120,7 @@ def build_tx_pyramid(tile_specs, image_resolution):
     return pyramid
 
 
-def construct_tile_dfs(df, pyramid):
+def construct_tile_dfs(df: pl.DataFrame, pyramid: dict[int, dict[str, Any]]) -> dict[int, dict[str, Any]]:
     for level, specs in pyramid.items():
         tile_size, _, sampling_fct = specs.values()
         df_smp = (
@@ -117,12 +135,14 @@ def construct_tile_dfs(df, pyramid):
     return pyramid
 
 
-def write_tx_zarr(tx_group, pyramid, logger: logging.Logger | None = None):
+def write_tx_zarr(
+    tx_group: 'zGroup', pyramid: dict[int, dict[str, Any]], override: bool = False, logger: logging.Logger | None = None
+):
     log = LOGGER or logger
     compressor = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
 
     for level in pyramid:
-        log.info(f'Writing transcript data for level {level}')
+        log.debug(f'Writing transcript data for level {level}')
         tile_df = pyramid[level]['tile_df']
         all_coords = tile_df.select(['x_pixel_coordinate', 'y_pixel_coordinate']).to_numpy()
         all_cell_ids = tile_df.select(c.CELL_ID_NAME).to_numpy()
@@ -142,6 +162,11 @@ def write_tx_zarr(tx_group, pyramid, logger: logging.Logger | None = None):
             coords = all_coords[idx].astype(np.int32)
             gene_names = all_gene_names[idx].astype('U10')
             cell_ids = all_cell_ids[idx].astype(np.int32)
+
+            if override:
+                for key in ['position', 'gene_name', 'cell_id']:
+                    if key in tile_group:
+                        del tile_group[key]
 
             create_array(tile_group, 'position', data=coords, compressor=compressor)
             create_array(tile_group, 'gene_name', data=gene_names, compressor=compressor)
