@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import logging
 import traceback
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
@@ -10,6 +13,7 @@ from anndata import AnnData
 from scipy.sparse import csr_matrix
 
 from .. import c, io
+from ..schema.definition import CellMetadata, CellxGene, CellxProtein, TranscriptPanel
 
 if TYPE_CHECKING:
     from anndata import AnnData
@@ -18,96 +22,152 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger(__name__)
 
+DEFAULT_CLUSTERINGS = {'leiden_coarse': (6, 0.25), 'leiden_fine': (12, 0.5)}
 
-def create_adata(
-    g4x_obj: 'G4Xoutput',
+DEFAULT_FILTER_CONFIG = [
+    dict(filter_type='cells', alias='area', key='nuclei_area_um', quantile_min=0.01, quantile_max=0.995),
+    dict(filter_type='cells', alias='counts', key='total_counts', value_min=10, quantile_max=0.995),
+    dict(filter_type='cells', alias='genes', key='n_genes_by_counts', value_min=5),
+    dict(filter_type='cells', alias='controls', key='pct_counts_ctrl', value_max=5),
+    dict(filter_type='genes', alias='targeting', key='probe_type', subset='targeting'),
+    dict(filter_type='genes', alias='coverage', key='n_cells_by_counts', value_min=100),
+]
+
+
+def process_sc_output(
+    g4x_obj,
+    adata,
     *,
     cluster_attempts: int = 10,
     rnd_st: int = 111,
+    compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
     logger: logging.Logger | None = None,
 ):
     log = logger or LOGGER
-    tx_panel = g4x_obj.tree.TranscriptPanel.parse()
-    cell_metadata = pl.read_csv(g4x_obj.tree.CellMetadata.p)
 
-    # prot = pl.read_csv(g4x_obj.tree.CellxProtein.p).drop('seg_cell_id')#.sample(fraction=1, shuffle=True)
-    # cell_metadata = cell_metadata.hstack(prot)
+    # 1. Filter AnnData object
+    adata_init = adata.copy()
+    adata = filter_adata(adata=adata_init, logger=log)
 
-    cell_x_gene = pl.read_csv(g4x_obj.tree.CellxGene.p)
+    if adata.n_obs == 0 or adata.n_vars == 0:
+        log.warning('No cells or genes passed the filtering criteria.')
+        write_dummy_clustering_outputs(g4x_obj, adata=adata_init, failure_code='filter_not_passed')
+        return
+    del adata_init
 
-    adata = init_adata(tx_panel=tx_panel, cell_metadata=cell_metadata, cell_x_gene=cell_x_gene, logger=log)
+    # 2. Pre-Processings (CPU/GPU) split path
+    backend = io.get_backend(which=compute_backend)
 
-    backend = io.get_backend(which='auto')
-    adata = pre_process_adata(
-        adata, rnd_st=rnd_st, pca_comps=50, n_neighbors=15, n_pcs=15, compute_backend=backend, logger=log
-    )
+    try:
+        adata = pre_process_adata(adata=adata, compute_backend=backend, logger=log)
+    except Exception as e:
+        log.warning(f'Preprocessing failed: {e}')
+        write_dummy_clustering_outputs(g4x_obj, adata=adata, failure_code='preprocessing_failed')
+        return
 
-    cluster_set_names = ['leiden_coarse', 'leiden_fine']
-    adata = optimize_leiden_clusters(
-        adata,
-        cluster_name=cluster_set_names[0],
-        target_clusters=6,
-        init_res=0.25,
-        max_attempts=cluster_attempts,
-        compute_backend=backend,
-        rnd_st=rnd_st,
-        logger=log,
-    )
-    adata = optimize_leiden_clusters(
-        adata,
-        cluster_name=cluster_set_names[1],
-        target_clusters=12,
-        init_res=0.5,
-        max_attempts=cluster_attempts,
-        compute_backend=backend,
-        rnd_st=rnd_st,
-        logger=log,
-    )
+    # 3. Optimize Leiden clusters (CPU/GPU) split path
+    success_clusterings = []
+    for k, (target_clusters, init_res) in DEFAULT_CLUSTERINGS.items():
+        try:
+            adata = optimize_leiden_clusters(
+                adata,
+                cluster_name=k,
+                target_clusters=target_clusters,
+                init_res=init_res,
+                max_attempts=cluster_attempts,
+                compute_backend=backend,
+                rnd_st=rnd_st,
+                logger=log,
+            )
+            success_clusterings.append(k)
 
-    if backend.use_gpu:
-        log.debug('Fetching adata back to CPU to run DGEX.')
-        backend.rsc.get.anndata_to_CPU(adata)
+        except Exception as e:
+            log.warning(f'Failed to optimize clusters for {k}: {e}')
 
-    for df in [adata.obs, adata.var]:
-        for col_name in df.columns:
-            col = df[col_name]
-            if col.nunique() == 1 and col.dtype == 'O':
-                df[col_name] = col.astype('category')
+    if not success_clusterings:
+        log.warning('No successful clusterings to run differential gene expression analysis.')
+        write_dummy_clustering_outputs(g4x_obj, adata=adata, failure_code='clustering_failed')
+        return
 
+    # 4. Generate UMAP and clustering dataframes
     umap_df = pl.from_numpy(adata.obsm['X_umap'], schema={'UMAP1': pl.Float32, 'UMAP2': pl.Float32})
-    leiden_df = pl.from_pandas(adata.obs[cluster_set_names], include_index=True)
-
+    leiden_df = pl.from_pandas(adata.obs[success_clusterings], include_index=True)
     clustering_umap = leiden_df.hstack(umap_df)
     clustering_umap.write_csv(g4x_obj.tree.ClusteringUmap.p, compression='gzip')
 
-    adata.write_h5ad(g4x_obj.tree.AdataH5.p)
+    # 5. Run differential gene expression analysis
+    try:
+        backend.rsc.get.anndata_to_CPU(adata)
+        dgex = run_dgex(adata, cluster_keys=success_clusterings, downsample=1000)
+        dgex.write_csv(g4x_obj.tree.Dgex.p, compression='gzip')
+    except Exception as e:
+        log.warning(f'Failed to run differential gene expression analysis: {e}')
+        write_dummy_clustering_outputs(g4x_obj, adata=adata, failure_code='dgex_failed')
 
-    dgex = run_dgex(adata, downsample=1000, logger=log)
-    dgex.write_csv(g4x_obj.tree.Dgex.p, compression='gzip')
 
-    return adata
-
-
-# TODO addition of protein values is missing
-# region create adata
+# region initialize
 def init_adata(
-    tx_panel: pl.DataFrame,
-    cell_x_gene: pl.DataFrame,
-    cell_metadata: pl.DataFrame | None = None,
+    g4x_obj: 'G4Xoutput',
     *,
-    filter_obs_area: dict[str, float] = {'q_min': 0.01, 'q_max': 0.995},
-    filter_obs_counts: dict[str, float] = {'val_min': 0, 'q_max': 0.995},
-    filter_obs_genes: dict[str, float] = {'val_min': 5, 'val_max': None},
-    filter_obs_controls: dict[str, float] = {'val_min': 0, 'val_max': 5},
-    filter_var_cells: dict[str, float] = {'val_min': 100, 'val_max': None},
+    tx_panel: pl.DataFrame | str = '__g4x_default__',
+    cell_metadata: pl.DataFrame | str = '__g4x_default__',
+    cell_x_gene: pl.DataFrame | str = '__g4x_default__',
+    cell_x_protein: pl.DataFrame | None = None,
     logger: logging.Logger | None = None,
 ) -> 'AnnData':
 
     log = logger or LOGGER
     log.info('Creating AnnData object')
 
-    log.debug('Converting cell x gene matrix to sparse format')
+    log.debug('Validating inputs')
+    if tx_panel == '__g4x_default__':
+        tx_panel = g4x_obj.tree.TranscriptPanel
+    else:
+        tx_panel = TranscriptPanel(target_path=tx_panel)
 
+    if cell_metadata == '__g4x_default__':
+        cell_meta_obj = g4x_obj.tree.CellMetadata
+    else:
+        cell_meta_obj = CellMetadata(target_path=cell_metadata)
+
+    if cell_x_gene == '__g4x_default__':
+        cell_x_gene = g4x_obj.tree.CellxGene
+    else:
+        cell_x_gene = CellxGene(target_path=cell_x_gene)
+
+    if cell_x_protein is None:
+        pass
+    elif cell_x_protein == '__g4x_default__':
+        cell_x_protein = g4x_obj.tree.CellxProtein
+    else:
+        cell_x_protein = CellxProtein(target_path=cell_x_protein)
+
+    all_valid = (
+        tx_panel.is_valid
+        and cell_meta_obj.is_valid
+        and cell_x_gene.is_valid
+        and (cell_x_protein is None or cell_x_protein.is_valid)
+    )
+    if not all_valid:
+        raise ValueError('One or more input dataframes are invalid')
+
+    tx_panel = tx_panel.parse()
+    cell_metadata = cell_meta_obj.load()
+    cell_x_gene = cell_x_gene.load()
+    if cell_x_protein is not None:
+        cell_x_protein = cell_x_protein.load()
+
+    cxg_ok = cell_metadata[c.CELL_ID_NAME].equals(cell_x_gene[c.CELL_ID_NAME])
+    if not cxg_ok:
+        raise ValueError('Cell IDs in CellMetadata do not match those in CellxGene')
+
+    if cell_x_protein is not None:
+        cxp_ok = cell_metadata[c.CELL_ID_NAME].equals(cell_x_protein[c.CELL_ID_NAME])
+        if not cxp_ok:
+            raise ValueError('Cell IDs in CellMetadata do not match those in CellxProtein')
+        cell_x_protein = cell_x_protein.drop(c.CELL_ID_NAME)
+
+    log.debug('Converting cell x gene matrix to sparse format')
     X = cell_x_gene.drop(c.CELL_ID_NAME).to_numpy().astype(np.uint16)
     X = csr_matrix(X)
 
@@ -136,29 +196,53 @@ def init_adata(
     log.info('Initializing AnnData object')
     adata = AnnData(X=X, obs=obs_df, var=var_df)
 
+    if cell_x_protein is not None:
+        log.debug('Adding protein data to AnnData object')
+        adata.uns['protein_names'] = [c.removesuffix('_intensity_mean') for c in cell_x_protein.columns]
+        adata.obsm['protein'] = cell_x_protein.to_numpy()
+
     log.info('Calculating QC metrics')
     adata.var['ctrl'] = adata.var['probe_type'] != 'targeting'
     sc.pp.calculate_qc_metrics(adata, qc_vars=['ctrl'], inplace=True, percent_top=None)
     adata.var.drop(columns=['ctrl'], inplace=True)
 
-    log.info('Filtering adata')
-    n_obs = adata.n_obs
-    n_var = adata.n_vars
+    sc_meta = pl.from_pandas(adata.obs, include_index=True).cast({c.CELL_ID_NAME: pl.UInt64})
+    sc_meta.write_csv(cell_meta_obj.p, compression='gzip')
 
-    cell_results = filter_cells(
-        adata, area=filter_obs_area, counts=filter_obs_counts, genes=filter_obs_genes, controls=filter_obs_controls
-    )
-    gene_results = filter_genes(adata, cells=filter_var_cells)
-
-    for df, name, n_total in [(cell_results, 'cells', n_obs), (gene_results, 'genes', n_var)]:
-        n_retained = df.filter(pl.all_horizontal(pl.col('^.*_ok$'))).select('n_total').item()
-        retained = n_retained / n_total
-        log.info('Retained {:,} ({:.2%}) {} after filtering'.format(n_retained, retained, name))
-
+    adata = _sanitize_categorical_columns(adata, threshold=10)
     return adata.copy()
 
 
 # region processing
+def filter_adata(
+    adata: 'AnnData',
+    filter_panel: 'FilterPanel' | None = None,
+    *,
+    logger: logging.Logger | None = None,
+):
+
+    log = logger or LOGGER
+
+    log.info('Filtering adata')
+    n_obs = adata.n_obs
+    n_var = adata.n_vars
+
+    if filter_panel is None:
+        filter_panel = _get_default_filter_panel()
+    cell_summary, gene_summary = filter_panel.filter(adata, apply=True)
+
+    if adata.n_obs == 0 or adata.n_vars == 0:
+        log.warning('No cells or genes remaining after filtering. Returning empty AnnData object.')
+        return adata  # , cell_summary, gene_summary
+
+    for df, name, n_total in [(cell_summary, 'cells', n_obs), (gene_summary, 'genes', n_var)]:
+        n_retained = df.filter(pl.all_horizontal(pl.col('^.*_ok$'))).select('n_total').item()
+        retained = n_retained / n_total
+        log.info('Retained {:,} ({:.2%}) {} after filtering'.format(n_retained, retained, name))
+
+    return adata  # , cell_summary, gene_summary
+
+
 def pre_process_adata(
     adata: 'AnnData',
     *,
@@ -314,24 +398,17 @@ def optimize_leiden_clusters(
 
 def run_dgex(
     adata: 'AnnData',
+    cluster_keys: list[str] = ['leiden'],
     downsample: int = 1000,
     logger: logging.Logger | None = None,
-):
+) -> pl.DataFrame:
     log = logger or LOGGER
 
-    # take at most {downsample} cells per cluster, but never more than the smallest cluster
-    smallest_cluster = adata.obs['leiden_fine'].value_counts().min()
-    min_cells = np.min([downsample, smallest_cluster])
-
-    idx = adata.obs.groupby('leiden_fine', observed=False).sample(min_cells).index
-    adata_downsample = adata[idx].copy()
-
     dfList = []
-    for leiden in ['leiden_coarse', 'leiden_fine']:
+    for leiden in cluster_keys:
         log.info('Running dgex on %s:', leiden)
+        adata_downsample = _subset_adata_by_key(adata, key=leiden, n_per_group=downsample)
         try:
-            # with warnings.catch_warnings():
-            #     warnings.simplefilter('ignore', PerformanceWarning)
             sc.tl.rank_genes_groups(
                 adata_downsample,
                 groupby=leiden,
@@ -369,87 +446,137 @@ def run_dgex(
     return dgex
 
 
-# region filtering
-def filter_cells(
-    adata: 'AnnData',
-    area: dict[str, float],
-    counts: dict[str, float],
-    genes: dict[str, float],
-    controls: dict[str, float],
-) -> pl.DataFrame:
-    n_obs = adata.n_obs
-    size_passed = _filter_by_qtiles(adata, key='nuclei_area_um', axis='obs', q_min=area['q_min'], q_max=area['q_max'])
-
-    max_counts = _filter_by_qtiles(adata, axis='obs', key='total_counts', q_min=0, q_max=counts['q_max'])
-    min_counts = _filter_by_limits(adata, axis='obs', key='total_counts', val_min=counts['val_min'], val_max=None)
-    counts_passed = max_counts & min_counts
-
-    genes_passed = _filter_by_limits(
-        adata, axis='obs', key='n_genes_by_counts', val_min=genes['val_min'], val_max=genes['val_max']
-    )
-
-    controls_passed = _filter_by_limits(
-        adata, axis='obs', key='pct_counts_ctrl', val_min=controls['val_min'], val_max=controls['val_max']
-    )
-
-    all_passed = counts_passed & genes_passed & controls_passed & size_passed
-    adata._inplace_subset_obs(all_passed)
-
-    results = {
-        'counts_ok': counts_passed,
-        'genes_ok': genes_passed,
-        'controls_ok': controls_passed,
-        'size_ok': size_passed,
-    }
-    cell_results = _summarize_filtering(n_obs, results)
-
-    return cell_results
-
-
-def filter_genes(adata: 'AnnData', cells: dict[str, float]) -> pl.DataFrame:
-    n_var = adata.n_vars
-    targeting_passed = adata.var['probe_type'] == 'targeting'
-    coverage_passed = _filter_by_limits(
-        adata, axis='var', key='n_cells_by_counts', val_min=cells['val_min'], val_max=cells['val_max']
-    )
-    genes_all_passed = targeting_passed & coverage_passed
-    adata._inplace_subset_var(genes_all_passed)
-
-    results = {'targeting_ok': targeting_passed, 'coverage_ok': coverage_passed}
-    gene_results = _summarize_filtering(n_var, results)
-
-    return gene_results
-
-
 # region utilities
-def _filter_by_limits(
-    adata: 'AnnData',
+class FilterMethod:
+    def __init__(
+        self,
+        filter_type: Literal['cells', 'genes'] = 'cells',
+        *,
+        key: str,
+        alias: str | None = None,
+        value_min: float | None = None,
+        value_max: float | None = None,
+        quantile_min: float | None = None,
+        quantile_max: float | None = None,
+        subset: str | None = None,
+    ):
+        if filter_type not in {'cells', 'genes'}:
+            raise ValueError("filter_type must be 'cells' or 'genes'")
+
+        if value_min is not None and value_max is not None and value_min > value_max:
+            raise ValueError('value_min cannot be greater than value_max')
+
+        if quantile_min is not None and quantile_max is not None and quantile_min > quantile_max:
+            raise ValueError('quantile_min cannot be greater than quantile_max')
+
+        if value_min is not None and quantile_min is not None:
+            raise ValueError('Cannot specify both value_min and quantile_min')
+
+        if value_max is not None and quantile_max is not None:
+            raise ValueError('Cannot specify both value_max and quantile_max')
+
+        self.key = key
+        self.filter_type = filter_type
+        self.value_min = value_min
+        self.value_max = value_max
+        self.quantile_min = quantile_min
+        self.quantile_max = quantile_max
+        self.subset = subset
+        self.alias = alias if alias is not None else key
+
+    @property
+    def axis(self) -> str:
+        return 'obs' if self.filter_type == 'cells' else 'var'
+
+    def resolve_thresholds(self, df):
+        v_min = self.value_min
+        v_max = self.value_max
+
+        if self.quantile_min is not None:
+            v_min = df[self.key].quantile(self.quantile_min)
+
+        if self.quantile_max is not None:
+            v_max = df[self.key].quantile(self.quantile_max)
+
+        return v_min, v_max
+
+    def filter(self, adata, apply: bool = False):
+        df = adata.obs if self.filter_type == 'cells' else adata.var
+
+        if self.subset is not None:
+            df = df[df[self.key] == self.subset]
+
+        v_min, v_max = self.resolve_thresholds(df)
+        return _filter_axis(adata, axis=self.axis, key=self.key, val_min=v_min, val_max=v_max, apply=apply)
+
+
+class FilterPanel:
+    def __init__(self, filters: list[FilterMethod]):
+        self.filters = filters
+
+    def _summarize_filtering(self, n_total: int, results: dict) -> pl.DataFrame:
+        series = [pl.Series(name, values) for name, values in results.items()]
+        df = pl.DataFrame(series).with_row_index()
+
+        df = df.group_by(results.keys()).agg(pl.len().alias('n_total')).sort('n_total', descending=True)
+        df = df.with_columns(((pl.col('n_total') / n_total) * 100).alias('pct'))
+        return df
+
+    def filter(self, adata, return_masks: bool = False, apply: bool = False):
+        cell_results = {}
+        gene_results = {}
+        for mth in self.filters:
+            if mth.filter_type == 'cells':
+                cell_results[f'{mth.alias}_ok'] = mth.filter(adata, apply=False)
+                all_passed_cell = np.logical_and.reduce(list(cell_results.values()))
+            else:
+                gene_results[f'{mth.alias}_ok'] = mth.filter(adata, apply=False)
+                all_passed_gene = np.logical_and.reduce(list(gene_results.values()))
+
+        cell_summary = self._summarize_filtering(adata.n_obs, cell_results)
+        gene_summary = self._summarize_filtering(adata.n_vars, gene_results)
+
+        if apply:
+            adata._inplace_subset_obs(all_passed_cell)
+            adata._inplace_subset_var(all_passed_gene)
+
+        if return_masks:
+            return (all_passed_cell, cell_summary), (all_passed_gene, gene_summary)
+
+        return cell_summary, gene_summary
+
+
+def _filter_axis(
+    adata,
+    axis: str,
     key: str,
-    axis: str = 'obs',
     val_min: float | None = None,
     val_max: float | None = None,
     apply: bool = False,
-) -> np.ndarray:
-    return _filter_axis(adata=adata, axis=axis, key=key, val_min=val_min, val_max=val_max, apply=apply)
-
-
-def _filter_by_qtiles(
-    adata: 'AnnData', key: str, axis: str = 'obs', q_min: float = 0, q_max: float = 1, apply: bool = False
-) -> np.ndarray:
-    if not (0 <= q_min <= 1 and 0 <= q_max <= 1):
-        raise ValueError('q_min and q_max must be between 0 and 1')
-    if q_min > q_max:
-        raise ValueError('q_min must be <= q_max')
-
-    df = adata.obs if axis == 'obs' else adata.var
-    if axis not in {'obs', 'var'}:
+):
+    if axis == 'obs':
+        df = adata.obs
+        size = adata.n_obs
+    elif axis == 'var':
+        df = adata.var
+        size = adata.n_vars
+    else:
         raise ValueError("axis must be 'obs' or 'var'")
+
     if key not in df:
         raise ValueError(f"key '{key}' not found in adata.{axis}")
 
-    val_min, val_max = df[key].quantile([q_min, q_max]).to_numpy()
+    values = df[key].to_numpy()
+    mask = np.ones(size, dtype=bool)
 
-    return _filter_axis(adata=adata, axis=axis, key=key, val_min=val_min, val_max=val_max, apply=apply)
+    if val_min is not None:
+        mask &= values >= val_min
+    if val_max is not None:
+        mask &= values <= val_max
+
+    if apply:
+        return adata[mask].copy() if axis == 'obs' else adata[:, mask].copy()
+    return mask
 
 
 def _reorder_clusters_by_size(obs: pd.DataFrame, key: str, prefix: str = 'C') -> pd.DataFrame:
@@ -486,48 +613,81 @@ def _reorder_clusters_by_size(obs: pd.DataFrame, key: str, prefix: str = 'C') ->
     return reordered_obs
 
 
-def _filter_axis(
-    adata: 'AnnData',
-    axis: str,
-    key: str,
-    val_min: float | None = None,
-    val_max: float | None = None,
-    apply: bool = False,
-) -> np.ndarray:
-    if axis == 'obs':
-        df = adata.obs
-        values = df[key].to_numpy()
-        mask = np.ones(adata.n_obs, dtype=bool)
-    elif axis == 'var':
-        df = adata.var
-        values = df[key].to_numpy()
-        mask = np.ones(adata.n_vars, dtype=bool)
+def write_dummy_clustering_outputs(
+    g4x_obj,
+    *,
+    adata,
+    out_dir: str = '__g4x_default__',
+    success_clusterings: list[str] = [],
+    failure_code: str = 'failed',
+) -> None:
+    out_dir = g4x_obj.data_dir if out_dir == '__g4x_default__' else Path(out_dir)
+
+    if 'X_umap' in adata.obsm:
+        print('X_umap was found')
+        umap = adata.obsm['X_umap']
     else:
-        raise ValueError("axis must be 'obs' or 'var'")
+        print('X_umap was not found, filling with NaNs')
+        umap = np.full((adata.n_obs, 2), np.nan)
 
-    if key not in df:
-        raise ValueError(f"key '{key}' not found in adata.{axis}")
+    obs_df = pl.from_pandas(adata.obs, include_index=True).cast({c.CELL_ID_NAME: pl.UInt64})
+    dummy_clust = obs_df.select([c.CELL_ID_NAME] + success_clusterings)
 
-    if val_min is not None:
-        mask &= values >= val_min
-    if val_max is not None:
-        mask &= values <= val_max
+    umap = adata.obsm['X_umap']
 
-    if apply:
-        if axis == 'obs':
-            return adata[mask].copy()
-        else:
-            return adata[:, mask].copy()
-    return mask
+    dummy_clust = dummy_clust.with_columns(
+        UMAP1=umap[:, 0],
+        UMAP2=umap[:, 1],
+    )
+
+    if not success_clusterings:
+        dummy_clust = dummy_clust.with_columns(leiden=pl.lit('unassigned'))
+        success_clusterings.append('leiden')
+
+    dummy_clust = dummy_clust.with_columns(failure_code=pl.lit(failure_code))
+
+    col_select = [c.CELL_ID_NAME] + success_clusterings + ['UMAP1', 'UMAP2', 'failure_code']
+    dummy_clust = dummy_clust.select(col_select)
+    dummy_clust.write_csv(out_dir / g4x_obj.tree.ClusteringUmap.target_rel, compression='gzip')
+
+    dummy_dgex = pl.DataFrame(schema=g4x_obj.tree.Dgex.SCHEMA)
+    null_row = pl.DataFrame({col: pl.Series([None], dtype=dummy_dgex.schema[col]) for col in dummy_dgex.columns})
+
+    dummy_dgex = dummy_dgex.vstack(null_row).with_columns(failure_code=pl.lit('filter_not_passed'))
+    dummy_dgex.write_csv(out_dir / g4x_obj.tree.Dgex.target_rel, compression='gzip')
 
 
-def _summarize_filtering(n_total: int, results: dict) -> pl.DataFrame:
-    series = [pl.Series(name, values) for name, values in results.items()]
-    df = pl.DataFrame(series).with_row_index()
+def _sanitize_categorical_columns(adata, threshold: int = 10):
+    for df in [adata.obs, adata.var]:
+        for col_name in df.columns:
+            col = df[col_name]
+            if col.nunique() < threshold and col.dtype == 'O':
+                df[col_name] = col.astype('category')
+    return adata
 
-    df = df.group_by(results.keys()).agg(pl.len().alias('n_total')).sort('n_total', descending=True)
-    df = df.with_columns(((pl.col('n_total') / n_total) * 100).alias('pct'))
-    return df
+
+def _get_default_filter_panel():
+    default_filter_panel = FilterPanel(filters=[FilterMethod(**cfg) for cfg in DEFAULT_FILTER_CONFIG])
+    return default_filter_panel
+
+
+def _subset_adata_by_key(adata, key='leiden', n_per_group=1000):
+
+    if key not in adata.obs:
+        raise ValueError(f"Key '{key}' not found in adata.obs")
+
+    rng = np.random.default_rng(42)
+
+    sampled_idx = (
+        adata.obs.groupby(key, group_keys=False, observed=True)
+        .apply(
+            lambda x: x.sample(n=min(len(x), n_per_group), random_state=rng.integers(1e9)),
+            include_groups=False,  # <-- fixes deprecation warning
+        )
+        .index
+    )
+
+    return adata[sampled_idx].copy()
 
 
 # polars implementation
@@ -541,55 +701,6 @@ def _summarize_filtering(n_total: int, results: dict) -> pl.DataFrame:
 
 #     new_umap = clust_umap.with_columns(pl.col(key).replace(order_map)).sort('seg_cell_id')
 #     return new_umap
-
-
-# def process_adata(adata: 'AnnData'):
-#     ## 1. filter on cell size, remove top and bottom 1%
-#     ## 2. remove genes not expressed by at least 5% of remaining cells
-#     ## 3. filter on total transcripts and unique genes remove top 1% and bottom 5%
-
-#     adata = filter_by_qtiles(adata, axis='obs', key='nuclei_area_um', q_min=0.01, q_max=0.99, apply=True)
-
-#     min_cells = int(0.05 * adata.n_obs)
-#     sc.pp.filter_genes(adata, min_cells=min_cells, inplace=True)
-
-#     sc.pp.filter_cells(adata, min_counts=10)
-
-#     adata = filter_by_qtiles(adata, axis='obs', key='total_counts', q_min=0.05, q_max=0.99, apply=True)
-#     adata = filter_by_qtiles(adata, axis='obs', key='n_genes_by_counts', q_min=0.05, q_max=0.99, apply=True)
-
-#     # normalize data
-#     adata.layers['counts'] = adata.X
-#     sc.pp.normalize_total(adata)
-
-#     sc.pp.log1p(adata)
-#     sc.pp.pca(adata)
-#     sc.pp.neighbors(adata)
-
-#     res = 1
-#     sc.tl.leiden(
-#         adata,
-#         resolution=res,
-#         objective_function='modularity',
-#         n_iterations=-1,
-#         random_state=42,
-#         flavor='igraph',
-#         key_added=f'leiden_{res:0.2f}',
-#     )
-
-#     sc.tl.umap(adata)
-
-#     with warnings.catch_warnings():
-#         warnings.simplefilter('ignore', PerformanceWarning)
-#         sc.tl.rank_genes_groups(
-#             adata,
-#             groupby=f'leiden_{res:0.2f}',
-#             use_raw=False,
-#             method='wilcoxon',
-#             pts=True,
-#             key_added=f'leiden_{res:0.2f}_rank_genes_groups',
-#         )
-#     return adata
 
 
 # def create_adata():
