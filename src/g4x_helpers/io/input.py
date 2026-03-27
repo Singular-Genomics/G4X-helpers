@@ -96,19 +96,19 @@ def parse_samplesheet(ss_path: str):
 def parse_input_manifest(file_path: str, verbose: bool = False):
     manifest = pl.read_csv(file_path)
 
-    col = 'probe_name'
-    if col not in manifest.columns:
-        raise ValueError(f"transcript manifest must contain column '{col}'")
+    # col = 'probe_name'
+    # if col not in manifest.columns:
+    #     raise ValueError(f"transcript manifest must contain column '{col}'")
 
     for i, parsed_column in enumerate(['gene_name', 'sequence', 'primer']):
         if parsed_column not in manifest.columns:
-            manifest = manifest.with_columns([manifest[col].str.extract(c.PROBE_PATTERN, i + 1).alias(parsed_column)])
+            manifest = manifest.with_columns([manifest['probe'].str.extract(c.PROBE_PATTERN, i + 1).alias(parsed_column)])
 
     null_count = manifest.null_count()['sequence'][0]
     if null_count > 0:
         if verbose:
             print(f'{null_count} probes with invalid sequence format will be ignored:')
-            null_seqs = manifest.filter(pl.col('sequence').is_null())['probe_name'].to_list()
+            null_seqs = manifest.filter(pl.col('sequence').is_null())['probe'].to_list()
             for ns in null_seqs:
                 print(f'- {ns}')
 
@@ -137,7 +137,7 @@ def parse_input_manifest(file_path: str, verbose: bool = False):
             )
         )
 
-    return manifest.select(['probe_name', 'gene_name', 'sequence', 'primer', 'read', 'probe_type'])
+    return manifest.select(['probe', 'gene_name', 'sequence', 'primer', 'read', 'probe_type'])
 
 
 @optionally_cached(maxsize=2)

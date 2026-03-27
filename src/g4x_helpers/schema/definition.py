@@ -123,7 +123,7 @@ class SampleSheet(BaseValidator):
 class TranscriptPanel(BaseValidator):
     DEFAULT_TARGET_PATH = c.TX_PANEL
 
-    SCHEMA = ['probe_name', 'gene_name', 'panel_type']
+    SCHEMA = ['probe', 'gene_name', 'panel_type']
 
     @validation_test
     def correct_schema(self):
@@ -328,19 +328,38 @@ class ClusteringUmap(BaseValidator):
 class Dgex(BaseValidator):
     DEFAULT_TARGET_PATH = c.FILE_DGEX
 
+    SCHEMA = {
+        'leiden_res': pl.String,
+        'cluster_id': pl.String,
+        'gene_id': pl.String,
+        'score': pl.Float64,
+        'logfoldchange': pl.Float64,
+        'pval': pl.Float64,
+        'pval_adj': pl.Float64,
+        'pct_nz_group': pl.Float64,
+        'pct_nz_reference': pl.Float64,
+    }
+
+    @validation_test
+    def correct_schema(self):
+        lf = pl.scan_csv(self.target_path)
+        lf_names = lf.collect_schema().names()
+
+        return set(self.SCHEMA.keys()).issubset(lf_names)
+
 
 class SingleCellFolder(BaseValidator):
     DEFAULT_TARGET_PATH = c.SINGLE_CELL_DIR
 
     SUB_VALIDATORS = [
-        CellMetadata('.'),
-        CellxGene('.'),
-        CellxProtein('.'),
-        AdataH5('.'),
+        CellMetadata(root='.'),
+        CellxGene(root='.'),
+        CellxProtein(root='.'),
+        AdataH5(root='.'),
     ]
 
     def __init__(self, root):
-        super().__init__(self.DEFAULT_TARGET_PATH)
+        super().__init__(root=root, target_path=self.DEFAULT_TARGET_PATH)
         for val in self.SUB_VALIDATORS:
             val.root = self.root
             setattr(self, val.name, val)

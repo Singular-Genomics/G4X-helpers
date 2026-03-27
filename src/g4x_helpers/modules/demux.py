@@ -116,7 +116,7 @@ def batched_demuxing(
     logger: logging.Logger | None = None,
 ):
     log = logger or LOGGER
-    probe_dict = dict(zip(manifest['probe_name'].to_list(), manifest['gene_name'].to_list()))
+    probe_dict = dict(zip(manifest['probe'].to_list(), manifest['gene_name'].to_list()))
     probe_dict['UNDETERMINED'] = 'UNDETERMINED'
 
     seq_reads = manifest['read'].unique().to_list()
@@ -153,7 +153,7 @@ def batched_demuxing(
 
             seqs = feature_batch_read['sequence'].to_list()
             codes = manifest_read['sequence'].to_list()
-            codebook_target_ids = np.array(manifest_read['probe_name'].to_list())
+            codebook_target_ids = np.array(manifest_read['probe'].to_list())
 
             hammings = batched_dot_product_hamming_matrix(seqs, codes, lut=LUT, batch_size=batch_size)
             feature_batch_read = demux(hammings, feature_batch_read, codebook_target_ids, probe_dict)

@@ -46,8 +46,8 @@ class G4Xoutput:
         self.stains = [c.NUCLEAR_STAIN, c.CYTOPLASMIC_STAIN]
         self.genes = []
         if self.tree.tx_detected:
-            tx_panel = io.parse_input_manifest(self.tree.TranscriptPanel.p)
-            tx_panel = tx_panel.sort(by=['probe_type', 'probe_name'], descending=[True, False])
+            tx_panel = self.tree.TranscriptPanel.parse()
+            tx_panel = tx_panel.sort(by=['probe_type', 'probe'], descending=[True, False])
             self.genes = tx_panel['gene_name'].unique(maintain_order=True).to_list()
 
         self.proteins = []
