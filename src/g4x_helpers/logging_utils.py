@@ -4,6 +4,7 @@ from pathlib import Path
 
 PACKAGE_LOGGER_NAME = __package__ or __name__.split('.')[0]
 
+PGAP = 2 * ' ' + '> '
 
 def configure_g4x_logging(
     *,
@@ -12,6 +13,7 @@ def configure_g4x_logging(
     stream_log: bool = True,
     file_log: bool = False,
     out_dir: str | Path | None = None,
+    append_time: bool = True,
     file_mode: str = 'a',
     clear_handlers: bool = True,
     format: str | None = None,
@@ -40,7 +42,7 @@ def configure_g4x_logging(
         out_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        log_path = out_dir / f'g4x_{timestamp}.log'
+        log_path = out_dir / f'g4x_{timestamp}.log' if append_time else out_dir / 'g4x.log'
 
         fh = logging.FileHandler(log_path, mode=file_mode, encoding='utf-8')
         fh.setLevel(level)

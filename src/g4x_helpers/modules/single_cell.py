@@ -13,15 +13,17 @@ from anndata import AnnData
 from scipy.sparse import csr_matrix
 
 from .. import c, io
+from ..logging_utils import PGAP
 from ..schema.definition import CellMetadata, CellxGene, CellxProtein, TranscriptPanel
 
 if TYPE_CHECKING:
     from anndata import AnnData
 
     from ..g4x_output import G4Xoutput
+    from ..schema.validator import BaseValidator
 
 LOGGER = logging.getLogger(__name__)
-
+DEFAULT_INPUT = '__g4x_default__'
 DEFAULT_CLUSTERINGS = {'leiden_coarse': (6, 0.25), 'leiden_fine': (12, 0.5)}
 
 DEFAULT_FILTER_CONFIG = [
@@ -34,20 +36,116 @@ DEFAULT_FILTER_CONFIG = [
 ]
 
 
-def process_sc_output(
-    g4x_obj,
-    adata,
+# region workflows
+def init_adata(
+    g4x_obj: 'G4Xoutput',
     *,
+    tx_panel: str = DEFAULT_INPUT,
+    cell_metadata: str = DEFAULT_INPUT,
+    cell_x_gene: str = DEFAULT_INPUT,
+    cell_x_protein: str | None = None,
+    logger: logging.Logger | None = None,
+) -> 'AnnData':
+
+    log = logger or LOGGER
+    log.info('Creating AnnData object')
+
+    log.debug('Validating inputs')
+    tx_panel_obj = _collect_input(g4x_obj, tx_panel, TranscriptPanel)
+    cell_meta_obj = _collect_input(g4x_obj, cell_metadata, CellMetadata)
+    cellxgene_obj = _collect_input(g4x_obj, cell_x_gene, CellxGene)
+
+    if cell_x_protein is not None:
+        cellxprot_obj = _collect_input(g4x_obj, cell_x_protein, CellxProtein)
+
+    all_valid = (
+        tx_panel_obj.is_valid
+        and cell_meta_obj.is_valid
+        and cellxgene_obj.is_valid
+        and (cell_x_protein is None or cellxprot_obj.is_valid)
+    )
+    if not all_valid:
+        raise ValueError('One or more input dataframes are invalid')
+
+    tx_panel = tx_panel_obj.parse()
+    cell_metadata = cell_meta_obj.load()
+    cell_x_gene = cellxgene_obj.load()
+    if cell_x_protein is not None:
+        cell_x_protein = cellxprot_obj.load()
+
+    # Ensure that cell IDs match between metadata and expression/protein matrices
+    _validate_cell_ids(cell_metadata, cell_x_gene, 'CellMetadata', 'CellxGene')
+    if cell_x_protein is not None:
+        _validate_cell_ids(cell_metadata, cell_x_protein, 'CellMetadata', 'CellxProtein')
+
+    log.info('Setting up AnnData components')
+    log.debug('Converting cell x gene matrix to sparse format')
+    X = cell_x_gene.drop(c.CELL_ID_NAME).to_numpy().astype(np.uint16)
+    X = csr_matrix(X)
+
+    log.info('Processing metadata for cells and genes')
+    obs_df = cell_metadata.to_pandas().set_index(c.CELL_ID_NAME)
+    obs_df.index = obs_df.index.astype(str)
+
+    gene_ids = pl.Series(name=c.GENE_ID_NAME, values=cell_x_gene.columns[1:])
+    var_df = pl.DataFrame(gene_ids).with_columns(pl.lit('tx').alias('modality'))
+
+    log.debug('Processing panel type information')
+    probe_type = tx_panel.unique('gene_name').select('gene_name', 'probe_type').rename({'gene_name': c.GENE_ID_NAME})
+
+    var_df = (
+        var_df.join(
+            probe_type,
+            on=c.GENE_ID_NAME,
+            how='left',
+        )
+        .to_pandas()
+        .set_index(c.GENE_ID_NAME)
+    )
+    var_df.index = var_df.index.astype(str)
+
+    log.debug('Initializing AnnData object')
+    adata = AnnData(X=X, obs=obs_df, var=var_df)
+
+    if cell_x_protein is not None:
+        log.debug('Adding protein data to AnnData object')
+        cell_x_protein = cell_x_protein.drop(c.CELL_ID_NAME)
+        adata.uns['protein_names'] = [c.removesuffix('_intensity_mean') for c in cell_x_protein.columns]
+        adata.obsm['protein'] = cell_x_protein.to_numpy()
+
+    log.info('Calculating QC metrics')
+    adata.var['ctrl'] = adata.var['probe_type'] != 'targeting'
+    sc.pp.calculate_qc_metrics(adata, qc_vars=['ctrl'], inplace=True, percent_top=None)
+    adata.var.drop(columns=['ctrl'], inplace=True)
+
+    log.debug('Writing metadata table to CSV:\n%s%s', PGAP, cell_meta_obj.p)
+    sc_meta = pl.from_pandas(adata.obs, include_index=True).cast({c.CELL_ID_NAME: pl.UInt64})
+    sc_meta.write_csv(cell_meta_obj.p, compression='gzip')
+
+    adata = _sanitize_categorical_columns(adata, threshold=10)
+    return adata.copy()
+
+
+# TODO add custom output
+def process_sc_output(
+    g4x_obj: 'G4Xoutput',
+    adata: 'AnnData',
+    *,
+    filter_panel: 'FilterPanel' | None = None,
     cluster_attempts: int = 10,
     rnd_st: int = 111,
     compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
     logger: logging.Logger | None = None,
 ):
     log = logger or LOGGER
+    backend = io.get_backend(which=compute_backend)
 
     # 1. Filter AnnData object
+    if filter_panel is None:
+        filter_panel = _get_default_filter_panel()
+
     adata_init = adata.copy()
-    adata = filter_adata(adata=adata_init, logger=log)
+    adata = filter_adata(adata=adata_init, filter_panel=filter_panel, logger=log)
 
     if adata.n_obs == 0 or adata.n_vars == 0:
         log.warning('No cells or genes passed the filtering criteria.')
@@ -56,8 +154,6 @@ def process_sc_output(
     del adata_init
 
     # 2. Pre-Processings (CPU/GPU) split path
-    backend = io.get_backend(which=compute_backend)
-
     try:
         adata = pre_process_adata(adata=adata, compute_backend=backend, logger=log)
     except Exception as e:
@@ -94,123 +190,20 @@ def process_sc_output(
     leiden_df = pl.from_pandas(adata.obs[success_clusterings], include_index=True)
     clustering_umap = leiden_df.hstack(umap_df)
     clustering_umap.write_csv(g4x_obj.tree.ClusteringUmap.p, compression='gzip')
+    log.debug('Writing clustering UMAP table to CSV:\n%s%s', PGAP, g4x_obj.tree.ClusteringUmap.p)
+
+    backend.rsc.get.anndata_to_CPU(adata)
+    adata.write(g4x_obj.tree.AdataH5.p)
+    log.debug('Writing AnnData object to H5AD:\n%s%s', PGAP, g4x_obj.tree.AdataH5.p)
 
     # 5. Run differential gene expression analysis
     try:
-        backend.rsc.get.anndata_to_CPU(adata)
-        dgex = run_dgex(adata, cluster_keys=success_clusterings, downsample=1000)
+        dgex = run_dgex(adata, cluster_keys=success_clusterings, downsample=1000, logger=log)
         dgex.write_csv(g4x_obj.tree.Dgex.p, compression='gzip')
+        log.debug('Writing dgex table to CSV:\n%s%s', PGAP, g4x_obj.tree.Dgex.p)
     except Exception as e:
         log.warning(f'Failed to run differential gene expression analysis: {e}')
         write_dummy_clustering_outputs(g4x_obj, adata=adata, failure_code='dgex_failed')
-
-
-# region initialize
-def init_adata(
-    g4x_obj: 'G4Xoutput',
-    *,
-    tx_panel: pl.DataFrame | str = '__g4x_default__',
-    cell_metadata: pl.DataFrame | str = '__g4x_default__',
-    cell_x_gene: pl.DataFrame | str = '__g4x_default__',
-    cell_x_protein: pl.DataFrame | None = None,
-    logger: logging.Logger | None = None,
-) -> 'AnnData':
-
-    log = logger or LOGGER
-    log.info('Creating AnnData object')
-
-    log.debug('Validating inputs')
-    if tx_panel == '__g4x_default__':
-        tx_panel = g4x_obj.tree.TranscriptPanel
-    else:
-        tx_panel = TranscriptPanel(target_path=tx_panel)
-
-    if cell_metadata == '__g4x_default__':
-        cell_meta_obj = g4x_obj.tree.CellMetadata
-    else:
-        cell_meta_obj = CellMetadata(target_path=cell_metadata)
-
-    if cell_x_gene == '__g4x_default__':
-        cell_x_gene = g4x_obj.tree.CellxGene
-    else:
-        cell_x_gene = CellxGene(target_path=cell_x_gene)
-
-    if cell_x_protein is None:
-        pass
-    elif cell_x_protein == '__g4x_default__':
-        cell_x_protein = g4x_obj.tree.CellxProtein
-    else:
-        cell_x_protein = CellxProtein(target_path=cell_x_protein)
-
-    all_valid = (
-        tx_panel.is_valid
-        and cell_meta_obj.is_valid
-        and cell_x_gene.is_valid
-        and (cell_x_protein is None or cell_x_protein.is_valid)
-    )
-    if not all_valid:
-        raise ValueError('One or more input dataframes are invalid')
-
-    tx_panel = tx_panel.parse()
-    cell_metadata = cell_meta_obj.load()
-    cell_x_gene = cell_x_gene.load()
-    if cell_x_protein is not None:
-        cell_x_protein = cell_x_protein.load()
-
-    cxg_ok = cell_metadata[c.CELL_ID_NAME].equals(cell_x_gene[c.CELL_ID_NAME])
-    if not cxg_ok:
-        raise ValueError('Cell IDs in CellMetadata do not match those in CellxGene')
-
-    if cell_x_protein is not None:
-        cxp_ok = cell_metadata[c.CELL_ID_NAME].equals(cell_x_protein[c.CELL_ID_NAME])
-        if not cxp_ok:
-            raise ValueError('Cell IDs in CellMetadata do not match those in CellxProtein')
-        cell_x_protein = cell_x_protein.drop(c.CELL_ID_NAME)
-
-    log.debug('Converting cell x gene matrix to sparse format')
-    X = cell_x_gene.drop(c.CELL_ID_NAME).to_numpy().astype(np.uint16)
-    X = csr_matrix(X)
-
-    log.info('Processing cell metadata')
-    obs_df = cell_metadata.to_pandas().set_index(c.CELL_ID_NAME)
-    obs_df.index = obs_df.index.astype(str)
-
-    log.info('Processing gene metadata')
-    gene_ids = pl.Series(name=c.GENE_ID_NAME, values=cell_x_gene.columns[1:])
-    var_df = pl.DataFrame(gene_ids).with_columns(pl.lit('tx').alias('modality'))
-
-    log.debug('Processing panel type information')
-    panel_type = tx_panel.unique('gene_name').select('gene_name', 'probe_type').rename({'gene_name': c.GENE_ID_NAME})
-
-    var_df = (
-        var_df.join(
-            panel_type,
-            on=c.GENE_ID_NAME,
-            how='left',
-        )
-        .to_pandas()
-        .set_index(c.GENE_ID_NAME)
-    )
-    var_df.index = var_df.index.astype(str)
-
-    log.info('Initializing AnnData object')
-    adata = AnnData(X=X, obs=obs_df, var=var_df)
-
-    if cell_x_protein is not None:
-        log.debug('Adding protein data to AnnData object')
-        adata.uns['protein_names'] = [c.removesuffix('_intensity_mean') for c in cell_x_protein.columns]
-        adata.obsm['protein'] = cell_x_protein.to_numpy()
-
-    log.info('Calculating QC metrics')
-    adata.var['ctrl'] = adata.var['probe_type'] != 'targeting'
-    sc.pp.calculate_qc_metrics(adata, qc_vars=['ctrl'], inplace=True, percent_top=None)
-    adata.var.drop(columns=['ctrl'], inplace=True)
-
-    sc_meta = pl.from_pandas(adata.obs, include_index=True).cast({c.CELL_ID_NAME: pl.UInt64})
-    sc_meta.write_csv(cell_meta_obj.p, compression='gzip')
-
-    adata = _sanitize_categorical_columns(adata, threshold=10)
-    return adata.copy()
 
 
 # region processing
@@ -220,22 +213,20 @@ def filter_adata(
     *,
     logger: logging.Logger | None = None,
 ):
-
     log = logger or LOGGER
-
     log.info('Filtering adata')
-    n_obs = adata.n_obs
-    n_var = adata.n_vars
 
     if filter_panel is None:
         filter_panel = _get_default_filter_panel()
+
+    obs_total, var_total = adata.n_obs, adata.n_vars
     cell_summary, gene_summary = filter_panel.filter(adata, apply=True)
 
     if adata.n_obs == 0 or adata.n_vars == 0:
         log.warning('No cells or genes remaining after filtering. Returning empty AnnData object.')
         return adata  # , cell_summary, gene_summary
 
-    for df, name, n_total in [(cell_summary, 'cells', n_obs), (gene_summary, 'genes', n_var)]:
+    for df, name, n_total in [(cell_summary, 'cells', obs_total), (gene_summary, 'genes', var_total)]:
         n_retained = df.filter(pl.all_horizontal(pl.col('^.*_ok$'))).select('n_total').item()
         retained = n_retained / n_total
         log.info('Retained {:,} ({:.2%}) {} after filtering'.format(n_retained, retained, name))
@@ -406,7 +397,7 @@ def run_dgex(
 
     dfList = []
     for leiden in cluster_keys:
-        log.info('Running dgex on %s:', leiden)
+        log.info('Running dgex on: %s', leiden)
         adata_downsample = _subset_adata_by_key(adata, key=leiden, n_per_group=downsample)
         try:
             sc.tl.rank_genes_groups(
@@ -488,6 +479,39 @@ class FilterMethod:
     def axis(self) -> str:
         return 'obs' if self.filter_type == 'cells' else 'var'
 
+    def _filter_axis(
+        self,
+        adata,
+        axis: str,
+        key: str,
+        val_min: float | None = None,
+        val_max: float | None = None,
+        apply: bool = False,
+    ):
+        if axis == 'obs':
+            df = adata.obs
+            size = adata.n_obs
+        elif axis == 'var':
+            df = adata.var
+            size = adata.n_vars
+        else:
+            raise ValueError("axis must be 'obs' or 'var'")
+
+        if key not in df:
+            raise ValueError(f"key '{key}' not found in adata.{axis}")
+
+        values = df[key].to_numpy()
+        mask = np.ones(size, dtype=bool)
+
+        if val_min is not None:
+            mask &= values >= val_min
+        if val_max is not None:
+            mask &= values <= val_max
+
+        if apply:
+            return adata[mask].copy() if axis == 'obs' else adata[:, mask].copy()
+        return mask
+
     def resolve_thresholds(self, df):
         v_min = self.value_min
         v_max = self.value_max
@@ -507,7 +531,7 @@ class FilterMethod:
             df = df[df[self.key] == self.subset]
 
         v_min, v_max = self.resolve_thresholds(df)
-        return _filter_axis(adata, axis=self.axis, key=self.key, val_min=v_min, val_max=v_max, apply=apply)
+        return self._filter_axis(adata, axis=self.axis, key=self.key, val_min=v_min, val_max=v_max, apply=apply)
 
 
 class FilterPanel:
@@ -544,39 +568,6 @@ class FilterPanel:
             return (all_passed_cell, cell_summary), (all_passed_gene, gene_summary)
 
         return cell_summary, gene_summary
-
-
-def _filter_axis(
-    adata,
-    axis: str,
-    key: str,
-    val_min: float | None = None,
-    val_max: float | None = None,
-    apply: bool = False,
-):
-    if axis == 'obs':
-        df = adata.obs
-        size = adata.n_obs
-    elif axis == 'var':
-        df = adata.var
-        size = adata.n_vars
-    else:
-        raise ValueError("axis must be 'obs' or 'var'")
-
-    if key not in df:
-        raise ValueError(f"key '{key}' not found in adata.{axis}")
-
-    values = df[key].to_numpy()
-    mask = np.ones(size, dtype=bool)
-
-    if val_min is not None:
-        mask &= values >= val_min
-    if val_max is not None:
-        mask &= values <= val_max
-
-    if apply:
-        return adata[mask].copy() if axis == 'obs' else adata[:, mask].copy()
-    return mask
 
 
 def _reorder_clusters_by_size(obs: pd.DataFrame, key: str, prefix: str = 'C') -> pd.DataFrame:
@@ -656,6 +647,8 @@ def write_dummy_clustering_outputs(
     dummy_dgex = dummy_dgex.vstack(null_row).with_columns(failure_code=pl.lit('filter_not_passed'))
     dummy_dgex.write_csv(out_dir / g4x_obj.tree.Dgex.target_rel, compression='gzip')
 
+    adata.write(out_dir / g4x_obj.tree.AdataH5.target_rel)
+
 
 def _sanitize_categorical_columns(adata, threshold: int = 10):
     for df in [adata.obs, adata.var]:
@@ -688,6 +681,20 @@ def _subset_adata_by_key(adata, key='leiden', n_per_group=1000):
     )
 
     return adata[sampled_idx].copy()
+
+
+def _collect_input(g4x_obj: 'G4Xoutput', path: str, validator: 'BaseValidator'):
+    if path == DEFAULT_INPUT:
+        in_obj = getattr(g4x_obj.tree, validator.__name__)
+    else:
+        in_obj = validator(target_path=path)
+    return in_obj
+
+
+def _validate_cell_ids(df1, df2, name_1, name_2):
+    cxg_ok = df1[c.CELL_ID_NAME].equals(df2[c.CELL_ID_NAME])
+    if not cxg_ok:
+        raise ValueError(f'Cell IDs in {name_1} do not match those in {name_2}')
 
 
 # polars implementation

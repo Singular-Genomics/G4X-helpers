@@ -7,8 +7,8 @@ import polars as pl
 from skimage.measure import regionprops
 from tqdm import tqdm
 
-from .. import constants as c
-from .. import io
+from .. import c, io
+from ..logging_utils import PGAP
 
 # from .workflow import g4x_workflow
 
@@ -17,7 +17,6 @@ if TYPE_CHECKING:
 
 
 LOGGER = logging.getLogger(__name__)
-log_p_gap = 2 * ' ' + '> '
 
 
 # @g4x_workflow
@@ -43,7 +42,7 @@ def aggregate_cell_data(
     else:
         out_dir = io.pathval.validate_dir_path(out_dir)
 
-    log.info('Output directory data:\n%s%s', log_p_gap, out_dir)
+    log.info('Output directory data:\n%s%s', PGAP, out_dir)
 
     tx_table_out = out_dir / g4x_obj.tree.TranscriptTable.p
     metadata_out = out_dir / g4x_obj.tree.CellMetadata.p
@@ -60,7 +59,7 @@ def aggregate_cell_data(
         tx_table_path = g4x_obj.tree.TranscriptTable.p
     else:
         tx_table_path = io.pathval.validate_file_path(tx_table)
-        log.debug('Using transcript table from:\n%s%s', log_p_gap, tx_table_path)
+        log.debug('Using transcript table from:\n%s%s', PGAP, tx_table_path)
 
     if segmentation_mask == '__g4x_default__':
         log.debug('Using default segmentation mask from G4X-output')
@@ -68,7 +67,7 @@ def aggregate_cell_data(
         cell_frame = _cell_frame(segmentation_mask=g4x_obj.load_segmentation(expanded=False))
     else:
         segmentation_mask_path = io.pathval.validate_file_path(segmentation_mask)
-        log.info('Importing segmentation mask from:\n%s%s', log_p_gap, segmentation_mask_path)
+        log.info('Importing segmentation mask from:\n%s%s', PGAP, segmentation_mask_path)
         mask = io.import_segmentation(
             segmentation_mask_path,
             expected_shape=g4x_obj.shape,
@@ -106,17 +105,17 @@ def aggregate_cell_data(
         logger=log,
     )
 
-    log.debug('Writing transcript table to CSV:\n%s%s', log_p_gap, tx_table_out)
+    log.debug('Writing transcript table to CSV:\n%s%s', PGAP, tx_table_out)
     if out_dir == g4x_obj.data_dir:
         tx_table_intersected.collect().write_csv(tx_table_out, compression='gzip')
     else:
         tx_table_intersected.sink_csv(tx_table_out, compression='gzip')
 
-    log.debug('Writing cell metadata to CSV:\n%s%s', log_p_gap, metadata_out)
+    log.debug('Writing cell metadata to CSV:\n%s%s', PGAP, metadata_out)
     cell_metadata.sink_csv(metadata_out, compression='gzip')
-    log.debug('Writing cell x gene matrix to CSV:\n%s%s', log_p_gap, cxg_out)
+    log.debug('Writing cell x gene matrix to CSV:\n%s%s', PGAP, cxg_out)
     cell_x_gene.sink_csv(cxg_out, compression='gzip')
-    log.debug('Writing cell x protein matrix to CSV:\n%s%s', log_p_gap, cxp_out)
+    log.debug('Writing cell x protein matrix to CSV:\n%s%s', PGAP, cxp_out)
     cell_x_signal.sink_csv(cxp_out, compression='gzip')
 
     log.info('Completed aggregating cell data')
