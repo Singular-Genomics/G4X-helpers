@@ -1,3 +1,4 @@
+import colorsys
 import logging
 import textwrap
 from typing import TYPE_CHECKING, Any
@@ -20,6 +21,7 @@ LOGGER = logging.getLogger(__name__)
 def write_transcripts(
     g4x_obj: 'G4Xoutput',
     root_group: 'zGroup',
+    colors=None,
     override: bool = False,
     logger: logging.Logger | None = None,
 ) -> None:
@@ -53,12 +55,18 @@ def write_transcripts(
 
     pyramid = construct_tile_dfs(df, pyramid)
 
-    # contstruct gene_list
-    gene_list = lf.unique('gene_name').sort('gene_name').collect()['gene_name'].to_list()
+    # # contstruct gene_list
+    # gene_list = lf.unique('gene_name').sort('gene_name').collect()['gene_name'].to_list()
 
-    N = len(gene_list)  # number of colors
-    colors = np.random.randint(0, 256, size=(N, 3), dtype=np.uint8)
-    gene_colors = {g: c.tolist() for g, c in zip(gene_list, colors)}
+    # N = len(gene_list)  # number of colors
+    # colors = np.random.randint(0, 256, size=(N, 3), dtype=np.uint8)
+    # gene_colors = {g: c.tolist() for g, c in zip(gene_list, colors)}
+
+    gene_colors = {}
+    for g in colors.iter_rows(named=True):
+        gene_colors[g['gene_id']] = hex_to_rgb(g['hex'])
+
+    # gene_colors
 
     # populate attrs
     layer_config = {
@@ -171,3 +179,110 @@ def write_tx_zarr(
             create_array(tile_group, 'position', data=coords, compressor=compressor)
             create_array(tile_group, 'gene_name', data=gene_names, compressor=compressor)
             create_array(tile_group, 'cell_id', data=cell_ids, compressor=compressor)
+
+
+# region colors
+def hex_to_rgb(hex_color):
+    hex_color = hex_color.lstrip("#")
+    
+    return tuple(
+        int(hex_color[i:i+2], 16)
+        for i in (0, 2, 4)
+    )
+
+def hsv_to_hex(h, s, v):
+    # wrap hue into [0,1]
+    h = h % 1.0
+
+    r, g, b = colorsys.hsv_to_rgb(h, s, v)
+
+    return '#{:02x}{:02x}{:02x}'.format(int(r * 255), int(g * 255), int(b * 255))
+
+
+def _normalize_range(df, column, out_range=(0, 1)):
+    result = df.with_columns((out_range[0] + (out_range[1] - out_range[0]) * pl.col(column)).alias(column))
+    return result
+
+
+def rank_normalized(df, column, new_column, out_range=(0, 1)):
+    result = df.with_columns(((pl.col(column).rank(method='average') - 1) / (pl.len() - 1)).alias(new_column))
+    result = _normalize_range(result, new_column, out_range)
+    return result
+
+
+def column_normalized(df, column, new_column, out_range=(0, 1)):
+    result = df.with_columns(
+        pl.when(pl.col(column).max() == pl.col(column).min())
+        .then(0.0)
+        .otherwise((pl.col(column) - pl.col(column).min()) / (pl.col(column).max() - pl.col(column).min()))
+        .alias(new_column)
+    )
+    result = _normalize_range(result, new_column, out_range)
+    return result
+
+
+def assign_colors(df, hue=180, hue_spread=0.1, sat_range=(0, 1), val_range=(0, 1)):
+
+    hue_n = hue / 360
+    hue_range = (hue_n - hue_spread / 2, hue_n + hue_spread / 2)
+
+    subset = df.sort('gene_id').with_row_index(name='rank')
+
+    subset = rank_normalized(subset, 'rank', 'hue', out_range=hue_range)
+    subset = column_normalized(subset, 'score', 'sat', out_range=sat_range)
+    subset = rank_normalized(subset, 'pct_nz_group', 'val', out_range=val_range)
+
+    # subset = subset.with_columns(
+    #     pl.struct(['hue', 'sat', 'val']).map_elements(lambda x: hsv_to_hex(x['hue'], x['sat'], x['val'])).alias('hex')
+    # )
+
+    return subset
+
+
+def assign_colors_to_clusters(df_fil):
+    clusters = df_fil['cluster_id'].unique().sort().to_list()
+    duplications = df_fil.group_by('gene_id').agg(pl.len()).sort('len', descending=True)
+
+    singles = duplications.filter(pl.col('len') == 1)
+    multis = duplications.filter(pl.col('len') > 1)
+
+    assignments = df_fil.filter(pl.col('gene_id').is_in(singles['gene_id'].implode()))
+
+    for gene in multis['gene_id'].to_list():
+        match = df_fil.filter(pl.col('gene_id') == gene).sort('score', descending=True).head(1)
+        assignments = assignments.vstack(match)
+
+    step = 360 / len(clusters)
+    spread = 1 / len(clusters) / 1.75
+
+    final_subset = pl.DataFrame()
+    for i, cluster in enumerate(clusters):
+        hue = i * step
+        subset = assignments.filter(pl.col('cluster_id') == cluster)
+        subset = assign_colors(subset, hue=hue, hue_spread=spread, sat_range=(0.25, 1.0), val_range=(0.25, 1.0))
+        final_subset = final_subset.vstack(subset)
+    return final_subset
+
+
+def complete_panel_colors(tx_panel, assignments):
+    complete_panel = (
+        tx_panel.unique(['probe_type', 'gene_name'])
+        .sort('probe_type', descending=True)
+        .select(['gene_name', 'probe_type'])
+    )
+
+    missing = complete_panel.filter(~pl.col('gene_name').is_in(assignments['gene_id'].implode()))
+
+    missing = missing.with_columns(pl.lit(0.0).alias('hue'), pl.lit(0.0).alias('sat'))
+    missing = missing.with_row_index(name='rank')
+
+    missing = rank_normalized(missing, 'rank', 'val', out_range=(0.0, 1.0))
+
+    colors = assignments.select('gene_id', 'hue', 'sat', 'val')
+    missing_colors = missing.select('gene_name', 'hue', 'sat', 'val').rename({'gene_name': 'gene_id'})
+
+    colors = colors.vstack(missing_colors)
+    colors = colors.with_columns(
+        pl.struct(['hue', 'sat', 'val']).map_elements(lambda x: hsv_to_hex(x['hue'], x['sat'], x['val'])).alias('hex')
+    )
+    return colors
