@@ -27,7 +27,7 @@ class G4Xoutput:
 
     """
 
-    def __init__(self, data_dir: str, use_cache: bool = True):
+    def __init__(self, data_dir: str, use_cache: bool = False):
         self.data_dir = Path(data_dir)
         self.tree = schema.FileTree(self.data_dir)
         self.use_cache = use_cache
@@ -185,25 +185,29 @@ class G4Xoutput:
         adata.obs_names = f'{self.sample_id}-' + adata.obs['cell_id'].str.split('-').str[1]
         return adata
 
-    def load_protein_image(self, protein: str) -> np.ndarray:
+    def load_protein_image(self, protein: str, use_cache: bool | None = None) -> np.ndarray:
         img_path = self.tree.ProteinDir.existing_files.get(protein)
         if img_path is None:
             print(f'Protein image for {protein} not found.')
             return None
 
-        return io.import_image(img_path=img_path, use_cache=self.use_cache)
+        cache = self.use_cache if use_cache is None else use_cache
+        return io.import_image(img_path=img_path, use_cache=cache)
 
-    def load_he_image(self) -> np.ndarray:
+    def load_he_image(self, use_cache: bool | None = None) -> np.ndarray:
         img_path = self.tree.HnEDir.existing_files['h_and_e/h_and_e']
-        return io.import_image(img_path=img_path, use_cache=self.use_cache)
+        cache = self.use_cache if use_cache is None else use_cache
+        return io.import_image(img_path=img_path, use_cache=cache)
 
-    def load_nuclear_image(self) -> np.ndarray:
+    def load_nuclear_image(self, use_cache: bool | None = None) -> np.ndarray:
         img_path = self.tree.HnEDir.existing_files['h_and_e/nuclear']
-        return io.import_image(img_path=img_path, use_cache=self.use_cache)
+        cache = self.use_cache if use_cache is None else use_cache
+        return io.import_image(img_path=img_path, use_cache=cache)
 
-    def load_cytoplasmic_image(self) -> np.ndarray:
+    def load_cytoplasmic_image(self, use_cache: bool | None = None) -> np.ndarray:
         img_path = self.tree.HnEDir.existing_files['h_and_e/cytoplasmic']
-        return io.import_image(img_path=img_path, use_cache=self.use_cache)
+        cache = self.use_cache if use_cache is None else use_cache
+        return io.import_image(img_path=img_path, use_cache=cache)
 
     def load_segmentation(self, expanded: bool = True, key: str | None = None) -> np.ndarray:
         key = 'nuclei_exp' if expanded else 'nuclei'
