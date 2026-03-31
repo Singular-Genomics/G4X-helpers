@@ -43,7 +43,7 @@ def init_adata(
     tx_panel: str = DEFAULT_INPUT,
     cell_metadata: str = DEFAULT_INPUT,
     cell_x_gene: str = DEFAULT_INPUT,
-    cell_x_protein: str | None = None,
+    cell_x_protein: str = DEFAULT_INPUT,
     logger: logging.Logger | None = None,
 ) -> 'AnnData':
 
@@ -55,28 +55,30 @@ def init_adata(
     cell_meta_obj = _collect_input(g4x_obj, cell_metadata, CellMetadata)
     cellxgene_obj = _collect_input(g4x_obj, cell_x_gene, CellxGene)
 
-    if cell_x_protein is not None:
-        cellxprot_obj = _collect_input(g4x_obj, cell_x_protein, CellxProtein)
+    cellxprot_obj = _collect_input(g4x_obj, cell_x_protein, CellxProtein)
+    if not g4x_obj.tree.pr_detected:
+        cell_x_protein = '__absent__'
 
     all_valid = (
         tx_panel_obj.is_valid
         and cell_meta_obj.is_valid
         and cellxgene_obj.is_valid
-        and (cell_x_protein is None or cellxprot_obj.is_valid)
+        and (cell_x_protein == '__absent__' or cellxprot_obj.is_valid)
     )
+
     if not all_valid:
         raise ValueError('One or more input dataframes are invalid')
 
     tx_panel = tx_panel_obj.parse()
     cell_metadata = cell_meta_obj.load()
     cell_x_gene = cellxgene_obj.load()
-    if cell_x_protein is not None:
-        cell_x_protein = cellxprot_obj.load()
+
+    if cell_x_protein != '__absent__':
+        cell_x_protein_df = cellxprot_obj.load()
+        _validate_cell_ids(cell_metadata, cell_x_protein_df, 'CellMetadata', 'CellxProtein')
 
     # Ensure that cell IDs match between metadata and expression/protein matrices
     _validate_cell_ids(cell_metadata, cell_x_gene, 'CellMetadata', 'CellxGene')
-    if cell_x_protein is not None:
-        _validate_cell_ids(cell_metadata, cell_x_protein, 'CellMetadata', 'CellxProtein')
 
     log.info('Setting up AnnData components')
     log.debug('Converting cell x gene matrix to sparse format')
@@ -107,11 +109,11 @@ def init_adata(
     log.debug('Initializing AnnData object')
     adata = AnnData(X=X, obs=obs_df, var=var_df)
 
-    if cell_x_protein is not None:
+    if cell_x_protein != '__absent__':
         log.debug('Adding protein data to AnnData object')
-        cell_x_protein = cell_x_protein.drop(c.CELL_ID_NAME)
-        adata.uns['protein_names'] = [c.removesuffix('_intensity_mean') for c in cell_x_protein.columns]
-        adata.obsm['protein'] = cell_x_protein.to_numpy()
+        cell_x_protein_df = cell_x_protein_df.drop(c.CELL_ID_NAME)
+        adata.uns['protein_names'] = [c.removesuffix('_intensity_mean') for c in cell_x_protein_df.columns]
+        adata.obsm['protein'] = cell_x_protein_df.to_numpy()
 
     log.info('Calculating QC metrics')
     adata.var['ctrl'] = adata.var['probe_type'] != 'targeting'
@@ -644,7 +646,7 @@ def write_dummy_clustering_outputs(
     dummy_dgex = pl.DataFrame(schema=g4x_obj.tree.Dgex.SCHEMA)
     null_row = pl.DataFrame({col: pl.Series([None], dtype=dummy_dgex.schema[col]) for col in dummy_dgex.columns})
 
-    dummy_dgex = dummy_dgex.vstack(null_row).with_columns(failure_code=pl.lit('filter_not_passed'))
+    dummy_dgex = dummy_dgex.vstack(null_row).with_columns(failure_code=pl.lit(failure_code))
     dummy_dgex.write_csv(out_dir / g4x_obj.tree.Dgex.target_rel, compression='gzip')
 
     adata.write(out_dir / g4x_obj.tree.AdataH5.target_rel)

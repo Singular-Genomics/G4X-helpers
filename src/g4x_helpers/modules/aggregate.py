@@ -15,19 +15,19 @@ from ..logging_utils import PGAP
 if TYPE_CHECKING:
     from ..g4x_output import G4Xoutput
 
-
+DEFAULT_INPUT = '__g4x_default__'
 LOGGER = logging.getLogger(__name__)
 
 
 # @g4x_workflow
 def aggregate_cell_data(
     g4x_obj: 'G4Xoutput',
-    segmentation_mask: str = '__g4x_default__',
-    out_dir: str = '__g4x_default__',
+    segmentation_mask: str = DEFAULT_INPUT,
+    out_dir: str = DEFAULT_INPUT,
     *,
-    tx_table: str = '__g4x_default__',
-    gene_list: list[str] = '__g4x_default__',
-    protein_list: list[str] = '__g4x_default__',
+    tx_table: str = DEFAULT_INPUT,
+    gene_list: list[str] = DEFAULT_INPUT,
+    protein_list: list[str] = DEFAULT_INPUT,
     mask_key: str | None = None,
     override: bool = False,
     show_progress: bool | None = None,
@@ -37,7 +37,7 @@ def aggregate_cell_data(
     log = logger or LOGGER
     log.info('Aggregating cell data')
 
-    if out_dir == '__g4x_default__':
+    if out_dir == DEFAULT_INPUT:
         out_dir = g4x_obj.data_dir
     else:
         out_dir = io.pathval.validate_dir_path(out_dir)
@@ -54,14 +54,20 @@ def aggregate_cell_data(
             raise FileExistsError(f'File {path} already exists and override is False.')
         io.pathval.ensure_parent_dir(path)
 
-    if tx_table == '__g4x_default__':
+    protein_list = g4x_obj.proteins if protein_list == DEFAULT_INPUT else protein_list
+    if protein_list:
+        unavailable_proteins = [p for p in protein_list if p not in g4x_obj.proteins]
+        if unavailable_proteins:
+            raise ValueError(f'The following requested proteins are not available in this data: {unavailable_proteins}')
+
+    if tx_table == DEFAULT_INPUT:
         log.debug('Using default transcript table from G4X-output')
         tx_table_path = g4x_obj.tree.TranscriptTable.p
     else:
         tx_table_path = io.pathval.validate_file_path(tx_table)
         log.debug('Using transcript table from:\n%s%s', PGAP, tx_table_path)
 
-    if segmentation_mask == '__g4x_default__':
+    if segmentation_mask == DEFAULT_INPUT:
         log.debug('Using default segmentation mask from G4X-output')
         mask = None
         cell_frame = _cell_frame(segmentation_mask=g4x_obj.load_segmentation(expanded=False))
@@ -96,14 +102,18 @@ def aggregate_cell_data(
     )
 
     # log.info('Creating cell x protein matrix')
-    protein_list = g4x_obj.proteins if protein_list == '__g4x_default__' else protein_list
-    cell_mask = g4x_obj.load_segmentation(expanded=True) if segmentation_mask == '__g4x_default__' else mask
-    cell_x_signal = create_cell_x_protein(
-        g4x_obj=g4x_obj,
-        mask=cell_mask,
-        signal_list=g4x_obj.stains + protein_list,
-        logger=log,
-    )
+
+    if protein_list:
+        cell_mask = g4x_obj.load_segmentation(expanded=True) if segmentation_mask == DEFAULT_INPUT else mask
+        cell_x_protein = create_cell_x_signal(
+            g4x_obj=g4x_obj,
+            mask=cell_mask,
+            signal_list=protein_list,
+            logger=log,
+        )
+
+        log.debug('Writing cell x protein matrix to CSV:\n%s%s', PGAP, cxp_out)
+        cell_x_protein.sink_csv(cxp_out, compression='gzip')
 
     log.debug('Writing transcript table to CSV:\n%s%s', PGAP, tx_table_out)
     if out_dir == g4x_obj.data_dir:
@@ -115,8 +125,6 @@ def aggregate_cell_data(
     cell_metadata.sink_csv(metadata_out, compression='gzip')
     log.debug('Writing cell x gene matrix to CSV:\n%s%s', PGAP, cxg_out)
     cell_x_gene.sink_csv(cxg_out, compression='gzip')
-    log.debug('Writing cell x protein matrix to CSV:\n%s%s', PGAP, cxp_out)
-    cell_x_signal.sink_csv(cxp_out, compression='gzip')
 
     log.info('Completed aggregating cell data')
 
@@ -143,15 +151,45 @@ def create_cell_metadata(
         pl.lit(g4x_obj.sample_id).alias('sample_id'),
         pl.lit(g4x_obj.tissue_type).alias('tissue_type'),
         pl.lit(g4x_obj.block).alias('block'),
+        pl.lit(seg_source).alias('seg_source'),
     )  # .collect()
 
     # TODO this might break if someone changes the .npz file
     if segmentation_mask is None:
-        mask_props = extract_cell_props_g4x(g4x_obj, show_progress=show_progress)
+        segmentation_mask = g4x_obj.load_segmentation(expanded=False)
+        mask_props_nuc = extract_cell_props(mask=segmentation_mask, mask_name='nuclei', show_progress=show_progress)
+
+        segmentation_mask = g4x_obj.load_segmentation(expanded=True)
+        mask_props_exp = extract_cell_props(mask=segmentation_mask, mask_name='nuclei_exp', show_progress=show_progress)
+
+        mask_props_nuc = mask_props_nuc.rename({'area_um': 'nuclei_area_um'})
+        mask_props_exp = mask_props_exp.rename({'area_um': 'wholecell_area_um'}).drop([c.CELL_COORD_X, c.CELL_COORD_Y])
+        mask_props = mask_props_nuc.join(mask_props_exp, on=c.CELL_ID_NAME)
+
+        mask_props = mask_props.select(
+            [c.CELL_ID_NAME, c.CELL_COORD_X, c.CELL_COORD_Y, 'nuclei_area_um', 'wholecell_area_um']
+        )
+
+        stain_intensities = create_cell_x_signal(
+            g4x_obj=g4x_obj,
+            mask=segmentation_mask,
+            signal_list=g4x_obj.stains,
+            logger=logger,
+        )
+
     else:
         mask_props = extract_cell_props(segmentation_mask, show_progress=show_progress)
 
-    mask_props = mask_props.with_columns(pl.lit(seg_source).alias('seg_source'))
+        stain_intensities = create_cell_x_signal(
+            g4x_obj=g4x_obj,
+            mask=segmentation_mask,
+            signal_list=g4x_obj.stains,
+            logger=logger,
+        )
+
+    del segmentation_mask
+
+    mask_props = mask_props.join(stain_intensities, on=c.CELL_ID_NAME, how='left')
 
     mask_cells = mask_props.select(c.CELL_ID_NAME).collect()
     cell_meta_cells = cell_meta.select(c.CELL_ID_NAME).collect()
@@ -208,34 +246,12 @@ def extract_cell_props(
     return mask_props
 
 
-def extract_cell_props_g4x(
-    g4x_obj: 'G4Xoutput',
-    show_progress: bool | None = None,
-) -> pl.DataFrame:
-    seg_mask = g4x_obj.load_segmentation(expanded=False)
-    mask_props_nuc = extract_cell_props(mask=seg_mask, mask_name='nuclei', show_progress=show_progress)
-
-    seg_mask = g4x_obj.load_segmentation(expanded=True)
-    mask_props_exp = extract_cell_props(mask=seg_mask, mask_name='nuclei_exp', show_progress=show_progress)
-    del seg_mask
-
-    mask_props_nuc = mask_props_nuc.rename({'area_um': 'nuclei_area_um'})
-    mask_props_exp = mask_props_exp.rename({'area_um': 'wholecell_area_um'}).drop([c.CELL_COORD_X, c.CELL_COORD_Y])
-    mask_props = mask_props_nuc.join(mask_props_exp, on=c.CELL_ID_NAME)
-
-    mask_props = mask_props.select(
-        [c.CELL_ID_NAME, c.CELL_COORD_X, c.CELL_COORD_Y, 'nuclei_area_um', 'wholecell_area_um']
-    )
-
-    return mask_props
-
-
 # region transcripts
 def create_cell_x_gene(
     g4x_obj: 'G4Xoutput',
     tx_table: pl.LazyFrame,
-    segmentation_mask: str | np.ndarray = '__g4x_default__',
-    gene_labels: str | np.ndarray = '__g4x_default__',
+    segmentation_mask: str | np.ndarray = DEFAULT_INPUT,
+    gene_labels: str | np.ndarray = DEFAULT_INPUT,
     return_lazy: bool = True,
     logger: logging.Logger | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
@@ -243,7 +259,7 @@ def create_cell_x_gene(
     log = logger or LOGGER
     log.info('Creating cell x gene matrix')
 
-    if segmentation_mask == '__g4x_default__':
+    if segmentation_mask == DEFAULT_INPUT:
         mask = g4x_obj.load_segmentation(expanded=True)
         tx_table = intersect_tx_with_cells(tx_table, mask, column_name=c.CELL_ID_NAME)
 
@@ -255,15 +271,15 @@ def create_cell_x_gene(
         tx_table = intersect_tx_with_cells(tx_table, segmentation_mask)
         cell_frame = _cell_frame(segmentation_mask)
 
-    if gene_labels == '__g4x_default__':
+    if gene_labels == DEFAULT_INPUT:
         gene_labels = g4x_obj.genes
 
     cell_by_gene = (
         tx_table.filter(pl.col(c.CELL_ID_NAME) != 0)
-        .group_by(c.CELL_ID_NAME, 'gene_name')
+        .group_by(c.CELL_ID_NAME, c.GENE_ID_NAME)
         .agg(pl.len().alias('counts'))
-        .sort('gene_name')
-        .pivot(on='gene_name', values='counts', index=c.CELL_ID_NAME, on_columns=gene_labels)
+        .sort(c.GENE_ID_NAME)
+        .pivot(on=c.GENE_ID_NAME, values='counts', index=c.CELL_ID_NAME, on_columns=gene_labels)
     )
 
     # Adding missing cells with zero counts
@@ -294,10 +310,10 @@ def intersect_tx_with_cells(
 
 
 # region protein
-def create_cell_x_protein(
+def create_cell_x_signal(
     g4x_obj: 'G4Xoutput',
     mask: np.ndarray,
-    signal_list: list[str] | None = None,
+    signal_list: list[str],
     suffix: str = '_intensity_mean',
     show_progress: bool | None = None,
     return_lazy: bool = True,
@@ -306,10 +322,6 @@ def create_cell_x_protein(
 ) -> pl.LazyFrame:
 
     log = logger or LOGGER
-
-    if signal_list is None:
-        signal_list = g4x_obj.stains + g4x_obj.proteins
-
     log.info('Creating cell x protein matrix for %d signals.', len(signal_list))
 
     bead_mask = g4x_obj.load_bead_mask()
@@ -321,7 +333,7 @@ def create_cell_x_protein(
     if show_progress is None:
         show_progress = sys.stderr.isatty()
 
-    for signal_name in tqdm(signal_list, desc='Extracting protein signal', disable=not show_progress):
+    for signal_name in tqdm(signal_list, desc='Extracting image signals', disable=not show_progress):
         log.debug('Processing signal: %s', signal_name)
         if signal_name == c.NUCLEAR_STAIN:
             signal_img = g4x_obj.load_nuclear_image()
