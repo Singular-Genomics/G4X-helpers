@@ -324,6 +324,12 @@ class AdataH5(BaseValidator):
 class ClusteringUmap(BaseValidator):
     DEFAULT_TARGET_PATH = c.FILE_CLUSTERING_UMAP
 
+    def load(self, lazy: bool = False):
+        if self.is_valid:
+            return io.import_table(self.target_path, lazy=lazy)
+        else:
+            return self.validation()
+
 
 class Dgex(BaseValidator):
     DEFAULT_TARGET_PATH = c.FILE_DGEX
@@ -340,12 +346,37 @@ class Dgex(BaseValidator):
         'pct_nz_reference': pl.Float64,
     }
 
+    # import_method
+    def _try_load(self, lazy: bool = False):
+        try:
+            res = io.import_table(self.target_path, lazy=lazy)
+        except Exception as _:
+            return None
+        return res
+
     @validation_test
     def correct_schema(self):
         lf = pl.scan_csv(self.target_path)
         lf_names = lf.collect_schema().names()
 
         return set(self.SCHEMA.keys()).issubset(lf_names)
+
+    @validation_test
+    def is_readable(self):
+        return self._try_load() is not None
+
+    @validation_test
+    def has_clusters(self):
+        df = self._try_load()
+        if df is not None:
+            max_clusters = df.unique(['leiden_res', 'cluster_id']).group_by(['leiden_res']).agg(pl.len())['len'].max()
+        return max_clusters > 2
+
+    def load(self, lazy: bool = False):
+        if self.is_valid:
+            return self._try_load(lazy=lazy)
+        else:
+            return self.validation()
 
 
 class SingleCellFolder(BaseValidator):
