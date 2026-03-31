@@ -29,15 +29,16 @@ class G4Xoutput:
 
     def __init__(self, data_dir: str, use_cache: bool = False):
         self.data_dir = Path(data_dir)
-        self.tree = schema.FileTree(self.data_dir)
+        self.src = schema.FileTree(self.data_dir)
+        self.out = self.src.copy()
         self.use_cache = use_cache
 
-        self.tree.validation_report(format='minimal', raw_only=True, report_pass=False, raise_exception=False)
+        self.src.validation_report(format='minimal', raw_only=True, report_pass=False, raise_exception=False)
 
-        with open(self.tree.SampleMetadata.p, 'r') as f:
+        with open(self.src.SampleMetadata.p, 'r') as f:
             self.smp_meta = json.load(f)
 
-        nuc_img = self.tree.HnEDir.existing_files['h_and_e/nuclear']
+        nuc_img = self.src.HnEDir.existing_files['h_and_e/nuclear']
         self.shape = ut.get_image_shape(nuc_img)
 
         self.set_meta_attrs()
@@ -45,14 +46,14 @@ class G4Xoutput:
 
         self.stains = [c.NUCLEAR_STAIN, c.CYTOPLASMIC_STAIN]
         self.genes = []
-        if self.tree.tx_detected:
-            tx_panel = self.tree.TranscriptPanel.parse()
+        if self.src.tx_detected:
+            tx_panel = self.src.Manifest.parse()
             tx_panel = tx_panel.sort(by=['probe_type', 'probe'], descending=[True, False])
             self.genes = tx_panel['gene_name'].unique(maintain_order=True).to_list()
 
         self.proteins = []
-        if self.tree.pr_detected:
-            protein_panel = pl.read_csv(self.tree.ProteinPanel.p)
+        if self.src.pr_detected:
+            protein_panel = pl.read_csv(self.src.ProteinPanel.p)
             protein_panel.sort(by=['panel_type', pl.col('target').str.to_lowercase()], descending=[True, False])
             self.proteins = self.sort_proteins(protein_panel['target'].to_list())
 
@@ -72,9 +73,9 @@ class G4Xoutput:
         repr_string += f'{"software version":<{gap}} - {self.software_version}\n\n'
 
         panels = [
-            ('Transcript panel', len(self.genes), 'genes', self.genes) if self.tree.tx_detected else (None, 0, '', []),
+            ('Transcript panel', len(self.genes), 'genes', self.genes) if self.src.tx_detected else (None, 0, '', []),
             ('Protein panel', len(self.proteins), 'proteins', self.proteins)
-            if self.tree.pr_detected
+            if self.src.pr_detected
             else (None, 0, '', []),
         ]
 
@@ -90,10 +91,10 @@ class G4Xoutput:
         def format_panel(title, count, label, items):
             return f'{title:<{gap}} - {count} {label:<{max_pre - len(str(count)) - 1}}[{", ".join(items[0:5])} ... ]\n'
 
-        if self.tree.tx_detected:
+        if self.src.tx_detected:
             repr_string += format_panel(*panels[0])
 
-        if self.tree.pr_detected:
+        if self.src.pr_detected:
             repr_string += format_panel(*panels[1])
 
         return repr_string
@@ -122,7 +123,7 @@ class G4Xoutput:
             return self.cache[cache_key].copy()
 
         nuc_mask = io.import_segmentation(
-            seg_path=self.tree.Segmentation.p,
+            seg_path=self.src.Segmentation.p,
             expected_shape=self.shape,
             labels_key='nuclei',  # TODO figure out what to do with custom segmentations
             use_cache=self.use_cache,
@@ -137,26 +138,26 @@ class G4Xoutput:
 
     @property
     def is_demuxed(self):
-        result = False if not self.tree.tx_detected else self.tree.TranscriptTable.is_valid
+        result = False if not self.src.tx_detected else self.src.TxTable.is_valid
         return result
 
     @property
     def is_aggregated(self):
-        cxg = True if not self.tree.tx_detected else self.tree.CellxGene.is_valid
-        cxp = True if not self.tree.pr_detected else self.tree.CellxProtein.is_valid
+        cxg = True if not self.src.tx_detected else self.src.CellxGene.is_valid
+        cxp = True if not self.src.pr_detected else self.src.CellxProt.is_valid
         return cxg and cxp
 
     @property
     def is_scprocessed(self):
-        # umap = self.tree.clustering_umap_path.exists()
-        # meta = self.tree.cell_metadata_path.exists()
-        fm = self.tree.AdataH5.is_valid
+        # umap = self.src.clustering_umap_path.exists()
+        # meta = self.src.cell_metadata_path.exists()
+        fm = self.src.AdataH5.is_valid
         return fm
         # return umap and meta and fm
 
     @property
     def is_viewer(self):
-        return self.tree.ViewerZarr.is_valid
+        return self.src.ViewerZarr.is_valid
 
     # region methods
     def load_adata(self, *, remove_nontargeting: bool = True, load_clustering: bool = True) -> AnnData:
@@ -186,7 +187,7 @@ class G4Xoutput:
         return adata
 
     def load_protein_image(self, protein: str, use_cache: bool | None = None) -> np.ndarray:
-        img_path = self.tree.ProteinDir.existing_files.get(protein)
+        img_path = self.src.ProteinDir.existing_files.get(protein)
         if img_path is None:
             print(f'Protein image for {protein} not found.')
             return None
@@ -195,28 +196,28 @@ class G4Xoutput:
         return io.import_image(img_path=img_path, use_cache=cache)
 
     def load_he_image(self, use_cache: bool | None = None) -> np.ndarray:
-        img_path = self.tree.HnEDir.existing_files['h_and_e/h_and_e']
+        img_path = self.src.HnEDir.existing_files['h_and_e/h_and_e']
         cache = self.use_cache if use_cache is None else use_cache
         return io.import_image(img_path=img_path, use_cache=cache)
 
     def load_nuclear_image(self, use_cache: bool | None = None) -> np.ndarray:
-        img_path = self.tree.HnEDir.existing_files['h_and_e/nuclear']
+        img_path = self.src.HnEDir.existing_files['h_and_e/nuclear']
         cache = self.use_cache if use_cache is None else use_cache
         return io.import_image(img_path=img_path, use_cache=cache)
 
     def load_cytoplasmic_image(self, use_cache: bool | None = None) -> np.ndarray:
-        img_path = self.tree.HnEDir.existing_files['h_and_e/cytoplasmic']
+        img_path = self.src.HnEDir.existing_files['h_and_e/cytoplasmic']
         cache = self.use_cache if use_cache is None else use_cache
         return io.import_image(img_path=img_path, use_cache=cache)
 
     def load_segmentation(self, expanded: bool = True, key: str | None = None) -> np.ndarray:
         key = 'nuclei_exp' if expanded else 'nuclei'
         return io.import_segmentation(
-            seg_path=self.tree.Segmentation.p, expected_shape=self.shape, labels_key=key, use_cache=self.use_cache
+            seg_path=self.src.Segmentation.p, expected_shape=self.shape, labels_key=key, use_cache=self.use_cache
         )
 
     def load_bead_mask(self) -> np.ndarray:
-        return np.load(self.tree.BeadMask.p)['bead_mask']
+        return np.load(self.src.BeadMask.p)['bead_mask']
 
     def load_feature_table(
         self,
@@ -225,7 +226,7 @@ class G4Xoutput:
         columns: list[str] | None = None,
         use_cache: bool = False,
     ) -> 'plDF | plLF':
-        file_path = self.tree.RawFeatures.p
+        file_path = self.src.RawFeatures.p
         return io.import_table(file_path, lazy=lazy, columns=columns, use_cache=use_cache)
 
     def load_transcript_table(
@@ -235,7 +236,7 @@ class G4Xoutput:
         columns: list[str] | None = None,
         use_cache: bool = False,
     ) -> 'plDF | plLF':
-        file_path = self.tree.TranscriptTable.p
+        file_path = self.src.TxTable.p
         return io.import_table(file_path, lazy=lazy, columns=columns, use_cache=use_cache)
 
     def list_content(self, subdir=None):

@@ -1,5 +1,5 @@
+import copy
 import json
-import textwrap
 from pathlib import Path
 from typing import Literal
 
@@ -8,10 +8,11 @@ from .definition import (
     BeadMask,
     CellMetadata,
     CellxGene,
-    CellxProtein,
+    CellxProt,
     ClusteringUmap,
     Dgex,
     HnEDir,
+    Manifest,
     ProteinDir,
     ProteinPanel,
     QCSummary,
@@ -20,8 +21,7 @@ from .definition import (
     SampleSheet,
     Segmentation,
     SingleCellFolder,
-    TranscriptPanel,
-    TranscriptTable,
+    TxTable,
     ViewerZarr,
 )
 
@@ -66,13 +66,13 @@ class FileTree:
             if self.tx_detected:
                 self.raw_validators.extend(
                     [
-                        TranscriptPanel(root=self.smp_dir),
+                        Manifest(root=self.smp_dir),
                         RawFeatures(root=self.smp_dir),
                     ]
                 )
                 self.secondary_validators.extend(
                     [
-                        TranscriptTable(root=self.smp_dir),
+                        TxTable(root=self.smp_dir),
                         CellxGene(root=self.smp_dir),
                     ]
                 )
@@ -86,7 +86,7 @@ class FileTree:
                 )
                 self.secondary_validators.extend(
                     [
-                        CellxProtein(root=self.smp_dir),
+                        CellxProt(root=self.smp_dir),
                     ]
                 )
 
@@ -113,6 +113,9 @@ class FileTree:
             if self.pr_detected
             else 'undefined'
         )
+
+    def copy(self):
+        return copy.deepcopy(self)
 
     @property
     def is_valid_raw(self):

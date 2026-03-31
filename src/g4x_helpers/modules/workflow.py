@@ -1,10 +1,67 @@
 import functools
 import logging
-import sys
+from pathlib import Path
+
+# import sys
+from typing import TYPE_CHECKING
 
 from .. import logging_utils
+from ..io import pathval
 
-# from ..utils import LoggerWriter, setup_logger, validate_path
+if TYPE_CHECKING:
+    from ..schema.validator import BaseValidator
+
+LOGGER = logging.getLogger(__name__)
+DEFAULT_INPUT = '__g4x_default__'
+
+
+def collect_input(
+    smp,
+    path: str,
+    validator: 'BaseValidator',
+    validate: bool = True,
+    logger: logging.Logger | None = None,
+):
+    log = logger or LOGGER
+
+    if path == DEFAULT_INPUT:
+        in_obj = getattr(smp.src, validator.__name__)
+        prefix = 'default'
+    else:
+        path_valid = pathval.validate_file_path(path)
+        in_obj = validator(target_path=path_valid)
+        prefix = 'provided'
+
+    if validate and not in_obj.is_valid:
+        raise ValueError(f'Provided {validator.__name__} is not valid!\nreason: {in_obj.report_validation()}')
+
+    log.debug(f'Using {prefix} {validator.__name__} as input:\n%s%s', logging_utils.PGAP, in_obj.p)
+    return in_obj
+
+
+def prepare_output(
+    smp,
+    out_dir: str,
+    validator: 'BaseValidator',
+    overwrite: bool = False,
+    logger: logging.Logger | None = None,
+):
+    log = logger or LOGGER
+
+    out_obj = getattr(smp.out, validator.__name__)
+    out_obj.root = Path(out_dir)
+    pathval.ensure_parent_dir(out_obj.p)
+
+    if out_obj.path_exists and not overwrite:
+        raise RuntimeError(
+            f'Operation aborted! {validator.__name__} already exists at:\n{logging_utils.PGAP}{out_obj.p}\nUse overwrite=True to ignore this.',
+        )
+
+    suffix = 'overriding existing file' if out_obj.path_exists else 'creating new file'
+    log.debug(
+        f'Using the following path for {validator.__name__} output ({suffix}):\n%s%s', logging_utils.PGAP, out_obj.p
+    )
+    return True
 
 
 def g4x_workflow(func):
@@ -31,6 +88,7 @@ def g4x_workflow(func):
             return result
 
     return wrapper
+
 
 # def workflow(func):
 #     @functools.wraps(func)

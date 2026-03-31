@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 PACKAGE_LOGGER_NAME = __package__ or __name__.split('.')[0]
-
+LOGGER = logging.getLogger(__name__)
 PGAP = 2 * ' ' + '> '
 
 
@@ -14,7 +14,7 @@ def configure_g4x_logging(
     level: int = logging.INFO,
     stream_log: bool = True,
     file_log: bool = False,
-    out_dir: str | Path | None = None,
+    out_dir: str | None = './g4x_helpers/logs',
     append_time: bool = True,
     file_mode: str = 'a',
     clear_handlers: bool = True,
@@ -61,6 +61,29 @@ class G4XFormatter(logging.Formatter):
         return super().format(record)
 
 
-def log_msg_wrapped(header: str, msg: str, logger: logging.Logger, *, level: int = logging.INFO, prefix: str = '    '):
+def log_msg_wrapped(
+    header: str, msg: str, logger: logging.Logger | None = None, *, prefix: str = '    ', level: int = logging.INFO
+):
+    log = logger or LOGGER
+
+    if isinstance(level, str):
+        level = getattr(logging, level.upper())
+
     formatted = textwrap.indent(str(msg), prefix=prefix)
-    logger.log(level, f'{header}\n\n%s', formatted)
+    log.log(level, f'{header}\n%s', formatted)
+
+
+def log_with_path(
+    message: str, path: str, logger: logging.Logger | None = None, *, after_path: str = '', level: int = logging.DEBUG
+):
+    log = logger or LOGGER
+
+    if isinstance(level, str):
+        level = getattr(logging, level.upper())
+
+    msg = message
+    msg += f'\n{PGAP}{path}'
+    if after_path:
+        msg += f'\n{after_path}'
+
+    log.log(level, msg)
