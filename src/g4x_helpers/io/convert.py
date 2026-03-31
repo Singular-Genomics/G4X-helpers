@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -49,7 +50,11 @@ def gdf_to_ndarray(gdf: 'GeoDataFrame', target_shape: tuple) -> np.ndarray:
     return label_array
 
 
-def ndarray_to_gdf(mask: np.ndarray, nudge: bool = True) -> 'GeoDataFrame':
+def ndarray_to_gdf(
+    mask: np.ndarray,
+    nudge: bool = True,
+    show_progress: bool | None = None,
+) -> 'GeoDataFrame':
     from geopandas import GeoDataFrame
 
     if mask.max() == 0:
@@ -67,10 +72,13 @@ def ndarray_to_gdf(mask: np.ndarray, nudge: bool = True) -> 'GeoDataFrame':
 
     regions = skimage.measure.regionprops(mask)
 
+    if show_progress is None:
+        show_progress = sys.stderr.isatty()
+
     geoms = []
     labels = []
     # Wrap the iteration in tqdm to show progress
-    for region in tqdm(regions, desc='Vectorizing regions'):
+    for region in tqdm(regions, desc='Vectorizing regions', disable=not show_progress):
         polys = _region_props_to_polygons(region)
         geoms.extend(polys)
         # add the region label once per polygon

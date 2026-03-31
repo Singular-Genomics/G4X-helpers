@@ -120,7 +120,7 @@ class SampleSheet(BaseValidator):
         return run_section_valid and data_section_valid
 
 
-class TranscriptPanel(BaseValidator):
+class Manifest(BaseValidator):
     DEFAULT_TARGET_PATH = c.TX_PANEL
 
     SCHEMA = ['probe', 'gene_name', 'panel_type']
@@ -195,8 +195,14 @@ class RawFeatures(BaseValidator):
         return lf_schema == self.SCHEMA
 
 
-class TranscriptTable(BaseValidator):
+class TxTable(BaseValidator):
     DEFAULT_TARGET_PATH = c.FILE_TX_TABLE
+
+    def load(self, lazy: bool = False):
+        if self.is_valid:
+            return io.import_table(self.target_path, lazy=lazy)
+        else:
+            return self.validation()
 
 
 # region protein
@@ -299,7 +305,7 @@ class CellxGene(BaseValidator):
             return self.validation()
 
 
-class CellxProtein(BaseValidator):
+class CellxProt(BaseValidator):
     DEFAULT_TARGET_PATH = c.FILE_CELL_X_PROTEIN
     SCHEMA = [c.CELL_ID_NAME]
 
@@ -385,7 +391,7 @@ class SingleCellFolder(BaseValidator):
     SUB_VALIDATORS = [
         CellMetadata(root='.'),
         CellxGene(root='.'),
-        CellxProtein(root='.'),
+        CellxProt(root='.'),
         AdataH5(root='.'),
     ]
 

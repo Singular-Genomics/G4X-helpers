@@ -63,6 +63,7 @@ primer_read_map = {
 # Metadata column names
 CELL_ID_NAME = 'seg_cell_id'
 GENE_ID_NAME = 'gene_id'
+CELL_AREA_NAME = 'cell_area_um'
 CELL_COORD_X = 'cell_x'
 CELL_COORD_Y = 'cell_y'
 
