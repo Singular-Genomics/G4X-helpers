@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import traceback
-from pathlib import Path
+from functools import partial
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
@@ -13,8 +13,9 @@ from anndata import AnnData
 from scipy.sparse import csr_matrix
 
 from .. import c, io
-from ..logging_utils import PGAP
-from ..schema.definition import CellMetadata, CellxGene, CellxProtein, TranscriptPanel
+from .. import logging_utils as logut
+from ..schema.definition import AdataH5, CellMetadata, CellxGene, CellxProt, ClusteringUmap, Dgex, Manifest
+from .workflow import collect_input, prepare_output
 
 if TYPE_CHECKING:
     from anndata import AnnData
@@ -27,7 +28,7 @@ DEFAULT_INPUT = '__g4x_default__'
 DEFAULT_CLUSTERINGS = {'leiden_coarse': (6, 0.25), 'leiden_fine': (12, 0.5)}
 
 DEFAULT_FILTER_CONFIG = [
-    dict(filter_type='cells', alias='area', key='nuclei_area_um', quantile_min=0.01, quantile_max=0.995),
+    dict(filter_type='cells', alias='area', key='cell_area_um', quantile_min=0.01, quantile_max=0.995),
     dict(filter_type='cells', alias='counts', key='total_counts', value_min=10, quantile_max=0.995),
     dict(filter_type='cells', alias='genes', key='n_genes_by_counts', value_min=5),
     dict(filter_type='cells', alias='controls', key='pct_counts_ctrl', value_max=5),
@@ -38,9 +39,10 @@ DEFAULT_FILTER_CONFIG = [
 
 # region workflows
 def init_adata(
-    g4x_obj: 'G4Xoutput',
+    smp: 'G4Xoutput',
     *,
-    tx_panel: str = DEFAULT_INPUT,
+    out_dir: str = DEFAULT_INPUT,
+    manifest: str = DEFAULT_INPUT,
     cell_metadata: str = DEFAULT_INPUT,
     cell_x_gene: str = DEFAULT_INPUT,
     cell_x_protein: str = DEFAULT_INPUT,
@@ -48,52 +50,58 @@ def init_adata(
 ) -> 'AnnData':
 
     log = logger or LOGGER
-    log.info('Creating AnnData object')
+    log.info('Running init_adata')
 
-    log.debug('Validating inputs')
-    tx_panel_obj = _collect_input(g4x_obj, tx_panel, TranscriptPanel)
-    cell_meta_obj = _collect_input(g4x_obj, cell_metadata, CellMetadata)
-    cellxgene_obj = _collect_input(g4x_obj, cell_x_gene, CellxGene)
+    # 1: Validate and collect input
+    manifest_in = collect_input(smp, manifest, Manifest, logger=log)
+    cellmeta_in = collect_input(smp, cell_metadata, CellMetadata, logger=log)
+    cellxgene_in = collect_input(smp, cell_x_gene, CellxGene, logger=log)
 
-    cellxprot_obj = _collect_input(g4x_obj, cell_x_protein, CellxProtein)
-    if not g4x_obj.tree.pr_detected:
-        cell_x_protein = '__absent__'
+    manifest = manifest_in.parse()
+    cellmeta = cellmeta_in.load().sort(c.CELL_ID_NAME)
+    cellxgene = cellxgene_in.load().sort(c.CELL_ID_NAME)
 
-    all_valid = (
-        tx_panel_obj.is_valid
-        and cell_meta_obj.is_valid
-        and cellxgene_obj.is_valid
-        and (cell_x_protein == '__absent__' or cellxprot_obj.is_valid)
-    )
-
-    if not all_valid:
-        raise ValueError('One or more input dataframes are invalid')
-
-    tx_panel = tx_panel_obj.parse()
-    cell_metadata = cell_meta_obj.load()
-    cell_x_gene = cellxgene_obj.load()
-
-    if cell_x_protein != '__absent__':
-        cell_x_protein_df = cellxprot_obj.load()
-        _validate_cell_ids(cell_metadata, cell_x_protein_df, 'CellMetadata', 'CellxProtein')
+    sanitize_cols = [
+        'n_genes_by_counts',
+        'log1p_n_genes_by_counts',
+        'total_counts',
+        'log1p_total_counts',
+        'total_counts_ctrl',
+        'log1p_total_counts_ctrl',
+        'pct_counts_ctrl',
+    ]
+    for col in sanitize_cols:
+        if col in cellmeta.columns:
+            cellmeta = cellmeta.drop(col)
 
     # Ensure that cell IDs match between metadata and expression/protein matrices
-    _validate_cell_ids(cell_metadata, cell_x_gene, 'CellMetadata', 'CellxGene')
+    _validate_cell_ids(cellmeta, cellxgene, 'CellMetadata', 'CellxGene')
 
+    if smp.src.pr_detected:
+        cellxprot_in = collect_input(smp, cell_x_protein, CellxProt, logger=log)
+        cellxprot = cellxprot_in.load().sort(c.CELL_ID_NAME)
+        _validate_cell_ids(cellmeta, cellxprot, 'CellMetadata', 'CellxProt')
+        cellxprot = cellxprot.drop(c.CELL_ID_NAME)
+
+    # 2: Validate and prepare output
+    out_dir = smp.data_dir if out_dir == DEFAULT_INPUT else io.pathval.validate_dir_path(out_dir)
+    prepare_output(smp, out_dir=out_dir, validator=CellMetadata, overwrite=True, logger=log)
+
+    # 3: Set up AnnData object
     log.info('Setting up AnnData components')
     log.debug('Converting cell x gene matrix to sparse format')
-    X = cell_x_gene.drop(c.CELL_ID_NAME).to_numpy().astype(np.uint16)
+    X = cellxgene.drop(c.CELL_ID_NAME).to_numpy().astype(np.uint16)
     X = csr_matrix(X)
 
     log.info('Processing metadata for cells and genes')
-    obs_df = cell_metadata.to_pandas().set_index(c.CELL_ID_NAME)
+    obs_df = cellmeta.to_pandas().set_index(c.CELL_ID_NAME)
     obs_df.index = obs_df.index.astype(str)
 
-    gene_ids = pl.Series(name=c.GENE_ID_NAME, values=cell_x_gene.columns[1:])
+    gene_ids = pl.Series(name=c.GENE_ID_NAME, values=cellxgene.columns[1:])
     var_df = pl.DataFrame(gene_ids).with_columns(pl.lit('tx').alias('modality'))
 
     log.debug('Processing panel type information')
-    probe_type = tx_panel.unique('gene_name').select('gene_name', 'probe_type').rename({'gene_name': c.GENE_ID_NAME})
+    probe_type = manifest.unique('gene_name').select('gene_name', 'probe_type').rename({'gene_name': c.GENE_ID_NAME})
 
     var_df = (
         var_df.join(
@@ -106,33 +114,39 @@ def init_adata(
     )
     var_df.index = var_df.index.astype(str)
 
+    # 4: bring it all together
     log.debug('Initializing AnnData object')
     adata = AnnData(X=X, obs=obs_df, var=var_df)
 
-    if cell_x_protein != '__absent__':
+    if smp.src.pr_detected:
         log.debug('Adding protein data to AnnData object')
-        cell_x_protein_df = cell_x_protein_df.drop(c.CELL_ID_NAME)
-        adata.uns['protein_names'] = [c.removesuffix('_intensity_mean') for c in cell_x_protein_df.columns]
-        adata.obsm['protein'] = cell_x_protein_df.to_numpy()
+        adata.uns['protein_names'] = [c.removesuffix('_intensity_mean') for c in cellxprot.columns]
+        adata.obsm['protein'] = cellxprot.to_numpy()
 
+    # 5: Calculate QC metrics
     log.info('Calculating QC metrics')
     adata.var['ctrl'] = adata.var['probe_type'] != 'targeting'
     sc.pp.calculate_qc_metrics(adata, qc_vars=['ctrl'], inplace=True, percent_top=None)
     adata.var.drop(columns=['ctrl'], inplace=True)
 
-    log.debug('Writing metadata table to CSV:\n%s%s', PGAP, cell_meta_obj.p)
+    # 6: Write cell metadata with updated QC metrics
+    logut.log_with_path(f'Writing {smp.out.CellMetadata.name} table:', smp.out.CellMetadata.p, level='info', logger=log)
     sc_meta = pl.from_pandas(adata.obs, include_index=True).cast({c.CELL_ID_NAME: pl.UInt64})
-    sc_meta.write_csv(cell_meta_obj.p, compression='gzip')
+    sc_meta.write_csv(cellmeta_in.p, compression='gzip')
 
     adata = _sanitize_categorical_columns(adata, threshold=10)
+
+    log.info('Completed init_adata')
     return adata.copy()
 
 
 # TODO add custom output
 def process_sc_output(
-    g4x_obj: 'G4Xoutput',
+    smp: 'G4Xoutput',
     adata: 'AnnData',
+    out_dir: str = DEFAULT_INPUT,
     *,
+    overwrite: bool = False,
     filter_panel: 'FilterPanel' | None = None,
     cluster_attempts: int = 10,
     rnd_st: int = 111,
@@ -141,6 +155,16 @@ def process_sc_output(
 ):
     log = logger or LOGGER
     backend = io.get_backend(which=compute_backend)
+
+    # Validate and prepare output, set up reusable functions
+    out_dir = smp.data_dir if out_dir == DEFAULT_INPUT else io.pathval.validate_dir_path(out_dir)
+    prep_out = partial(prepare_output, smp, out_dir, overwrite=overwrite, logger=log)
+    log_with_path = partial(logut.log_with_path, logger=log, level='info')
+    write_dummys = partial(write_dummy_clustering_outputs, adata=adata, smp=smp, logger=log)
+
+    prep_out(validator=AdataH5)
+    prep_out(validator=Dgex)
+    prep_out(validator=ClusteringUmap)
 
     # 1. Filter AnnData object
     if filter_panel is None:
@@ -151,7 +175,7 @@ def process_sc_output(
 
     if adata.n_obs == 0 or adata.n_vars == 0:
         log.warning('No cells or genes passed the filtering criteria.')
-        write_dummy_clustering_outputs(g4x_obj, adata=adata_init, failure_code='filter_not_passed')
+        write_dummys(adata=adata_init, failure_code='filter_not_passed')
         return
     del adata_init
 
@@ -160,7 +184,7 @@ def process_sc_output(
         adata = pre_process_adata(adata=adata, compute_backend=backend, logger=log)
     except Exception as e:
         log.warning(f'Preprocessing failed: {e}')
-        write_dummy_clustering_outputs(g4x_obj, adata=adata, failure_code='preprocessing_failed')
+        write_dummys(failure_code='preprocessing_failed')
         return
 
     # 3. Optimize Leiden clusters (CPU/GPU) split path
@@ -184,28 +208,31 @@ def process_sc_output(
 
     if not success_clusterings:
         log.warning('No successful clusterings to run differential gene expression analysis.')
-        write_dummy_clustering_outputs(g4x_obj, adata=adata, failure_code='clustering_failed')
+        write_dummys(failure_code='clustering_failed')
         return
+
+    # Move AnnData object to CPU for downstream processing
+    backend.rsc.get.anndata_to_CPU(adata)
 
     # 4. Generate UMAP and clustering dataframes
     umap_df = pl.from_numpy(adata.obsm['X_umap'], schema={'UMAP1': pl.Float32, 'UMAP2': pl.Float32})
     leiden_df = pl.from_pandas(adata.obs[success_clusterings], include_index=True)
     clustering_umap = leiden_df.hstack(umap_df)
-    clustering_umap.write_csv(g4x_obj.tree.ClusteringUmap.p, compression='gzip')
-    log.debug('Writing clustering UMAP table to CSV:\n%s%s', PGAP, g4x_obj.tree.ClusteringUmap.p)
 
-    backend.rsc.get.anndata_to_CPU(adata)
-    adata.write(g4x_obj.tree.AdataH5.p)
-    log.debug('Writing AnnData object to H5AD:\n%s%s', PGAP, g4x_obj.tree.AdataH5.p)
+    log_with_path(f'Writing {smp.out.ClusteringUmap.name} table:', smp.out.ClusteringUmap.p)
+    clustering_umap.write_csv(smp.out.ClusteringUmap.p, compression='gzip')
+
+    log_with_path(f'Writing {smp.out.AdataH5.name} h5ad:', smp.out.AdataH5.p)
+    adata.write(smp.out.AdataH5.p)
 
     # 5. Run differential gene expression analysis
     try:
         dgex = run_dgex(adata, cluster_keys=success_clusterings, downsample=1000, logger=log)
-        dgex.write_csv(g4x_obj.tree.Dgex.p, compression='gzip')
-        log.debug('Writing dgex table to CSV:\n%s%s', PGAP, g4x_obj.tree.Dgex.p)
+        log_with_path(f'Writing {smp.out.Dgex.name} table:', smp.out.Dgex.p)
+        dgex.write_csv(smp.out.Dgex.p, compression='gzip')
     except Exception as e:
         log.warning(f'Failed to run differential gene expression analysis: {e}')
-        write_dummy_clustering_outputs(g4x_obj, adata=adata, failure_code='dgex_failed')
+        write_dummys(failure_code='dgex_failed')
 
 
 # region processing
@@ -607,49 +634,58 @@ def _reorder_clusters_by_size(obs: pd.DataFrame, key: str, prefix: str = 'C') ->
 
 
 def write_dummy_clustering_outputs(
-    g4x_obj,
+    smp,
     *,
     adata,
-    out_dir: str = '__g4x_default__',
     success_clusterings: list[str] = [],
     failure_code: str = 'failed',
+    logger: logging.Logger | None = None,
 ) -> None:
-    out_dir = g4x_obj.data_dir if out_dir == '__g4x_default__' else Path(out_dir)
 
-    if 'X_umap' in adata.obsm:
-        print('X_umap was found')
-        umap = adata.obsm['X_umap']
-    else:
-        print('X_umap was not found, filling with NaNs')
+    log = logger or LOGGER
+    log.info('Filling missing outputs with placeholders due to failure code: %s', failure_code)
+
+    # 1: Clustering / UMAP table
+    if 'X_umap' not in adata.obsm:
+        log.debug('X_umap was not found, filling with NaNs')
         umap = np.full((adata.n_obs, 2), np.nan)
+    else:
+        umap = adata.obsm['X_umap']
 
+    # get the adata.obs
     obs_df = pl.from_pandas(adata.obs, include_index=True).cast({c.CELL_ID_NAME: pl.UInt64})
     dummy_clust = obs_df.select([c.CELL_ID_NAME] + success_clusterings)
-
-    umap = adata.obsm['X_umap']
 
     dummy_clust = dummy_clust.with_columns(
         UMAP1=umap[:, 0],
         UMAP2=umap[:, 1],
     )
 
+    # add a default clustering if none were successful
     if not success_clusterings:
+        log.debug('No successful clusterings found, adding default label "unassigned" for all cells')
         dummy_clust = dummy_clust.with_columns(leiden=pl.lit('unassigned'))
         success_clusterings.append('leiden')
 
     dummy_clust = dummy_clust.with_columns(failure_code=pl.lit(failure_code))
 
+    # select the relevant columns for the output
     col_select = [c.CELL_ID_NAME] + success_clusterings + ['UMAP1', 'UMAP2', 'failure_code']
     dummy_clust = dummy_clust.select(col_select)
-    dummy_clust.write_csv(out_dir / g4x_obj.tree.ClusteringUmap.target_rel, compression='gzip')
 
-    dummy_dgex = pl.DataFrame(schema=g4x_obj.tree.Dgex.SCHEMA)
+    # 2: Dgex table
+    dummy_dgex = pl.DataFrame(schema=smp.src.Dgex.SCHEMA)
     null_row = pl.DataFrame({col: pl.Series([None], dtype=dummy_dgex.schema[col]) for col in dummy_dgex.columns})
-
     dummy_dgex = dummy_dgex.vstack(null_row).with_columns(failure_code=pl.lit(failure_code))
-    dummy_dgex.write_csv(out_dir / g4x_obj.tree.Dgex.target_rel, compression='gzip')
 
-    adata.write(out_dir / g4x_obj.tree.AdataH5.target_rel)
+    msg = str(smp.out.ClusteringUmap.p) + '\n'
+    msg += str(smp.out.Dgex.p) + '\n'
+    msg += str(smp.out.AdataH5.p)
+
+    logut.log_msg_wrapped(header='Writing clustering outputs with placeholders', msg=msg, prefix=logut.PGAP, logger=log)
+    dummy_clust.write_csv(smp.out.ClusteringUmap.p, compression='gzip')
+    dummy_dgex.write_csv(smp.out.Dgex.p, compression='gzip')
+    adata.write(smp.out.AdataH5.p)
 
 
 def _sanitize_categorical_columns(adata, threshold: int = 10):
@@ -685,9 +721,9 @@ def _subset_adata_by_key(adata, key='leiden', n_per_group=1000):
     return adata[sampled_idx].copy()
 
 
-def _collect_input(g4x_obj: 'G4Xoutput', path: str, validator: 'BaseValidator'):
+def _collect_input(smp: 'G4Xoutput', path: str, validator: 'BaseValidator'):
     if path == DEFAULT_INPUT:
-        in_obj = getattr(g4x_obj.tree, validator.__name__)
+        in_obj = getattr(smp.src, validator.__name__)
     else:
         in_obj = validator(target_path=path)
     return in_obj
