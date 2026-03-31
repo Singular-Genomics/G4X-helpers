@@ -11,7 +11,7 @@ from .setup import create_array, populate_zarr_metadata
 LOGGER = logging.getLogger(__name__)
 
 
-def write_cells(smp, root_group, prechew: None = None, logger: logging.Logger | None = None):
+def write_cells(smp, root_group, prechew: None = None, overwrite: bool = False, logger: logging.Logger | None = None):
     log = LOGGER or logger
 
     log.info('Preparing cell data')
@@ -30,11 +30,14 @@ def write_cells(smp, root_group, prechew: None = None, logger: logging.Logger | 
         metadata, gex, gene_names = prechew
 
     log.info('Writing cell metadata arrays')
-    # write arrays for each attribute
+    for key in ['cell_id', 'area', 'cluster_id', 'total_counts', 'total_genes', 'umap']:
+        if overwrite and key in metadata_group:
+            del metadata_group[key]
+
     arr = metadata[c.CELL_ID_NAME].to_numpy().astype(np.uint32)
     create_array(metadata_group, 'cell_id', data=arr, compressor=compressor)
 
-    arr = metadata['wholecell_area_um'].to_numpy().astype(np.uint16)
+    arr = metadata[c.CELL_AREA_NAME].to_numpy().astype(np.uint16)
     create_array(metadata_group, 'area', data=arr, compressor=compressor)
 
     arr = metadata['leiden_fine'].to_numpy().astype('U10')
@@ -46,16 +49,26 @@ def write_cells(smp, root_group, prechew: None = None, logger: logging.Logger | 
     arr = metadata['n_genes_by_counts'].to_numpy().astype(np.uint16)
     create_array(metadata_group, 'total_genes', data=arr, compressor=compressor)
 
+    arr = (
+        metadata.select(['UMAP1', 'UMAP2']).rename({'UMAP1': 'umap_1', 'UMAP2': 'umap_2'}).to_numpy().astype(np.float16)
+    )
+    create_array(metadata_group, 'umap', data=arr, compressor=compressor)
+
+    log.info('Writing cell protein arrays')
+    for key in ['protein_values', 'protein_names']:
+        if overwrite and key in protein_group:
+            del protein_group[key]
+
     protein_df = metadata.select(*[c for c in metadata.columns if '_intensity_mean' in c])
     arr = protein_df.to_numpy().astype(np.uint16)
     create_array(protein_group, 'protein_values', data=arr, compressor=compressor)
     protein_names = np.array([s.removesuffix('_intensity_mean') for s in protein_df.columns]).astype('U50')
     create_array(protein_group, 'protein_names', data=protein_names, compressor=compressor)
 
-    arr = (
-        metadata.select(['UMAP1', 'UMAP2']).rename({'UMAP1': 'umap_1', 'UMAP2': 'umap_2'}).to_numpy().astype(np.float16)
-    )
-    create_array(metadata_group, 'umap', data=arr, compressor=compressor)
+    log.info('Writing cell polygon arrays')
+    for key in ['polygon_offsets', 'polygon_vertices_xy']:
+        if overwrite and key in polygon_group:
+            del polygon_group[key]
 
     # write ragged array of polygon vertices
     x_vert = metadata['vert_x'].to_numpy()
@@ -73,6 +86,11 @@ def write_cells(smp, root_group, prechew: None = None, logger: logging.Logger | 
 
     create_array(polygon_group, 'polygon_offsets', data=offsets, compressor=compressor)
     create_array(polygon_group, 'polygon_vertices_xy', data=verts_xy, compressor=compressor)
+
+    log.info('Writing cell gene expression arrays')
+    for key in ['data', 'indices', 'indptr', 'gene_names']:
+        if overwrite and key in genes_group:
+            del genes_group[key]
 
     uids = sort_clusters(metadata, key='leiden_fine')
     populate_zarr_metadata(root_group, gene_mtx_shape=gex.shape, cluster_ids=generate_cluster_palette(uids))
@@ -101,9 +119,9 @@ def sort_clusters(metadata, key='cluster_id'):
 def prepare_cell_group_input(smp):
     from scipy.sparse import csr_matrix
 
-    cell_metadata = smp.tree.CellMetadata.load()
-    cell_x_gene = smp.tree.CellxGene.load()
-    cell_x_protein = smp.tree.CellxProtein.load()
+    cell_metadata = smp.src.CellMetadata.load()
+    cell_x_gene = smp.src.CellxGene.load()
+    cell_x_protein = smp.src.CellxProt.load()
 
     if not cell_metadata[c.CELL_ID_NAME].equals(cell_x_protein[c.CELL_ID_NAME]):
         raise ValueError('Cell IDs in metadata and protein table do not match')
@@ -120,7 +138,7 @@ def prepare_cell_group_input(smp):
 
     # 2: extract cell vertices
     # mask = smp.load_segmentation(expanded=True)
-    vertices = extract_vertices_cached(smp.tree.Segmentation.p, shape=smp.shape)
+    vertices = extract_vertices_cached(smp.src.Segmentation.p, shape=smp.shape)
     # del mask
 
     cell_metadata = cell_metadata.join(cell_x_protein, on=c.CELL_ID_NAME)
@@ -129,65 +147,12 @@ def prepare_cell_group_input(smp):
     cell_metadata = cell_metadata.join(vertices, on=c.CELL_ID_NAME)
     del vertices
 
-    clust_umap = pl.read_csv(smp.tree.ClusteringUmap.p)
+    clust_umap = pl.read_csv(smp.src.ClusteringUmap.p)
     # cluster_cols = [c for c in clust_umap.columns if 'leiden_' in c]
 
     cell_metadata = cell_metadata.join(clust_umap, on=c.CELL_ID_NAME, how='left')
     cell_metadata = cell_metadata.with_columns(pl.col('^leiden_.*$').fill_null('unassigned'))
     return cell_metadata, gex, gene_names
-
-
-# def prepare_cell_group_input(smp):
-#     # 1: create fresh adata with qc-values
-#     tx_panel = smp.tree.TranscriptPanel.p
-#     cell_metadata = smp.tree.CellMetadata.p
-#     cell_x_gene = smp.tree.CellxGene.p
-
-#     adata = single_cell.init_adata(smp, tx_panel=tx_panel, cell_metadata=cell_metadata, cell_x_gene=cell_x_gene)
-
-#     gex = adata.X
-#     del cell_x_gene
-#     gene_names = adata.var_names
-
-#     # 2: extract cell vertices
-#     mask = smp.load_segmentation(expanded=True)
-#     vertices = extract_vertices(mask)
-#     del mask
-
-#     # 3: create metadata dataframe
-#     obs_df = (
-#         pl.from_pandas(adata.obs, include_index=True)
-#         .drop('tissue_type', 'block', 'seg_source')
-#         .cast({c.CELL_ID_NAME: pl.UInt32})
-#     )
-#     del adata
-
-#     metadata = obs_df.join(vertices, on=c.CELL_ID_NAME)
-#     metadata = metadata.sort(c.CELL_ID_NAME)
-#     del obs_df, vertices
-
-#     # 4: load clustering and UMAP coordinates
-#     clust_umap = pl.read_csv(
-#         smp.tree.ClusteringUmap.p,
-#         schema={
-#             'idx': pl.UInt16,
-#             c.CELL_ID_NAME: pl.UInt32,
-#             'leiden_1.00': pl.Utf8,
-#             'UMAP1': pl.Float32,
-#             'UMAP2': pl.Float32,
-#         },
-#     )
-#     clust_umap = clust_umap.rename({'leiden_1.00': 'cluster_id'})  # TODO this is hard coded right now
-
-#     metadata = metadata.join(clust_umap, on=c.CELL_ID_NAME, how='left')
-#     metadata = metadata.with_columns(pl.col('cluster_id').fill_null('unassigned'))
-
-#     # 5: load protein data if available
-#     if smp.tree.pr_detected:
-#         protein_data = pl.read_csv(smp.data_dir / 'single_cell_data' / 'cell_by_protein.csv.gz')
-#         metadata = metadata.join(protein_data, on=c.CELL_ID_NAME, how='left')
-
-#     return metadata, gex, gene_names
 
 
 def generate_cluster_palette(ordered_unique_clusters: list, max_colors: int = 256) -> dict:

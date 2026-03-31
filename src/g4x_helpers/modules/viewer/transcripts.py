@@ -21,8 +21,7 @@ LOGGER = logging.getLogger(__name__)
 def write_transcripts(
     g4x_obj: 'G4Xoutput',
     root_group: 'zGroup',
-    gene_metadata=None,
-    override: bool = False,
+    overwrite: bool = False,
     logger: logging.Logger | None = None,
 ) -> None:
 
@@ -82,7 +81,7 @@ def write_transcripts(
     log.info('Writing transcript data')
     tx_group = root_group['transcripts']
 
-    write_tx_zarr(tx_group, pyramid, override=override)
+    write_tx_zarr(tx_group, pyramid, overwrite=overwrite)
 
 
 def choose_square_tiling(
@@ -144,7 +143,7 @@ def construct_tile_dfs(df: pl.DataFrame, pyramid: dict[int, dict[str, Any]]) -> 
 
 
 def write_tx_zarr(
-    tx_group: 'zGroup', pyramid: dict[int, dict[str, Any]], override: bool = False, logger: logging.Logger | None = None
+    tx_group: 'zGroup', pyramid: dict[int, dict[str, Any]], overwrite: bool = False, logger: logging.Logger | None = None
 ):
     log = LOGGER or logger
     compressor = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
@@ -172,17 +171,17 @@ def write_tx_zarr(
             cell_ids = all_cell_ids[idx].astype(np.int32)
 
             for key, arr in [('position', coords), ('gene_name', gene_names), ('cell_id', cell_ids)]:
-                if override and key in tile_group:
+                if overwrite and key in tile_group:
                     del tile_group[key]
                 create_array(tile_group, key, data=arr, compressor=compressor)
 
 
 def get_gene_metadata(g4x_obj, ):
     
-    tx_panel = g4x_obj.tree.TranscriptPanel.parse()
+    tx_panel = g4x_obj.src.Manifest.parse()
     
-    if g4x_obj.tree.Dgex.is_valid:
-        dgex = g4x_obj.tree.Dgex.load()
+    if g4x_obj.src.Dgex.is_valid:
+        dgex = g4x_obj.src.Dgex.load()
 
         leiden_result = (
             dgex.unique(['leiden_res', 'cluster_id'])
