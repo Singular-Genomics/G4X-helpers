@@ -21,7 +21,7 @@ LOGGER = logging.getLogger(__name__)
 def write_transcripts(
     g4x_obj: 'G4Xoutput',
     root_group: 'zGroup',
-    colors=None,
+    gene_metadata=None,
     override: bool = False,
     logger: logging.Logger | None = None,
 ) -> None:
@@ -29,9 +29,18 @@ def write_transcripts(
     log = LOGGER or logger
     log.info('Preparing transcript data')
 
-    aggregation_level = 'gene_name'
+    aggregation_level = c.GENE_ID_NAME
     keep_cols = ['x_pixel_coordinate', 'y_pixel_coordinate', c.CELL_ID_NAME, aggregation_level]
     lf = g4x_obj.load_transcript_table(lazy=True, columns=keep_cols)
+
+    gene_list = lf.unique(c.GENE_ID_NAME).sort(c.GENE_ID_NAME).collect()[c.GENE_ID_NAME].to_list()
+
+    gene_metadata = get_gene_metadata(g4x_obj)
+    
+    unavailable_genes = [g for g in gene_list if g not in gene_metadata]
+    if unavailable_genes:
+        raise ValueError(f'The following genes are missing from the gene metadata: {unavailable_genes}')
+
     df = lf.collect()
 
     img_resolution = g4x_obj.shape
@@ -55,18 +64,9 @@ def write_transcripts(
 
     pyramid = construct_tile_dfs(df, pyramid)
 
-    # # contstruct gene_list
-    # gene_list = lf.unique('gene_name').sort('gene_name').collect()['gene_name'].to_list()
 
-    # N = len(gene_list)  # number of colors
-    # colors = np.random.randint(0, 256, size=(N, 3), dtype=np.uint8)
-    # gene_colors = {g: c.tolist() for g, c in zip(gene_list, colors)}
 
-    gene_colors = {}
-    for g in colors.iter_rows(named=True):
-        gene_colors[g['gene_id']] = hex_to_rgb(g['hex'])
-
-    # gene_colors
+    gene_colors = {k: v['color'] for k, v in gene_metadata.items()}
 
     # populate attrs
     layer_config = {
@@ -154,7 +154,7 @@ def write_tx_zarr(
         tile_df = pyramid[level]['tile_df']
         all_coords = tile_df.select(['x_pixel_coordinate', 'y_pixel_coordinate']).to_numpy()
         all_cell_ids = tile_df.select(c.CELL_ID_NAME).to_numpy()
-        all_gene_names = tile_df.select('gene_name').to_numpy()
+        all_gene_names = tile_df.select(c.GENE_ID_NAME).to_numpy()
         all_tile_ids = tile_df.select(['tile_y', 'tile_x']).to_numpy()
 
         tile_ids = tile_df.unique(['tile_y', 'tile_x'], maintain_order=True).select(['tile_y', 'tile_x']).to_numpy()
@@ -171,24 +171,54 @@ def write_tx_zarr(
             gene_names = all_gene_names[idx].astype('U10')
             cell_ids = all_cell_ids[idx].astype(np.int32)
 
-            if override:
-                for key in ['position', 'gene_name', 'cell_id']:
-                    if key in tile_group:
-                        del tile_group[key]
+            for key, arr in [('position', coords), ('gene_name', gene_names), ('cell_id', cell_ids)]:
+                if override and key in tile_group:
+                    del tile_group[key]
+                create_array(tile_group, key, data=arr, compressor=compressor)
 
-            create_array(tile_group, 'position', data=coords, compressor=compressor)
-            create_array(tile_group, 'gene_name', data=gene_names, compressor=compressor)
-            create_array(tile_group, 'cell_id', data=cell_ids, compressor=compressor)
+
+def get_gene_metadata(g4x_obj, ):
+    
+    tx_panel = g4x_obj.tree.TranscriptPanel.parse()
+    
+    if g4x_obj.tree.Dgex.is_valid:
+        dgex = g4x_obj.tree.Dgex.load()
+
+        leiden_result = (
+            dgex.unique(['leiden_res', 'cluster_id'])
+            .group_by(['leiden_res'])
+            .agg(pl.len())
+            .sort('len')
+            .head(1)['leiden_res']
+            .item()
+        )
+        
+        dgex = dgex.filter(pl.col('leiden_res') == leiden_result)
+        dgex_fil = dgex.filter(pl.col('score') > 0)
+
+        assignments = assign_colors_to_clusters(dgex_fil)
+        colors = complete_panel_colors(tx_panel=tx_panel, assignments=assignments)
+
+        gene_metadata = {}
+        for g in colors.iter_rows(named=True):
+            gene_metadata[g['gene_id']] = {'color': hex_to_rgb(g['hex'])}
+    else:
+        gene_list = tx_panel['gene_name'].unique().sort().to_list()
+
+        N = len(gene_list)  # number of colors
+        colors = np.random.randint(0, 256, size=(N, 3), dtype=np.uint8)
+        gene_metadata = {g: {'color': tuple(c.tolist())} for g, c in zip(gene_list, colors)}
+        gene_metadata
+
+    return gene_metadata
 
 
 # region colors
 def hex_to_rgb(hex_color):
-    hex_color = hex_color.lstrip("#")
-    
-    return tuple(
-        int(hex_color[i:i+2], 16)
-        for i in (0, 2, 4)
-    )
+    hex_color = hex_color.lstrip('#')
+
+    return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+
 
 def hsv_to_hex(h, s, v):
     # wrap hue into [0,1]
