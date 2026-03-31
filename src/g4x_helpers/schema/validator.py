@@ -24,18 +24,13 @@ class BaseValidator:
     ):
         self.name = type(self).__name__  # + 'Validator'
         self.root = Path(root) if root is not None else None
+        self.resolve = resolve
         
         tpath_str = str(target_path) if target_path is not None else str(type(self).DEFAULT_TARGET_PATH)
         tpath_str = tpath_str.format(**format)
 
         self._target_path = Path(tpath_str)
         
-        if self.root is not None:
-            self._target_path = self.root / self._target_path
-
-        if resolve:
-            self._target_path = self._target_path.resolve(strict=False)
-
         self.validate_absence = validate_absence
 
     @classmethod
@@ -56,7 +51,15 @@ class BaseValidator:
 
     @property
     def target_path(self):
-        return self._target_path.expanduser()
+        if self.root is not None:
+            complete_path = self.root / self._target_path
+        else:
+            complete_path = self._target_path
+        
+        if self.resolve:
+            complete_path = complete_path.resolve(strict=False)
+        
+        return complete_path.expanduser()
 
     @property
     def p(self):
