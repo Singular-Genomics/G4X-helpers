@@ -1,10 +1,12 @@
 import logging
+import textwrap
 from datetime import datetime
 from pathlib import Path
 
 PACKAGE_LOGGER_NAME = __package__ or __name__.split('.')[0]
 
 PGAP = 2 * ' ' + '> '
+
 
 def configure_g4x_logging(
     *,
@@ -57,3 +59,8 @@ class G4XFormatter(logging.Formatter):
     def format(self, record):
         record.g4x_name = f'g4x.{record.name.split(".")[-1]}'
         return super().format(record)
+
+
+def log_msg_wrapped(header: str, msg: str, logger: logging.Logger, *, level: int = logging.INFO, prefix: str = '    '):
+    formatted = textwrap.indent(str(msg), prefix=prefix)
+    logger.log(level, f'{header}\n\n%s', formatted)

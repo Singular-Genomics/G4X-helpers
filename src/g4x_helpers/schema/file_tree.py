@@ -130,9 +130,6 @@ class FileTree:
     def reports(self):
         return {v.name: v.validation() for v in self.validators}
 
-    def _return_indent(self, msg, prefix='    '):
-        return textwrap.indent(msg, prefix=prefix)
-
     def _val_report_minimal(self, raw_only: bool = True, report_pass: bool = True, raise_exception: bool = True):
         gate = self.is_valid_raw if raw_only else self.is_valid_all
         what = 'raw' if raw_only else 'all'
@@ -178,7 +175,6 @@ class FileTree:
         raw_only: bool = False,
         report_pass: bool = True,
         raise_exception: bool = True,
-        indent: str = '    ',
     ):
         if format == 'verbose':
             msg = self._val_report_verbose(raw_only=raw_only, raise_exception=raise_exception)
@@ -190,7 +186,7 @@ class FileTree:
         if msg is None:
             return None
 
-        return self._return_indent(msg, prefix=indent)
+        return msg
 
 
 class ValidationError(Exception):
