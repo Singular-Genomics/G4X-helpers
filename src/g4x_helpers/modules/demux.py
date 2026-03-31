@@ -21,12 +21,14 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 log_p_gap = 2 * ' ' + '> '
 
+DEFAULT_INPUT = '__g4x_default__'
+
 
 # @g4x_workflow
 def demux_raw_features(
     g4x_obj: 'G4Xoutput',
-    manifest: str = '__g4x_default__',
-    out_dir: str = '__g4x_default__',
+    manifest: str = DEFAULT_INPUT,
+    out_dir: str = DEFAULT_INPUT,
     *,
     override: bool = False,
     batch_size: int = c.DEFAULT_BATCH_SIZE,
@@ -36,43 +38,46 @@ def demux_raw_features(
 
     log = logger or LOGGER
 
-    if out_dir == '__g4x_default__':
+    if out_dir == DEFAULT_INPUT:
         out_dir = g4x_obj.data_dir
     else:
         out_dir = io.pathval.validate_dir_path(out_dir)
+        g4x_obj.tree.TranscriptTable.root = out_dir
 
     log.info('Demux output directory:\n%s%s', log_p_gap, out_dir)
 
-    tx_table_out = out_dir / g4x_obj.tree.TranscriptTable.DEFAULT_TARGET_PATH
-    tx_table_out = io.pathval.ensure_parent_dir(tx_table_out)
+    io.pathval.ensure_parent_dir(g4x_obj.tree.TranscriptTable.p)
+    tx_table_obj = g4x_obj.tree.TranscriptTable
 
-    if tx_table_out.exists() and not override:
+    if tx_table_obj.path_exists and not override:
         log.warning(
-            f'Operation aborted! Transcript table already exists at {tx_table_out}. Use override=True to replace it.'
+            f'Operation aborted! Transcript table already exists at {tx_table_obj.p}. Use override=True to replace it.'
         )
         return
 
-    if manifest == '__g4x_default__':
+    if manifest == DEFAULT_INPUT:
         log.debug('Using default transcript panel from G4X-output')
-        tx_panel_file = g4x_obj.tree.TranscriptPanel
-        tx_panel = tx_panel_file.parse()
+        tx_panel_in = g4x_obj.tree.TranscriptPanel
     else:
-        manifest_path = io.pathval.validate_file_path(manifest)
-        tx_panel_file = TranscriptPanel(manifest_path)
+        manifest_valid = io.pathval.validate_file_path(manifest)
+        tx_panel_in = TranscriptPanel(manifest_valid)
 
-        if tx_panel_file.is_valid:
-            log.debug('Using provided transcript panel:\n%s%s', log_p_gap, tx_panel_file.p)
+        if tx_panel_in.is_valid:
+            log.debug('Using provided transcript panel:\n%s%s', log_p_gap, tx_panel_in.p)
         else:
-            raise ValueError(f'Provided transcript panel is not valid!\nreason: {tx_panel_file.report_validation()}')
+            raise ValueError(f'Provided transcript panel is not valid!\nreason: {tx_panel_in.report_validation()}')
 
-        tx_panel = tx_panel_file.parse()
+        g4x_obj.tree.TranscriptPanel.root = out_dir
 
-        manifest_new_path = out_dir / g4x_obj.tree.TranscriptPanel.DEFAULT_TARGET_PATH
-        if manifest_new_path != manifest_path:
-            if manifest_new_path.exists() and not override:
-                log.warning(f'Transcript panel already exists at {manifest_new_path}. Use override=True to replace it.')
-            else:
-                shutil.copy(manifest_path, manifest_new_path)
+        if g4x_obj.tree.TranscriptPanel.path_exists and not override:
+            log.warning(
+                f'Operation aborted! Transcript panel already exists at {g4x_obj.tree.TranscriptPanel.p}. Use override=True to replace it.'
+            )
+            return
+        else:
+            shutil.copy(tx_panel_in.p, g4x_obj.tree.TranscriptPanel.p)
+
+    tx_panel = tx_panel_in.parse()
 
     log.info('Starting batched demuxing of raw features')
     if show_progress is None:
@@ -95,8 +100,8 @@ def demux_raw_features(
         tx_table = tx_table.filter(pl.col('demuxed')).drop('demuxed')
 
         # Write the transcript table to a CSV file
-        log.info('Writing transcript table to CSV:\n%s%s', log_p_gap, tx_table_out)
-        tx_table.sink_csv(tx_table_out, compression='gzip')
+        log.info('Writing transcript table to CSV:\n%s%s', log_p_gap, tx_table_obj.p)
+        tx_table.sink_csv(tx_table_obj.p, compression='gzip')
 
     finally:
         # Remove temporary demux batches
@@ -220,7 +225,7 @@ def demux(
     reads = reads.with_columns(
         [
             pl.Series('probe_name', transcripts),
-            pl.Series('gene_name', transcript_condensed),
+            pl.Series(c.GENE_ID_NAME, transcript_condensed),
             pl.Series('demuxed', demuxed),
         ]
     )
