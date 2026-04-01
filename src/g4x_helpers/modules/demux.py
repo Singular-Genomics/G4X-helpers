@@ -47,6 +47,7 @@ def demux_raw_features(
 
     prepare_output(smp, out_dir, validator=TxTable, overwrite=overwrite, logger=log)
     prepare_output(smp, out_dir, validator=Manifest, overwrite=overwrite, logger=log)
+
     if manifest != DEFAULT_INPUT:
         shutil.copy(manifest_in.p, smp.out.Manifest.p)
 
@@ -75,6 +76,8 @@ def demux_raw_features(
         # 5: Write the demuxed transcript table
         logut.log_with_path(f'Writing {smp.out.TxTable.name} table:', smp.out.TxTable.p, level='info', logger=log)
         tx_table.sink_csv(smp.out.TxTable.p, compression='gzip')
+
+        smp.set_genes()
 
     # 6: Remove temporary demux batches
     finally:

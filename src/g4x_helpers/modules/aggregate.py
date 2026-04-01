@@ -25,13 +25,13 @@ LOGGER = logging.getLogger(__name__)
 def aggregate_cell_data(
     smp: 'G4Xoutput',
     segmentation_mask: str = DEFAULT_INPUT,
+    mask_key: str | None = DEFAULT_MASK_KEY,
     *,
     out_dir: str = DEFAULT_INPUT,
     tx_table: str = DEFAULT_INPUT,
+    overwrite: bool = False,
     gene_list: list[str] = DEFAULT_INPUT,
     protein_list: list[str] = DEFAULT_INPUT,
-    mask_key: str | None = DEFAULT_MASK_KEY,
-    overwrite: bool = False,
     show_progress: bool | None = None,
     logger: logging.Logger | None = None,
 ) -> None:
@@ -43,12 +43,6 @@ def aggregate_cell_data(
     txtable_in = collect_input(smp, tx_table, TxTable, logger=log)
     # TODO maybe reconsider validation methods for this validator
     segment_in = collect_input(smp, segmentation_mask, Segmentation, validate=False, logger=log)
-
-    protein_list = smp.proteins if protein_list == DEFAULT_INPUT else protein_list
-    if protein_list:
-        unavailable_proteins = [p for p in protein_list if p not in smp.proteins]
-        if unavailable_proteins:
-            raise ValueError(f'The following requested proteins are not available in this data: {unavailable_proteins}')
 
     # 2: Validate and prepare output
     out_dir = smp.data_dir if out_dir == DEFAULT_INPUT else io.pathval.validate_dir_path(out_dir)
@@ -96,11 +90,14 @@ def aggregate_cell_data(
         )
 
     # 6: Create cell x protein matrix (optional)
-    if protein_list:
+    if smp.src.pr_detected:
+        if protein_list != DEFAULT_INPUT:
+            smp.set_proteins(protein_list)
+
         cell_x_protein = create_cell_x_signal(
             smp=smp,
             mask=mask,
-            signal_list=protein_list,
+            signal_list=smp.proteins,
             logger=log,
         )
 

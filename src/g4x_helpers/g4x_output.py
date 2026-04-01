@@ -45,17 +45,8 @@ class G4Xoutput:
         self.cache = {}
 
         self.stains = [c.NUCLEAR_STAIN, c.CYTOPLASMIC_STAIN]
-        self.genes = []
-        if self.src.tx_detected:
-            tx_panel = self.src.Manifest.parse()
-            tx_panel = tx_panel.sort(by=['probe_type', 'probe'], descending=[True, False])
-            self.genes = tx_panel['gene_name'].unique(maintain_order=True).to_list()
-
-        self.proteins = []
-        if self.src.pr_detected:
-            protein_panel = pl.read_csv(self.src.ProteinPanel.p)
-            protein_panel.sort(by=['panel_type', pl.col('target').str.to_lowercase()], descending=[True, False])
-            self.proteins = self.sort_proteins(protein_panel['target'].to_list())
+        self.set_genes()
+        self.set_proteins()
 
     ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ###
     # region dunder
@@ -116,6 +107,37 @@ class G4Xoutput:
         for k in static_attrs:
             setattr(self, k, self.smp_meta.get(k, 'unknown'))
 
+    def set_genes(self, genes: list[str] | None = None):
+        self.genes = []
+        if genes is not None:
+            self.genes = genes
+            return
+
+        if self.src.tx_detected:
+            tx_panel = self.out.Manifest.parse()
+            tx_panel = tx_panel.sort(by=['probe_type', 'probe'], descending=[True, False])
+            self.genes = tx_panel['gene_name'].unique(maintain_order=True).to_list()
+
+    def set_proteins(self, proteins: list[str] | None = None):
+        self.available_proteins = []
+        if self.src.pr_detected:
+            protein_panel = pl.read_csv(self.src.ProteinPanel.p)
+            protein_panel.sort(by=['panel_type', pl.col('target').str.to_lowercase()], descending=[True, False])
+            self.available_proteins = self.sort_proteins(protein_panel['target'].to_list())
+
+        self.proteins = []
+        if proteins is not None and len(proteins) > 0:
+            unavailable_proteins = [p for p in proteins if p not in self.available_proteins]
+            if unavailable_proteins:
+                raise ValueError(
+                    f'The following requested proteins are not available in this data: {unavailable_proteins}'
+                )
+
+            self.proteins = proteins
+            return
+
+        self.proteins = self.available_proteins.copy()
+
     @property
     def cell_labels(self) -> np.ndarray:
         cache_key = 'cell_labels'
@@ -138,22 +160,18 @@ class G4Xoutput:
 
     @property
     def is_demuxed(self):
-        result = False if not self.src.tx_detected else self.src.TxTable.is_valid
-        return result
+        return False if not self.src.tx_detected else self.src.TxTable.is_valid
 
     @property
     def is_aggregated(self):
+        met = self.src.CellMetadata.is_valid
         cxg = True if not self.src.tx_detected else self.src.CellxGene.is_valid
         cxp = True if not self.src.pr_detected else self.src.CellxProt.is_valid
-        return cxg and cxp
+        return met and cxg and cxp
 
     @property
     def is_scprocessed(self):
-        # umap = self.src.clustering_umap_path.exists()
-        # meta = self.src.cell_metadata_path.exists()
-        fm = self.src.AdataH5.is_valid
-        return fm
-        # return umap and meta and fm
+        return self.src.SingleCellFolder.is_valid
 
     @property
     def is_viewer(self):
