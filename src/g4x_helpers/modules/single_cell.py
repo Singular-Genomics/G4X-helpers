@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from anndata import AnnData
 
     from ..g4x_output import G4Xoutput
-    from ..schema.validator import BaseValidator
+
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_INPUT = '__g4x_default__'
@@ -41,7 +41,6 @@ DEFAULT_FILTER_CONFIG = [
 def init_adata(
     smp: 'G4Xoutput',
     *,
-    out_dir: str = DEFAULT_INPUT,
     manifest: str = DEFAULT_INPUT,
     cell_metadata: str = DEFAULT_INPUT,
     cell_x_gene: str = DEFAULT_INPUT,
@@ -74,7 +73,7 @@ def init_adata(
         if col in cellmeta.columns:
             cellmeta = cellmeta.drop(col)
 
-    # Ensure that cell IDs match between metadata and expression/protein matrices
+    # 3: Ensure that cell IDs match between metadata and expression/protein matrices
     _validate_cell_ids(cellmeta, cellxgene, 'CellMetadata', 'CellxGene')
 
     if smp.src.pr_detected:
@@ -82,10 +81,6 @@ def init_adata(
         cellxprot = cellxprot_in.load().sort(c.CELL_ID_NAME)
         _validate_cell_ids(cellmeta, cellxprot, 'CellMetadata', 'CellxProt')
         cellxprot = cellxprot.drop(c.CELL_ID_NAME)
-
-    # 2: Validate and prepare output
-    out_dir = smp.data_dir if out_dir == DEFAULT_INPUT else io.pathval.validate_dir_path(out_dir)
-    prepare_output(smp, out_dir=out_dir, validator=CellMetadata, overwrite=True, logger=log)
 
     # 3: Set up AnnData object
     log.info('Setting up AnnData components')
@@ -125,14 +120,9 @@ def init_adata(
 
     # 5: Calculate QC metrics
     log.info('Calculating QC metrics')
-    adata.var['ctrl'] = adata.var['probe_type'] != 'targeting'
+    adata.var['ctrl'] = adata.var['probe_type'].str.lower() != 'targeting'
     sc.pp.calculate_qc_metrics(adata, qc_vars=['ctrl'], inplace=True, percent_top=None)
     adata.var.drop(columns=['ctrl'], inplace=True)
-
-    # 6: Write cell metadata with updated QC metrics
-    logut.log_with_path(f'Writing {smp.out.CellMetadata.name} table:', smp.out.CellMetadata.p, level='info', logger=log)
-    sc_meta = pl.from_pandas(adata.obs, include_index=True).cast({c.CELL_ID_NAME: pl.UInt64})
-    sc_meta.write_csv(cellmeta_in.p, compression='gzip')
 
     adata = _sanitize_categorical_columns(adata, threshold=10)
 
@@ -165,13 +155,19 @@ def process_sc_output(
     prep_out(validator=AdataH5)
     prep_out(validator=Dgex)
     prep_out(validator=ClusteringUmap)
+    prep_out(validator=CellMetadata, overwrite=True)
+
+    # 1: Befor we modify the adata object, we write cell metadata with QC metrics
+    logut.log_with_path(f'Writing {smp.out.CellMetadata.name} table:', smp.out.CellMetadata.p, level='info', logger=log)
+    sc_meta = pl.from_pandas(adata.obs, include_index=True).cast({c.CELL_ID_NAME: pl.UInt64})
+    sc_meta.write_csv(smp.out.CellMetadata.p, compression='gzip')
 
     # 1. Filter AnnData object
     if filter_panel is None:
         filter_panel = _get_default_filter_panel()
 
     adata_init = adata.copy()
-    adata = filter_adata(adata=adata_init, filter_panel=filter_panel, logger=log)
+    adata, cell_summary, gene_summary = filter_adata(adata=adata_init, filter_panel=filter_panel, logger=log)
 
     if adata.n_obs == 0 or adata.n_vars == 0:
         log.warning('No cells or genes passed the filtering criteria.')
@@ -253,14 +249,14 @@ def filter_adata(
 
     if adata.n_obs == 0 or adata.n_vars == 0:
         log.warning('No cells or genes remaining after filtering. Returning empty AnnData object.')
-        return adata  # , cell_summary, gene_summary
+        return adata, cell_summary, gene_summary
 
     for df, name, n_total in [(cell_summary, 'cells', obs_total), (gene_summary, 'genes', var_total)]:
         n_retained = df.filter(pl.all_horizontal(pl.col('^.*_ok$'))).select('n_total').item()
         retained = n_retained / n_total
         log.info('Retained {:,} ({:.2%}) {} after filtering'.format(n_retained, retained, name))
 
-    return adata  # , cell_summary, gene_summary
+    return adata, cell_summary, gene_summary
 
 
 def pre_process_adata(
@@ -673,7 +669,7 @@ def write_dummy_clustering_outputs(
     col_select = [c.CELL_ID_NAME] + success_clusterings + ['UMAP1', 'UMAP2', 'failure_code']
     dummy_clust = dummy_clust.select(col_select)
 
-    # 2: Dgex table
+    # 2: Dgex table <- this is the last step in the pipeline. so when the previous steps fail, we still need to create a placeholder
     dummy_dgex = pl.DataFrame(schema=smp.src.Dgex.SCHEMA)
     null_row = pl.DataFrame({col: pl.Series([None], dtype=dummy_dgex.schema[col]) for col in dummy_dgex.columns})
     dummy_dgex = dummy_dgex.vstack(null_row).with_columns(failure_code=pl.lit(failure_code))
@@ -719,14 +715,6 @@ def _subset_adata_by_key(adata, key='leiden', n_per_group=1000):
     )
 
     return adata[sampled_idx].copy()
-
-
-def _collect_input(smp: 'G4Xoutput', path: str, validator: 'BaseValidator'):
-    if path == DEFAULT_INPUT:
-        in_obj = getattr(smp.src, validator.__name__)
-    else:
-        in_obj = validator(target_path=path)
-    return in_obj
 
 
 def _validate_cell_ids(df1, df2, name_1, name_2):
