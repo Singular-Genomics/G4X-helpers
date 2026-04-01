@@ -1448,7 +1448,7 @@ requires-dist = [
     { name = "rich-click", specifier = "~=1.9" },
     { name = "scanpy", specifier = "~=1.11" },
     { name = "scikit-image", specifier = "~=0.25" },
-    { name = "shapely", specifier = "~=2.1" },
+    { name = "shapely", specifier = "~=2.0" },
 ]
 provides-extras = ["gpu"]
 
