@@ -1,8 +1,6 @@
 import functools
 import logging
 from pathlib import Path
-
-# import sys
 from typing import TYPE_CHECKING
 
 from .. import logging_utils

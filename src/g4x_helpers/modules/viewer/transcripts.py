@@ -19,7 +19,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def write_transcripts(
-    g4x_obj: 'G4Xoutput',
+    smp: 'G4Xoutput',
     root_group: 'zGroup',
     overwrite: bool = False,
     logger: logging.Logger | None = None,
@@ -30,11 +30,11 @@ def write_transcripts(
 
     aggregation_level = c.GENE_ID_NAME
     keep_cols = ['x_pixel_coordinate', 'y_pixel_coordinate', c.CELL_ID_NAME, aggregation_level]
-    lf = g4x_obj.load_transcript_table(lazy=True, columns=keep_cols)
+    lf = smp.load_transcript_table(lazy=True, columns=keep_cols)
 
     gene_list = lf.unique(c.GENE_ID_NAME).sort(c.GENE_ID_NAME).collect()[c.GENE_ID_NAME].to_list()
 
-    gene_metadata = get_gene_metadata(g4x_obj)
+    gene_metadata = get_gene_metadata(smp)
     
     unavailable_genes = [g for g in gene_list if g not in gene_metadata]
     if unavailable_genes:
@@ -42,7 +42,7 @@ def write_transcripts(
 
     df = lf.collect()
 
-    img_resolution = g4x_obj.shape
+    img_resolution = smp.shape
 
     tile_specs = choose_square_tiling(
         image_resolution_hw=img_resolution,
@@ -63,16 +63,14 @@ def write_transcripts(
 
     pyramid = construct_tile_dfs(df, pyramid)
 
-
-
     gene_colors = {k: v['color'] for k, v in gene_metadata.items()}
 
     # populate attrs
     layer_config = {
         'layers': len(pyramid) - 1,
         'tile_size': pyramid[len(pyramid) - 1]['tile_size'],
-        'layer_height': g4x_obj.shape[0],
-        'layer_width': g4x_obj.shape[1],
+        'layer_height': smp.shape[0],
+        'layer_width': smp.shape[1],
         'coordinate_order': ['x_pixel_coordinate', 'y_pixel_coordinate'],
     }
 
@@ -176,12 +174,12 @@ def write_tx_zarr(
                 create_array(tile_group, key, data=arr, compressor=compressor)
 
 
-def get_gene_metadata(g4x_obj, ):
+def get_gene_metadata(smp, ):
     
-    tx_panel = g4x_obj.src.Manifest.parse()
+    tx_panel = smp.src.Manifest.parse()
     
-    if g4x_obj.src.Dgex.is_valid:
-        dgex = g4x_obj.src.Dgex.load()
+    if smp.src.Dgex.is_valid:
+        dgex = smp.src.Dgex.load()
 
         leiden_result = (
             dgex.unique(['leiden_res', 'cluster_id'])
