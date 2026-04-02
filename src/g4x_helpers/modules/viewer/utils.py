@@ -1,40 +1,12 @@
 from __future__ import annotations
 
 import inspect
-import shutil
-from pathlib import Path
 
 import zarr
 
-from ... import constants as c
+from ... import c
 
-
-def setup_zarr_tree(target_dir: str, store_name: str = c.FILE_VIEWER_ZARR, overwrite: bool = True):
-    target_dir = Path(target_dir) / store_name
-
-    if target_dir.exists() and overwrite:
-        print(f'Removing existing Zarr store at {target_dir}')
-        shutil.rmtree(target_dir)
-
-    root_group = zarr.open_group(target_dir, mode='w', zarr_version=2)
-
-    img_group = root_group.create_group('images', overwrite=overwrite)
-
-    _ = img_group.create_group('multiplex', overwrite=overwrite)
-    _ = img_group.create_group('h_and_e', overwrite=overwrite)
-
-    _ = root_group.create_group('transcripts', overwrite=overwrite)
-
-    cell_group = root_group.create_group('cells', overwrite=overwrite)
-    _ = cell_group.create_group('metadata', overwrite=overwrite)
-    _ = cell_group.create_group('protein', overwrite=overwrite)
-    _ = cell_group.create_group('polygons', overwrite=overwrite)
-    _ = cell_group.create_group('genes', overwrite=overwrite)
-
-    (target_dir / 'misc').mkdir(parents=True, exist_ok=True)
-
-    write_metadata_defaults(root_group)
-    return root_group
+DEFAULT_ZARR_NAME = c.FILE_VIEWER_ZARR
 
 
 def write_metadata_defaults(root_group: zarr.Group):

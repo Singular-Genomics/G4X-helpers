@@ -19,7 +19,7 @@ def collect_input(
     validator: 'BaseValidator',
     validate: bool = True,
     logger: logging.Logger | None = None,
-):
+) -> 'BaseValidator':
     log = logger or LOGGER
 
     if path == DEFAULT_INPUT:
@@ -43,7 +43,7 @@ def prepare_output(
     validator: 'BaseValidator',
     overwrite: bool = False,
     logger: logging.Logger | None = None,
-):
+) -> bool:
     log = logger or LOGGER
 
     out_obj = getattr(smp.out, validator.__name__)
