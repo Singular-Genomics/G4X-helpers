@@ -1,12 +1,14 @@
 import logging
-from functools import lru_cache
+from functools import lru_cache, partial
 
 import numpy as np
 import polars as pl
 from numcodecs import Blosc
 
 from ... import c, io
-from .setup import create_array, populate_zarr_metadata
+from ...schema.definition import CellMetadata, CellxGene, CellxProt, ClusteringUmap, Segmentation
+from ..workflow import DEFAULT_INPUT, collect_input
+from .utils import create_array, populate_zarr_metadata
 
 LOGGER = logging.getLogger(__name__)
 
@@ -25,34 +27,27 @@ def write_cells(smp, root_group, prechew: None = None, overwrite: bool = False, 
 
     log.info('Preparing cell group input')
     if prechew is None:
-        metadata, gex, gene_names = prepare_cell_group_input(smp)
+        metadata, gex, gene_names = process_cell_data(smp)
     else:
         metadata, gex, gene_names = prechew
 
+    meta_columns = {
+        'cell_id': metadata[c.CELL_ID_NAME].to_numpy().astype(np.uint32),
+        'area': metadata[c.CELL_AREA_NAME].to_numpy().astype(np.uint16),
+        'cluster_id': metadata['leiden_fine'].to_numpy().astype('U10'),  # TODO this is hard coded
+        'total_counts': metadata['total_counts'].to_numpy().astype(np.uint16),
+        'total_genes': metadata['n_genes_by_counts'].to_numpy().astype(np.uint16),
+        'umap': metadata.select(['UMAP1', 'UMAP2'])
+        .rename({'UMAP1': 'umap_1', 'UMAP2': 'umap_2'})
+        .to_numpy()
+        .astype(np.float16),
+    }
+
     log.info('Writing cell metadata arrays')
-    for key in ['cell_id', 'area', 'cluster_id', 'total_counts', 'total_genes', 'umap']:
+    for key, arr in meta_columns.items():
         if overwrite and key in metadata_group:
             del metadata_group[key]
-
-    arr = metadata[c.CELL_ID_NAME].to_numpy().astype(np.uint32)
-    create_array(metadata_group, 'cell_id', data=arr, compressor=compressor)
-
-    arr = metadata[c.CELL_AREA_NAME].to_numpy().astype(np.uint16)
-    create_array(metadata_group, 'area', data=arr, compressor=compressor)
-
-    arr = metadata['leiden_fine'].to_numpy().astype('U10')
-    create_array(metadata_group, 'cluster_id', data=arr, compressor=compressor)
-
-    arr = metadata['total_counts'].to_numpy().astype(np.uint16)
-    create_array(metadata_group, 'total_counts', data=arr, compressor=compressor)
-
-    arr = metadata['n_genes_by_counts'].to_numpy().astype(np.uint16)
-    create_array(metadata_group, 'total_genes', data=arr, compressor=compressor)
-
-    arr = (
-        metadata.select(['UMAP1', 'UMAP2']).rename({'UMAP1': 'umap_1', 'UMAP2': 'umap_2'}).to_numpy().astype(np.float16)
-    )
-    create_array(metadata_group, 'umap', data=arr, compressor=compressor)
+        create_array(metadata_group, key, data=arr, compressor=compressor)
 
     log.info('Writing cell protein arrays')
     for key in ['protein_values', 'protein_names']:
@@ -97,6 +92,60 @@ def write_cells(smp, root_group, prechew: None = None, overwrite: bool = False, 
     write_csr(genes_group, csr=gex, gene_names=gene_names, compressor=compressor, chunks='auto')
 
 
+def process_cell_data(
+    smp,
+    segmentation_mask: str = DEFAULT_INPUT,
+    cell_metadata: str = DEFAULT_INPUT,
+    cell_x_gene: str = DEFAULT_INPUT,
+    cell_x_protein: str = DEFAULT_INPUT,
+    clustering_umap: str = DEFAULT_INPUT,
+    logger: logging.Logger | None = None,
+):
+    from scipy.sparse import csr_matrix
+
+    log = logger or LOGGER
+
+    collect_in_partial = partial(collect_input, smp, validate=True, logger=log)
+    segment_in = collect_in_partial(segmentation_mask, Segmentation, validate=False)
+    cellmet_in = collect_in_partial(cell_metadata, CellMetadata)
+    cellxgene_in = collect_in_partial(cell_x_gene, CellxGene)
+    cellxprot_in = collect_in_partial(cell_x_protein, CellxProt)
+    clustumap_in = collect_in_partial(clustering_umap, ClusteringUmap)
+
+    cell_metadata = cellmet_in.load()
+    cell_x_gene = cellxgene_in.load()
+    cell_x_protein = cellxprot_in.load()
+
+    if not cell_metadata[c.CELL_ID_NAME].equals(cell_x_protein[c.CELL_ID_NAME]):
+        raise ValueError('Cell IDs in metadata and protein table do not match')
+
+    if not cell_metadata[c.CELL_ID_NAME].equals(cell_x_gene[c.CELL_ID_NAME]):
+        raise ValueError('Cell IDs in metadata and gene expression matrix do not match')
+
+    cell_x_gene = cell_x_gene.drop(c.CELL_ID_NAME)
+    gene_names = np.array(cell_x_gene.columns)
+
+    gex = cell_x_gene.to_numpy().astype(np.uint16)
+    gex = csr_matrix(gex)
+    del cell_x_gene
+
+    # 2: extract cell vertices
+    # mask = smp.load_segmentation(expanded=True)
+    # vertices = extract_vertices_cached(segment_in.p, shape=smp.shape)
+    # cell_metadata = cell_metadata.join(vertices, on=c.CELL_ID_NAME)
+    # del vertices  # , mask
+
+    cell_metadata = cell_metadata.join(cell_x_protein, on=c.CELL_ID_NAME)
+    del cell_x_protein
+
+    # cluster_cols = [c for c in clust_umap.columns if 'leiden_' in c]
+    clust_umap = clustumap_in.load()
+    cell_metadata = cell_metadata.join(clust_umap, on=c.CELL_ID_NAME, how='left')
+    cell_metadata = cell_metadata.with_columns(pl.col('^leiden_.*$').fill_null('unassigned'))
+
+    return cell_metadata, gex, gene_names
+
+
 def write_csr(group, csr, gene_names, compressor=None, chunks=None):
     create_array(group, 'data', data=csr.data.astype('int16'), compressor=compressor, chunks=chunks)
     create_array(group, 'indices', data=csr.indices.astype('int32'), compressor=compressor, chunks=chunks)
@@ -114,45 +163,6 @@ def sort_clusters(metadata, key='cluster_id'):
 
     uids.append('unassigned')
     return uids
-
-
-def prepare_cell_group_input(smp):
-    from scipy.sparse import csr_matrix
-
-    cell_metadata = smp.src.CellMetadata.load()
-    cell_x_gene = smp.src.CellxGene.load()
-    cell_x_protein = smp.src.CellxProt.load()
-
-    if not cell_metadata[c.CELL_ID_NAME].equals(cell_x_protein[c.CELL_ID_NAME]):
-        raise ValueError('Cell IDs in metadata and protein table do not match')
-
-    if not cell_metadata[c.CELL_ID_NAME].equals(cell_x_gene[c.CELL_ID_NAME]):
-        raise ValueError('Cell IDs in metadata and gene expression matrix do not match')
-
-    cell_x_gene = cell_x_gene.drop(c.CELL_ID_NAME)
-    gene_names = np.array(cell_x_gene.columns)
-
-    gex = cell_x_gene.to_numpy().astype(np.uint16)
-    gex = csr_matrix(gex)
-    del cell_x_gene
-
-    # 2: extract cell vertices
-    # mask = smp.load_segmentation(expanded=True)
-    vertices = extract_vertices_cached(smp.src.Segmentation.p, shape=smp.shape)
-    # del mask
-
-    cell_metadata = cell_metadata.join(cell_x_protein, on=c.CELL_ID_NAME)
-    del cell_x_protein
-
-    cell_metadata = cell_metadata.join(vertices, on=c.CELL_ID_NAME)
-    del vertices
-
-    clust_umap = pl.read_csv(smp.src.ClusteringUmap.p)
-    # cluster_cols = [c for c in clust_umap.columns if 'leiden_' in c]
-
-    cell_metadata = cell_metadata.join(clust_umap, on=c.CELL_ID_NAME, how='left')
-    cell_metadata = cell_metadata.with_columns(pl.col('^leiden_.*$').fill_null('unassigned'))
-    return cell_metadata, gex, gene_names
 
 
 def generate_cluster_palette(ordered_unique_clusters: list, max_colors: int = 256) -> dict:

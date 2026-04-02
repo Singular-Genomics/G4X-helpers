@@ -1,14 +1,16 @@
 import colorsys
 import logging
-import textwrap
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import polars as pl
 from numcodecs import Blosc
 
-from ... import constants as c
-from .setup import create_array, populate_zarr_metadata
+from ... import c
+from ... import logging_utils as logut
+from ...schema.definition import Dgex, Manifest, TxTable
+from ..workflow import DEFAULT_INPUT, collect_input
+from .utils import create_array, populate_zarr_metadata
 
 if TYPE_CHECKING:
     from zarr.hierarchy import Group as zGroup
@@ -21,6 +23,9 @@ LOGGER = logging.getLogger(__name__)
 def write_transcripts(
     smp: 'G4Xoutput',
     root_group: 'zGroup',
+    tx_table: str = DEFAULT_INPUT,
+    manifest: str = DEFAULT_INPUT,
+    dgex: str = DEFAULT_INPUT,
     overwrite: bool = False,
     logger: logging.Logger | None = None,
 ) -> None:
@@ -28,44 +33,40 @@ def write_transcripts(
     log = LOGGER or logger
     log.info('Preparing transcript data')
 
+    # 1: load inputs
+    txtable_in = collect_input(smp, tx_table, validator=TxTable, logger=log)
+    gene_metadata = get_gene_metadata(smp, manifest=manifest, dgex=dgex, logger=log)
+
+    # 2: load tx table and filter to relevant columns
     aggregation_level = c.GENE_ID_NAME
     keep_cols = ['x_pixel_coordinate', 'y_pixel_coordinate', c.CELL_ID_NAME, aggregation_level]
-    lf = smp.load_transcript_table(lazy=True, columns=keep_cols)
+    df = txtable_in.load(lazy=False).select(keep_cols)
 
-    gene_list = lf.unique(c.GENE_ID_NAME).sort(c.GENE_ID_NAME).collect()[c.GENE_ID_NAME].to_list()
+    # 3: check that all genes in tx table have metadata
+    gene_list = df[c.GENE_ID_NAME].unique().sort().to_list()
 
-    gene_metadata = get_gene_metadata(smp)
-    
     unavailable_genes = [g for g in gene_list if g not in gene_metadata]
     if unavailable_genes:
         raise ValueError(f'The following genes are missing from the gene metadata: {unavailable_genes}')
 
-    df = lf.collect()
-
-    img_resolution = smp.shape
-
-    tile_specs = choose_square_tiling(
-        image_resolution_hw=img_resolution,
+    # 4: construct pyramid
+    pyramid, tile_specs = build_tx_pyramid(
+        image_resolution=smp.shape,
         total_points=df.height,
         target_points_per_tile=5000,
         min_tile_size=256,
     )
 
-    # contstruct pyramid
-    pyramid = build_tx_pyramid(tile_specs, image_resolution=img_resolution)
-
     msg = f'\n{tile_specs}\n'
     for level, specs in pyramid.items():
         msg += f'Level {level}: tile_size: {specs["tile_size"]} - scale: {specs["scale_fct"]}\n'
 
-    formatted = textwrap.indent(str(msg), prefix='    ')
-    log.debug('Tile specs:\n%s', formatted)
+    logut.log_msg_wrapped('Tile specs:\n', msg, logger=log)
 
+    # 5: assign tiles to tx and construct tile dataframes
     pyramid = construct_tile_dfs(df, pyramid)
 
-    gene_colors = {k: v['color'] for k, v in gene_metadata.items()}
-
-    # populate attrs
+    # 6: populate attrs
     layer_config = {
         'layers': len(pyramid) - 1,
         'tile_size': pyramid[len(pyramid) - 1]['tile_size'],
@@ -74,12 +75,39 @@ def write_transcripts(
         'coordinate_order': ['x_pixel_coordinate', 'y_pixel_coordinate'],
     }
 
+    gene_colors = {k: v['color'] for k, v in gene_metadata.items()}
     populate_zarr_metadata(root_group, gene_colors=gene_colors, tx_layer_config=layer_config)
 
     log.info('Writing transcript data')
     tx_group = root_group['transcripts']
 
     write_tx_zarr(tx_group, pyramid, overwrite=overwrite)
+
+
+def build_tx_pyramid(
+    image_resolution: tuple[int, int], total_points: int, target_points_per_tile: int = 5000, min_tile_size: int = 256
+) -> dict[int, dict[str, Any]]:
+
+    tile_specs = choose_square_tiling(
+        image_resolution_hw=image_resolution,
+        total_points=total_points,
+        target_points_per_tile=target_points_per_tile,
+        min_tile_size=min_tile_size,
+    )
+
+    pyramid = {}
+    level = 0
+    tile_size = tile_specs['tile_size']
+
+    # build pyramid until last tile size exceeds image resolution
+    while tile_size <= max(image_resolution):
+        scale = 2**level
+        tile_size = tile_specs['tile_size'] * scale
+        sampling_fct = 1 / (scale**2)
+        pyramid[level] = {'tile_size': tile_size, 'scale_fct': scale, 'sampling_fct': sampling_fct}
+        level += 1
+
+    return pyramid, tile_specs
 
 
 def choose_square_tiling(
@@ -109,22 +137,6 @@ def choose_square_tiling(
     return res
 
 
-def build_tx_pyramid(tile_specs: dict[str, Any], image_resolution: tuple[int, int]) -> dict[int, dict[str, Any]]:
-    pyramid = {}
-    level = 0
-    tile_size = tile_specs['tile_size']
-
-    # build pyramid until last tile size exceeds image resolution
-    while tile_size <= max(image_resolution):
-        scale = 2**level
-        tile_size = tile_specs['tile_size'] * scale
-        sampling_fct = 1 / (scale**2)
-        pyramid[level] = {'tile_size': tile_size, 'scale_fct': scale, 'sampling_fct': sampling_fct}
-        level += 1
-
-    return pyramid
-
-
 def construct_tile_dfs(df: pl.DataFrame, pyramid: dict[int, dict[str, Any]]) -> dict[int, dict[str, Any]]:
     for level, specs in pyramid.items():
         tile_size, _, sampling_fct = specs.values()
@@ -141,7 +153,10 @@ def construct_tile_dfs(df: pl.DataFrame, pyramid: dict[int, dict[str, Any]]) -> 
 
 
 def write_tx_zarr(
-    tx_group: 'zGroup', pyramid: dict[int, dict[str, Any]], overwrite: bool = False, logger: logging.Logger | None = None
+    tx_group: 'zGroup',
+    pyramid: dict[int, dict[str, Any]],
+    overwrite: bool = False,
+    logger: logging.Logger | None = None,
 ):
     log = LOGGER or logger
     compressor = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
@@ -174,12 +189,16 @@ def write_tx_zarr(
                 create_array(tile_group, key, data=arr, compressor=compressor)
 
 
-def get_gene_metadata(smp, ):
-    
-    tx_panel = smp.src.Manifest.parse()
-    
-    if smp.src.Dgex.is_valid:
-        dgex = smp.src.Dgex.load()
+def get_gene_metadata(smp, manifest, dgex, logger: logging.Logger | None = None):
+    log = logger or LOGGER
+
+    manifest_in = collect_input(smp, manifest, validator=Manifest, logger=log)
+    dgex_in = collect_input(smp, dgex, validator=Dgex, validate=False, logger=log)
+
+    tx_panel = manifest_in.parse()
+
+    if dgex_in.is_valid:
+        dgex = dgex_in.load()
 
         leiden_result = (
             dgex.unique(['leiden_res', 'cluster_id'])
@@ -189,7 +208,7 @@ def get_gene_metadata(smp, ):
             .head(1)['leiden_res']
             .item()
         )
-        
+
         dgex = dgex.filter(pl.col('leiden_res') == leiden_result)
         dgex_fil = dgex.filter(pl.col('score') > 0)
 

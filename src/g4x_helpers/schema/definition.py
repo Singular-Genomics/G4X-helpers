@@ -393,6 +393,8 @@ class SingleCellFolder(BaseValidator):
         CellxGene(root='.'),
         CellxProt(root='.'),
         AdataH5(root='.'),
+        Dgex(root='.'),
+        ClusteringUmap(root='.'),
     ]
 
     def __init__(self, root):
@@ -403,10 +405,10 @@ class SingleCellFolder(BaseValidator):
 
     @validation_test
     def files_present(self):
-        existing_files = {}
+        self.existing_files = {}
         for val in self.SUB_VALIDATORS:
-            existing_files[val.name] = val.is_valid
-        return all(existing_files.values())
+            self.existing_files[val.name] = val.is_valid
+        return all(self.existing_files.values())
 
 
 # region viewer
