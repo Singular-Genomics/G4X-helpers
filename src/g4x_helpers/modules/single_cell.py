@@ -138,6 +138,7 @@ def process_sc_output(
     *,
     overwrite: bool = False,
     filter_panel: 'FilterPanel' | None = None,
+    n_neighbors: int = 15,
     cluster_attempts: int = 10,
     rnd_st: int = 111,
     compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
@@ -177,7 +178,7 @@ def process_sc_output(
 
     # 2. Pre-Processings (CPU/GPU) split path
     try:
-        adata = pre_process_adata(adata=adata, compute_backend=backend, logger=log)
+        adata = pre_process_adata(adata=adata, n_neighbors=n_neighbors, compute_backend=backend, logger=log)
     except Exception as e:
         log.warning(f'Preprocessing failed: {e}')
         write_dummys(failure_code='preprocessing_failed')

@@ -7,8 +7,8 @@ from pathlib import Path
 import zarr
 
 from ... import c, io
-from ...schema.definition import SingleCellFolder, ViewerZarr
-from ..workflow import DEFAULT_INPUT, collect_input, prepare_output
+from ...schema.definition import ViewerZarr
+from ..workflow import DEFAULT_INPUT, prepare_output
 from .cells import process_cell_data, write_cells
 from .images import write_images
 from .transcripts import write_transcripts
@@ -37,7 +37,8 @@ def create_viewer_zarr(
     if protein_list is not None:
         smp.set_proteins(protein_list)
 
-    sc_dir = collect_input(smp, single_cell_dir, SingleCellFolder, logger=log)  # just to validate the input dir
+    single_cell_dir = smp.out.SingleCellFolder.p if single_cell_dir == DEFAULT_INPUT else single_cell_dir
+    sc_dir = io.pathval.validate_dir_path(single_cell_dir, must_exist=True)
 
     out_dir = smp.data_dir if out_dir == DEFAULT_INPUT else io.pathval.validate_dir_path(out_dir)
     prepare_output(smp, out_dir, validator=ViewerZarr, overwrite=overwrite, logger=log)
@@ -47,18 +48,18 @@ def create_viewer_zarr(
     root_group.attrs['run_metadata'] = {'Sample Information': smp.smp_meta}
     root_group.attrs['smp_info_order'] = list(smp.smp_meta.keys())
 
-    # write_images(smp, root_group, logger=log)
+    write_images(smp, root_group, logger=log)
     write_transcripts(
-        smp, root_group, tx_table=tx_table, manifest=manifest, dgex=sc_dir.Dgex.p, overwrite=True, logger=log
+        smp, root_group, tx_table=tx_table, manifest=manifest, dgex=sc_dir / smp.out.Dgex.n, overwrite=True, logger=log
     )
 
     prechew = process_cell_data(
         smp,
         segmentation_mask=segmentation_mask,
-        cell_metadata=sc_dir.CellMetadata.p,
-        cell_x_gene=sc_dir.CellxGene.p,
-        cell_x_protein=sc_dir.CellxProt.p,
-        clustering_umap=sc_dir.ClusteringUmap.p,
+        cell_metadata=sc_dir / smp.out.CellMetadata.n,
+        cell_x_gene=sc_dir / smp.out.CellxGene.n,
+        cell_x_protein=None if not smp.src.pr_detected else sc_dir / smp.out.CellxProt.n,
+        clustering_umap=sc_dir / smp.out.ClusteringUmap.n,
         logger=log,
     )
     write_cells(smp, root_group, prechew=prechew, overwrite=True, logger=log)
@@ -80,16 +81,16 @@ def setup_zarr_tree(target_dir: str, store_name: str = c.FILE_VIEWER_ZARR, overw
 
     img_group = root_group.create_group('images', overwrite=overwrite)
 
-    _ = img_group.create_group('multiplex', overwrite=overwrite)
-    _ = img_group.create_group('h_and_e', overwrite=overwrite)
+    img_group.create_group('multiplex', overwrite=overwrite)
+    img_group.create_group('h_and_e', overwrite=overwrite)
 
-    _ = root_group.create_group('transcripts', overwrite=overwrite)
+    root_group.create_group('transcripts', overwrite=overwrite)
 
     cell_group = root_group.create_group('cells', overwrite=overwrite)
-    _ = cell_group.create_group('metadata', overwrite=overwrite)
-    _ = cell_group.create_group('protein', overwrite=overwrite)
-    _ = cell_group.create_group('polygons', overwrite=overwrite)
-    _ = cell_group.create_group('genes', overwrite=overwrite)
+    cell_group.create_group('metadata', overwrite=overwrite)
+    cell_group.create_group('protein', overwrite=overwrite)
+    cell_group.create_group('polygons', overwrite=overwrite)
+    cell_group.create_group('genes', overwrite=overwrite)
 
     (target_dir / 'misc').mkdir(parents=True, exist_ok=True)
 

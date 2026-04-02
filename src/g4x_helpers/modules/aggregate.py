@@ -51,7 +51,6 @@ def aggregate_cell_data(
     prep_out = partial(prepare_output, smp, out_dir, overwrite=overwrite, logger=log)
     prep_out(validator=CellMetadata)
     prep_out(validator=CellxGene)
-    prep_out(validator=CellxProt)
     prep_out(validator=TxTable, overwrite=True)
 
     # 3: Import segmentation mask and create cell frame
@@ -91,6 +90,7 @@ def aggregate_cell_data(
 
     # 6: Create cell x protein matrix (optional)
     if smp.src.pr_detected:
+        prep_out(validator=CellxProt)
         if protein_list != DEFAULT_INPUT:
             smp.set_proteins(protein_list)
 

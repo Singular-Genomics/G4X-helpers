@@ -109,15 +109,12 @@ def process_cell_data(
     segment_in = collect_in_partial(segmentation_mask, Segmentation, validate=False)
     cellmet_in = collect_in_partial(cell_metadata, CellMetadata)
     cellxgene_in = collect_in_partial(cell_x_gene, CellxGene)
-    cellxprot_in = collect_in_partial(cell_x_protein, CellxProt)
     clustumap_in = collect_in_partial(clustering_umap, ClusteringUmap)
 
     cell_metadata = cellmet_in.load()
-    cell_x_gene = cellxgene_in.load()
-    cell_x_protein = cellxprot_in.load()
 
-    if not cell_metadata[c.CELL_ID_NAME].equals(cell_x_protein[c.CELL_ID_NAME]):
-        raise ValueError('Cell IDs in metadata and protein table do not match')
+    # process cell by gene
+    cell_x_gene = cellxgene_in.load()
 
     if not cell_metadata[c.CELL_ID_NAME].equals(cell_x_gene[c.CELL_ID_NAME]):
         raise ValueError('Cell IDs in metadata and gene expression matrix do not match')
@@ -129,14 +126,22 @@ def process_cell_data(
     gex = csr_matrix(gex)
     del cell_x_gene
 
+    # process cell by protein (optional)
+    if smp.src.pr_detected:
+        cellxprot_in = collect_in_partial(cell_x_protein, CellxProt)
+        cell_x_protein = cellxprot_in.load()
+
+        if not cell_metadata[c.CELL_ID_NAME].equals(cell_x_protein[c.CELL_ID_NAME]):
+            raise ValueError('Cell IDs in metadata and protein table do not match')
+
+        cell_metadata = cell_metadata.join(cell_x_protein, on=c.CELL_ID_NAME)
+        del cell_x_protein
+
     # 2: extract cell vertices
     # mask = smp.load_segmentation(expanded=True)
-    # vertices = extract_vertices_cached(segment_in.p, shape=smp.shape)
-    # cell_metadata = cell_metadata.join(vertices, on=c.CELL_ID_NAME)
-    # del vertices  # , mask
-
-    cell_metadata = cell_metadata.join(cell_x_protein, on=c.CELL_ID_NAME)
-    del cell_x_protein
+    vertices = extract_vertices_cached(segment_in.p, shape=smp.shape)
+    cell_metadata = cell_metadata.join(vertices, on=c.CELL_ID_NAME)
+    del vertices  # , mask
 
     # cluster_cols = [c for c in clust_umap.columns if 'leiden_' in c]
     clust_umap = clustumap_in.load()
@@ -151,7 +156,7 @@ def write_csr(group, csr, gene_names, compressor=None, chunks=None):
     create_array(group, 'indices', data=csr.indices.astype('int32'), compressor=compressor, chunks=chunks)
     create_array(group, 'indptr', data=csr.indptr.astype('int64'), compressor=compressor, chunks=chunks)
 
-    # TODO find maybe better spot for dtype conversion
+    # TODO find maybe better spot for assigning this dtype
     create_array(group, 'gene_names', data=np.array(gene_names).astype('U12'), compressor=compressor, chunks='auto')
 
 
