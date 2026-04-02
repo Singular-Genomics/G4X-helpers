@@ -235,7 +235,9 @@ class G4Xoutput:
         )
 
     def load_bead_mask(self) -> np.ndarray:
-        return np.load(self.src.BeadMask.p)['bead_mask']
+        if self.src.BeadMask.is_valid:
+            return np.load(self.src.BeadMask.p)['bead_mask']
+        return None
 
     def load_feature_table(
         self,

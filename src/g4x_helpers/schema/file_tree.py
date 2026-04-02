@@ -46,7 +46,6 @@ class FileTree:
                 [
                     SampleSheet(root=self.smp_dir),
                     Segmentation(root=self.smp_dir),
-                    BeadMask(root=self.smp_dir),
                     HnEDir(root=self.smp_dir),
                 ]
             )
@@ -54,6 +53,7 @@ class FileTree:
             self.secondary_validators.extend(
                 [
                     QCSummary(root=self.smp_dir, format={'sample_id': sample_id}),
+                    BeadMask(root=self.smp_dir),
                     ViewerZarr(root=self.smp_dir),
                     SingleCellFolder(root=self.smp_dir),
                     CellMetadata(root=self.smp_dir),
@@ -101,8 +101,8 @@ class FileTree:
 
         # TODO ensure these hooks are a good choice
         # inspect tx and pr presence from valid metadata
-        self.tx_detected = 'transcript_panel' in smp_meta
-        self.pr_detected = 'protein_panel' in smp_meta
+        self.tx_detected = smp_meta.get('transcript_panel', None) is not None
+        self.pr_detected = smp_meta.get('protein_panel', None) is not None
 
         self.assay_type = (
             'combined'
