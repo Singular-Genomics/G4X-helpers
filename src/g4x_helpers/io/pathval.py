@@ -9,14 +9,20 @@ def _normalize_path(path_str, *, resolve: bool = False) -> Path:
     return path
 
 
+def validate_path(path, *, must_exist: bool = True, resolve: bool = False) -> Path:
+    path = _normalize_path(path, resolve=resolve)
+
+    if must_exist and not path.exists():
+        raise FileNotFoundError(f'Path does not exist: {path}')
+
+    return path
+
+
 def validate_file_path(path, *, must_exist: bool = True, resolve: bool = False) -> Path:
     """
     Validate that a path is a file.
     """
-    path = _normalize_path(path, resolve=resolve)
-
-    if must_exist and not path.exists():
-        raise FileNotFoundError(f'File does not exist: {path}')
+    path = validate_path(path, must_exist=must_exist, resolve=resolve)
 
     if path.exists() and not path.is_file():
         raise ValueError(f'Expected file, got directory: {path}')
@@ -28,10 +34,7 @@ def validate_dir_path(path, *, must_exist: bool = True, resolve: bool = False) -
     """
     Validate that a path is a directory.
     """
-    path = _normalize_path(path, resolve=resolve)
-
-    if must_exist and not path.exists():
-        raise FileNotFoundError(f'Directory does not exist: {path}')
+    path = validate_path(path, must_exist=must_exist, resolve=resolve)
 
     if path.exists() and not path.is_dir():
         raise ValueError(f'Expected directory, got file: {path}')

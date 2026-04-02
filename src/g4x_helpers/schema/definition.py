@@ -397,17 +397,21 @@ class SingleCellFolder(BaseValidator):
         ClusteringUmap(root='.'),
     ]
 
-    def __init__(self, root):
-        super().__init__(root=root, target_path=self.DEFAULT_TARGET_PATH)
+    def __init__(self, root=None, target_path=None):
+        super().__init__(root=root, target_path=target_path or self.DEFAULT_TARGET_PATH)
         for val in self.SUB_VALIDATORS:
             val.root = self.root
             setattr(self, val.name, val)
 
+    @property
+    def existing_files(self):
+        existing_files = {}
+        for val in self.SUB_VALIDATORS:
+            existing_files[val.name] = val.is_valid
+        return existing_files
+    
     @validation_test
     def files_present(self):
-        self.existing_files = {}
-        for val in self.SUB_VALIDATORS:
-            self.existing_files[val.name] = val.is_valid
         return all(self.existing_files.values())
 
 

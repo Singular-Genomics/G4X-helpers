@@ -1,6 +1,5 @@
 from . import cells as cell
 from . import images as img
-from . import setup as setup
 from . import transcripts as tx
 from .create_zarr import create_viewer_zarr
 
