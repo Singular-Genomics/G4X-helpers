@@ -28,6 +28,7 @@ def init_bin_file(
     g4x_obj: 'G4Xoutput',
     out_dir: str | Path,
     seg_mask: np.ndarray | None = None,
+    single_cell_dir: str | Path | None = None,
     *,
     n_threads: int = 4,
     logger: logging.Logger | None = None,
@@ -36,7 +37,9 @@ def init_bin_file(
     out_file = out_tree.g4x_viewer / f'{g4x_obj.sample_id}_segmentation.bin'
 
     adata = g4x_obj.load_adata(
-        single_cell_dir=out_dir / 'single_cell_data', load_clustering=False, remove_nontargeting=False
+        single_cell_dir=single_cell_dir or g4x_obj.data_dir / 'single_cell_data',
+        load_clustering=False,
+        remove_nontargeting=False,
     )
 
     if seg_mask is None:
