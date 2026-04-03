@@ -159,6 +159,14 @@ class G4Xoutput:
     def bead_mask_path(self) -> Path:
         return self.data_dir / 'protein' / 'bead_mask.npz'
 
+    @property
+    def use_cyto(self):
+        h_and_e_images = []
+        for img in (self.data_dir / 'h_and_e').glob('*.jp2'):
+            h_and_e_images.append(img.stem)
+
+        return 'cytoplasmic' in h_and_e_images
+
     def set_meta_attrs(self):
         static_attrs = [
             'platform',
@@ -242,6 +250,9 @@ class G4Xoutput:
             directory = 'protein'
         else:
             pattern_base = {'h_and_e': 'h_and_e', 'nuclear': 'nuclear', 'eosin': 'eosin'}.get(image_type)
+
+            if image_type == 'eosin' and self.use_cyto:
+                pattern_base = 'cytoplasmic'
 
             if not pattern_base:
                 print(f'Unknown image type: {image_type}')
