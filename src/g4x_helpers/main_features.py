@@ -129,13 +129,14 @@ def redemux(
         g4x_obj=g4x_obj,
         labels=labels,
         tx_table=out_dir / 'rna' / 'transcript_table.csv.gz',
+        manifest=manifest,
         out_dir=out_dir,
         skip_protein_extraction=False,
         create_source=False,
         logger=logger,
     )
 
-    init_bin.init_bin_file(g4x_obj=g4x_obj, out_dir=out_dir, n_threads=n_threads, logger=logger)
+    init_bin.init_bin_file(g4x_obj=g4x_obj, out_dir=out_dir, n_threads=n_threads, seg_mask=labels, logger=logger)
 
     # TODO tell user to run update_bin afterwards
 

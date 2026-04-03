@@ -35,7 +35,9 @@ def init_bin_file(
     out_tree = OutSchema(out_dir, subdirs=['g4x_viewer'])
     out_file = out_tree.g4x_viewer / f'{g4x_obj.sample_id}_segmentation.bin'
 
-    adata = g4x_obj.load_adata(load_clustering=True, remove_nontargeting=False)
+    adata = g4x_obj.load_adata(
+        single_cell_dir=out_dir / 'single_cell_data', load_clustering=False, remove_nontargeting=False
+    )
 
     if seg_mask is None:
         logger.info('Loading default segmentation mask.')
