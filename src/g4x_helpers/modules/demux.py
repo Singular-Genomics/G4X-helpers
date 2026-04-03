@@ -13,7 +13,7 @@ from tqdm import tqdm
 from .. import c, io
 from .. import logging_utils as logut
 from ..schema.definition import Manifest, TxTable
-from .workflow import collect_input, prepare_output
+from .workflow import collect_input, route_output
 
 if TYPE_CHECKING:
     from ..g4x_output import G4Xoutput
@@ -45,8 +45,8 @@ def demux_raw_features(
     out_dir = smp.data_dir if out_dir == DEFAULT_INPUT else io.pathval.validate_dir_path(out_dir)
     logut.log_with_path('Output directory:', out_dir, logger=log)
 
-    prepare_output(smp, out_dir, validator=TxTable, overwrite=overwrite, logger=log)
-    prepare_output(smp, out_dir, validator=Manifest, overwrite=overwrite, logger=log)
+    route_output(smp, out_dir, validator=TxTable, overwrite=overwrite, logger=log)
+    route_output(smp, out_dir, validator=Manifest, overwrite=overwrite, logger=log)
 
     if manifest != DEFAULT_INPUT:
         shutil.copy(manifest_in.p, smp.out.Manifest.p)

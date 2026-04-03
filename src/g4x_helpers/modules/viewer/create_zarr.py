@@ -7,8 +7,9 @@ from pathlib import Path
 import zarr
 
 from ... import c, io
+from ... import logging_utils as logut
 from ...schema.definition import ViewerZarr
-from ..workflow import DEFAULT_INPUT, prepare_output
+from ..workflow import DEFAULT_INPUT, route_output
 from .cells import process_cell_data, write_cells
 from .images import write_images
 from .transcripts import write_transcripts
@@ -41,7 +42,7 @@ def create_viewer_zarr(
     sc_dir = io.pathval.validate_dir_path(single_cell_dir, must_exist=True)
 
     out_dir = smp.data_dir if out_dir == DEFAULT_INPUT else io.pathval.validate_dir_path(out_dir)
-    prepare_output(smp, out_dir, validator=ViewerZarr, overwrite=overwrite, logger=log)
+    route_output(smp, out_dir, validator=ViewerZarr, overwrite=overwrite, logger=log)
 
     root_group = setup_zarr_tree(smp.data_dir, store_name=store_name, overwrite=overwrite)
 
@@ -70,11 +71,14 @@ def create_viewer_zarr(
         log.info('QCSummary file does not exist, skipping copy to ViewerZarr.')
 
 
-def setup_zarr_tree(target_dir: str, store_name: str = c.FILE_VIEWER_ZARR, overwrite: bool = True):
+def setup_zarr_tree(
+    target_dir: str, store_name: str = c.FILE_VIEWER_ZARR, overwrite: bool = True, logger: logging.Logger | None = None
+) -> zarr.Group:
+    log = logger or LOGGER
     target_dir = Path(target_dir) / store_name
 
     if target_dir.exists() and overwrite:
-        print(f'Removing existing Zarr store at {target_dir}')
+        logut.log_with_path('Removing existing Zarr store at:', target_dir, logger=log, level='INFO')
         shutil.rmtree(target_dir)
 
     root_group = zarr.open_group(target_dir, mode='w', zarr_version=2)

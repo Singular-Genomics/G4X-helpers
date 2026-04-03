@@ -11,7 +11,7 @@ from tqdm import tqdm
 from .. import c, io
 from .. import logging_utils as logut
 from ..schema.definition import CellMetadata, CellxGene, CellxProt, Segmentation, TxTable
-from .workflow import DEFAULT_INPUT, collect_input, prepare_output
+from .workflow import DEFAULT_INPUT, collect_input, route_output
 
 if TYPE_CHECKING:
     from ..g4x_output import G4Xoutput
@@ -22,6 +22,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 # @g4x_workflow
+# region main function
 def aggregate_cell_data(
     smp: 'G4Xoutput',
     segmentation_mask: str = DEFAULT_INPUT,
@@ -37,7 +38,8 @@ def aggregate_cell_data(
 ) -> None:
 
     log = logger or LOGGER
-    log.info('Running aggregate_cell_data')
+    seg_source = 'g4x-default' if segmentation_mask == DEFAULT_INPUT else 'custom'
+    log.info('Running aggregate_cell_data with %s segmentation source', seg_source)
 
     # 1: Validate and collect input
     txtable_in = collect_input(smp, tx_table, TxTable, logger=log)
@@ -48,7 +50,7 @@ def aggregate_cell_data(
     out_dir = smp.data_dir if out_dir == DEFAULT_INPUT else io.pathval.validate_dir_path(out_dir)
 
     log_with_path = partial(logut.log_with_path, logger=log, level='info')
-    prep_out = partial(prepare_output, smp, out_dir, overwrite=overwrite, logger=log)
+    prep_out = partial(route_output, smp, out_dir, overwrite=overwrite, logger=log)
     prep_out(validator=CellMetadata)
     prep_out(validator=CellxGene)
     prep_out(validator=TxTable, overwrite=True)
@@ -63,7 +65,6 @@ def aggregate_cell_data(
     cell_frame = _cell_frame(segmentation_mask=mask)
 
     # 4: Create cell metadata
-    seg_source = 'g4x-default' if segmentation_mask == DEFAULT_INPUT else 'custom'
     cell_metadata = create_cell_metadata(
         smp,
         cell_frame=cell_frame,
@@ -119,30 +120,7 @@ def aggregate_cell_data(
     log.info('Completed aggregating cell data')
 
 
-def add_nuclei_properties(smp, cell_metadata, show_progress=True):
-    segmentation_mask = smp.load_segmentation(expanded=False)
-    mask_props_nuc = extract_cell_props(mask=segmentation_mask, mask_name='nuclei', show_progress=show_progress)
-    mask_props_nuc = mask_props_nuc.rename({c.CELL_AREA_NAME: 'nuclei_area_um'})
-
-    cell_metadata = cell_metadata.drop([c.CELL_COORD_X, c.CELL_COORD_Y]).join(mask_props_nuc, on=c.CELL_ID_NAME)
-
-    col_order = [
-        c.CELL_ID_NAME,
-        'sample_id',
-        'tissue_type',
-        'block',
-        'seg_source',
-        c.CELL_COORD_X,
-        c.CELL_COORD_Y,
-        'nuclei_area_um',
-        c.CELL_AREA_NAME,
-        'nuclearstain_intensity_mean',
-        'cytoplasmicstain_intensity_mean',
-    ]
-    return cell_metadata.select(col_order)
-
-
-# region metadata
+# region high-level functions
 def create_cell_metadata(
     smp: 'G4Xoutput',
     segmentation_mask: np.ndarray,
@@ -153,8 +131,7 @@ def create_cell_metadata(
     logger: logging.Logger | None = None,
 ):
     log = logger or LOGGER
-
-    log.info('Creating cell metadata from %s segmentation source', seg_source)
+    log.debug('Creating cell metadata')
 
     if cell_frame is None:
         cell_frame = _cell_frame(smp.cell_labels)
@@ -194,6 +171,98 @@ def create_cell_metadata(
     return cell_meta.collect()
 
 
+def create_cell_x_gene(
+    smp: 'G4Xoutput',
+    tx_table: pl.LazyFrame,
+    segmentation_mask: str | np.ndarray = DEFAULT_INPUT,
+    gene_labels: str | np.ndarray = DEFAULT_INPUT,
+    return_lazy: bool = True,
+    logger: logging.Logger | None = None,
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+
+    log = logger or LOGGER
+    log.debug('Creating cell x gene matrix')
+
+    tx_table = intersect_tx_with_cells(tx_table, segmentation_mask)
+    cell_frame = _cell_frame(segmentation_mask)
+
+    if gene_labels == DEFAULT_INPUT:
+        gene_labels = smp.genes
+
+    cell_by_gene = (
+        tx_table.filter(pl.col(c.CELL_ID_NAME) != 0)
+        .group_by(c.CELL_ID_NAME, c.GENE_ID_NAME)
+        .agg(pl.len().alias('counts'))
+        .sort(c.GENE_ID_NAME)
+        .pivot(on=c.GENE_ID_NAME, values='counts', index=c.CELL_ID_NAME, on_columns=gene_labels)
+    )
+
+    # Adding missing cells with zero counts
+    cell_by_gene = cell_frame.join(cell_by_gene.lazy(), on=c.CELL_ID_NAME, how='left')
+
+    existing = cell_by_gene.collect_schema().names()
+    if not set(existing[1:]) == set(gene_labels):
+        raise ValueError('Mismatch between cell_by_gene columns and gene_labels')
+
+    cell_by_gene = cell_by_gene.select([c.CELL_ID_NAME] + gene_labels)
+    cell_by_gene = cell_by_gene.fill_null(0).sort(c.CELL_ID_NAME)
+
+    log.debug('Cell x gene matrix created successfully')
+
+    if return_lazy:
+        return cell_by_gene, tx_table
+    return cell_by_gene.collect(), tx_table.collect()
+
+
+def create_cell_x_signal(
+    smp: 'G4Xoutput',
+    mask: np.ndarray,
+    signal_list: list[str],
+    suffix: str = '_intensity_mean',
+    show_progress: bool | None = None,
+    return_lazy: bool = True,
+    logger: logging.Logger | None = None,
+    **kwargs,
+) -> pl.LazyFrame:
+
+    log = logger or LOGGER
+    log.debug('Creating cell x signal matrix for %d signals.', len(signal_list))
+
+    bead_mask = smp.load_bead_mask()
+    bead_mask_flat = bead_mask.ravel() if bead_mask is not None else None
+    mask_flat = mask.ravel()
+
+    channel_df = _cell_frame(mask)
+
+    if show_progress is None:
+        show_progress = sys.stderr.isatty()
+
+    for signal_name in tqdm(signal_list, desc='Extracting image signals', disable=not show_progress):
+        log.debug('Processing signal: %s', signal_name)
+        if signal_name == c.NUCLEAR_STAIN:
+            signal_img = smp.load_nuclear_image()
+            signal_name += 'stain'
+        elif signal_name == c.CYTOPLASMIC_STAIN:
+            signal_img = smp.load_cytoplasmic_image()
+            signal_name += 'stain'
+        else:
+            signal_img = smp.load_protein_image(protein=signal_name)
+
+        ch_label = f'{signal_name}{suffix}'
+
+        intensity_df = image_intensity_extraction(
+            signal_img, mask_flat=mask_flat, bead_mask_flat=bead_mask_flat, ch_label=ch_label, **kwargs
+        )
+        channel_df = channel_df.join(intensity_df, on=c.CELL_ID_NAME, how='left')
+
+    channel_df = channel_df.sort(c.CELL_ID_NAME)
+    log.debug('Cell x signal matrix created successfully')
+    if return_lazy:
+        return channel_df
+    return channel_df.collect()
+
+
+# region core functions
 def extract_cell_props(
     mask: np.ndarray,
     mask_name: str | None = None,
@@ -234,48 +303,27 @@ def extract_cell_props(
     return mask_props
 
 
-# region transcripts
-def create_cell_x_gene(
-    smp: 'G4Xoutput',
-    tx_table: pl.LazyFrame,
-    segmentation_mask: str | np.ndarray = DEFAULT_INPUT,
-    gene_labels: str | np.ndarray = DEFAULT_INPUT,
-    return_lazy: bool = True,
-    logger: logging.Logger | None = None,
-) -> tuple[pl.DataFrame, pl.DataFrame]:
+def add_nuclei_properties(smp, cell_metadata, show_progress=True):
+    segmentation_mask = smp.load_segmentation(expanded=False)
+    mask_props_nuc = extract_cell_props(mask=segmentation_mask, mask_name='nuclei', show_progress=show_progress)
+    mask_props_nuc = mask_props_nuc.rename({c.CELL_AREA_NAME: 'nuclei_area_um'})
 
-    log = logger or LOGGER
-    log.info('Creating cell x gene matrix')
+    cell_metadata = cell_metadata.drop([c.CELL_COORD_X, c.CELL_COORD_Y]).join(mask_props_nuc, on=c.CELL_ID_NAME)
 
-    tx_table = intersect_tx_with_cells(tx_table, segmentation_mask)
-    cell_frame = _cell_frame(segmentation_mask)
-
-    if gene_labels == DEFAULT_INPUT:
-        gene_labels = smp.genes
-
-    cell_by_gene = (
-        tx_table.filter(pl.col(c.CELL_ID_NAME) != 0)
-        .group_by(c.CELL_ID_NAME, c.GENE_ID_NAME)
-        .agg(pl.len().alias('counts'))
-        .sort(c.GENE_ID_NAME)
-        .pivot(on=c.GENE_ID_NAME, values='counts', index=c.CELL_ID_NAME, on_columns=gene_labels)
-    )
-
-    # Adding missing cells with zero counts
-    cell_by_gene = cell_frame.join(cell_by_gene.lazy(), on=c.CELL_ID_NAME, how='left')
-
-    existing = cell_by_gene.collect_schema().names()
-    if not set(existing[1:]) == set(gene_labels):
-        raise ValueError('Mismatch between cell_by_gene columns and gene_labels')
-
-    cell_by_gene = cell_by_gene.select([c.CELL_ID_NAME] + gene_labels)
-    cell_by_gene = cell_by_gene.fill_null(0).sort(c.CELL_ID_NAME)
-
-    log.info('Cell x gene matrix created successfully')
-
-    if return_lazy:
-        return cell_by_gene, tx_table
-    return cell_by_gene.collect(), tx_table.collect()
+    col_order = [
+        c.CELL_ID_NAME,
+        'sample_id',
+        'tissue_type',
+        'block',
+        'seg_source',
+        c.CELL_COORD_X,
+        c.CELL_COORD_Y,
+        'nuclei_area_um',
+        c.CELL_AREA_NAME,
+        'nuclearstain_intensity_mean',
+        'cytoplasmicstain_intensity_mean',
+    ]
+    return cell_metadata.select(col_order)
 
 
 def intersect_tx_with_cells(
@@ -286,55 +334,6 @@ def intersect_tx_with_cells(
     cell_ids = mask[tx_coords[:, 0], tx_coords[:, 1]]
     tx_table = tx_table.with_columns(pl.lit(cell_ids).alias(column_name))
     return tx_table
-
-
-# region protein
-def create_cell_x_signal(
-    smp: 'G4Xoutput',
-    mask: np.ndarray,
-    signal_list: list[str],
-    suffix: str = '_intensity_mean',
-    show_progress: bool | None = None,
-    return_lazy: bool = True,
-    logger: logging.Logger | None = None,
-    **kwargs,
-) -> pl.LazyFrame:
-
-    log = logger or LOGGER
-    log.info('Creating cell x signal matrix for %d signals.', len(signal_list))
-
-    bead_mask = smp.load_bead_mask()
-    bead_mask_flat = bead_mask.ravel() if bead_mask is not None else None
-    mask_flat = mask.ravel()
-
-    channel_df = _cell_frame(mask)
-
-    if show_progress is None:
-        show_progress = sys.stderr.isatty()
-
-    for signal_name in tqdm(signal_list, desc='Extracting image signals', disable=not show_progress):
-        log.debug('Processing signal: %s', signal_name)
-        if signal_name == c.NUCLEAR_STAIN:
-            signal_img = smp.load_nuclear_image()
-            signal_name += 'stain'
-        elif signal_name == c.CYTOPLASMIC_STAIN:
-            signal_img = smp.load_cytoplasmic_image()
-            signal_name += 'stain'
-        else:
-            signal_img = smp.load_protein_image(protein=signal_name)
-
-        ch_label = f'{signal_name}{suffix}'
-
-        intensity_df = image_intensity_extraction(
-            signal_img, mask_flat=mask_flat, bead_mask_flat=bead_mask_flat, ch_label=ch_label, **kwargs
-        )
-        channel_df = channel_df.join(intensity_df, on=c.CELL_ID_NAME, how='left')
-
-    channel_df = channel_df.sort(c.CELL_ID_NAME)
-    log.info('Cell x signal matrix created successfully')
-    if return_lazy:
-        return channel_df
-    return channel_df.collect()
 
 
 def image_intensity_extraction(
@@ -440,7 +439,6 @@ def _image_intensity_extraction_gpu(
     return cp.asnumpy(all_labels), cp.asnumpy(means)
 
 
-# region utilities
 def _cell_frame(segmentation_mask: np.ndarray, lazy: bool = True) -> int:
     cell_labels = np.unique(segmentation_mask)
     cell_labels = cell_labels[cell_labels != 0]

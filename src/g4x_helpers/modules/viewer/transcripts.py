@@ -61,7 +61,7 @@ def write_transcripts(
     for level, specs in pyramid.items():
         msg += f'Level {level}: tile_size: {specs["tile_size"]} - scale: {specs["scale_fct"]}\n'
 
-    logut.log_msg_wrapped('Tile specs:', msg, logger=log)
+    logut.log_msg_wrapped('Tile specs:', msg, logger=log, level='debug')
 
     # 5: assign tiles to tx and construct tile dataframes
     pyramid = construct_tile_dfs(df, pyramid)

@@ -15,7 +15,7 @@ from scipy.sparse import csr_matrix
 from .. import c, io
 from .. import logging_utils as logut
 from ..schema.definition import AdataH5, CellMetadata, CellxGene, CellxProt, ClusteringUmap, Dgex, Manifest
-from .workflow import collect_input, prepare_output
+from .workflow import collect_input, route_output
 
 if TYPE_CHECKING:
     from anndata import AnnData
@@ -37,7 +37,7 @@ DEFAULT_FILTER_CONFIG = [
 ]
 
 
-# region workflows
+# region main functions
 def init_adata(
     smp: 'G4Xoutput',
     *,
@@ -126,11 +126,10 @@ def init_adata(
 
     adata = _sanitize_categorical_columns(adata, threshold=10)
 
-    log.info('Completed init_adata')
+    log.debug('Completed init_adata')
     return adata.copy()
 
 
-# TODO add custom output
 def process_sc_output(
     smp: 'G4Xoutput',
     adata: 'AnnData',
@@ -149,7 +148,7 @@ def process_sc_output(
 
     # Validate and prepare output, set up reusable functions
     out_dir = smp.data_dir if out_dir == DEFAULT_INPUT else io.pathval.validate_dir_path(out_dir)
-    prep_out = partial(prepare_output, smp, out_dir, overwrite=overwrite, logger=log)
+    prep_out = partial(route_output, smp, out_dir, overwrite=overwrite, logger=log)
     log_with_path = partial(logut.log_with_path, logger=log, level='info')
     write_dummys = partial(write_dummy_clustering_outputs, adata=adata, smp=smp, logger=log)
 
@@ -209,7 +208,8 @@ def process_sc_output(
         return
 
     # Move AnnData object to CPU for downstream processing
-    backend.rsc.get.anndata_to_CPU(adata)
+    if backend.use_gpu:
+        backend.rsc.get.anndata_to_CPU(adata)
 
     # 4. Generate UMAP and clustering dataframes
     umap_df = pl.from_numpy(adata.obsm['X_umap'], schema={'UMAP1': pl.Float32, 'UMAP2': pl.Float32})
@@ -232,7 +232,7 @@ def process_sc_output(
         write_dummys(failure_code='dgex_failed')
 
 
-# region processing
+# region hiher-level functions
 def filter_adata(
     adata: 'AnnData',
     filter_panel: 'FilterPanel' | None = None,
@@ -301,6 +301,7 @@ def pre_process_adata(
         tl = sc.tl
         neighbors_kwargs = neighbors_params
         umap_kwargs = {'init_pos': 'spectral', **umap_params}
+        pca_params['svd_solver'] = 'arpack'  # more stable for small datasets on CPU
 
     steps = [
         ('normalizing total counts', lambda: pp.normalize_total(adata)),
@@ -310,8 +311,9 @@ def pre_process_adata(
         ('running UMAP', lambda: tl.umap(adata, **umap_kwargs)),
     ]
 
+    log.info('Running: normalization -> log-transform -> PCA -> neighbors -> UMAP')
     for message, fn in steps:
-        log.info(message)
+        log.debug(message)
         fn()
 
     adata.uns['pre_process_method'] = backend_proxy
@@ -463,7 +465,62 @@ def run_dgex(
     return dgex
 
 
-# region utilities
+# region core functions
+def write_dummy_clustering_outputs(
+    smp,
+    *,
+    adata,
+    success_clusterings: list[str] = [],
+    failure_code: str = 'failed',
+    logger: logging.Logger | None = None,
+) -> None:
+
+    log = logger or LOGGER
+    log.info('Filling missing outputs with placeholders due to failure code: %s', failure_code)
+
+    # 1: Clustering / UMAP table
+    if 'X_umap' not in adata.obsm:
+        log.debug('X_umap was not found, filling with NaNs')
+        umap = np.full((adata.n_obs, 2), np.nan)
+    else:
+        umap = adata.obsm['X_umap']
+
+    # get the adata.obs
+    obs_df = pl.from_pandas(adata.obs, include_index=True).cast({c.CELL_ID_NAME: pl.UInt64})
+    dummy_clust = obs_df.select([c.CELL_ID_NAME] + success_clusterings)
+
+    dummy_clust = dummy_clust.with_columns(
+        UMAP1=umap[:, 0],
+        UMAP2=umap[:, 1],
+    )
+
+    # add a default clustering if none were successful
+    if not success_clusterings:
+        log.debug('No successful clusterings found, adding default label "unassigned" for all cells')
+        dummy_clust = dummy_clust.with_columns(leiden=pl.lit('unassigned'))
+        success_clusterings.append('leiden')
+
+    dummy_clust = dummy_clust.with_columns(failure_code=pl.lit(failure_code))
+
+    # select the relevant columns for the output
+    col_select = [c.CELL_ID_NAME] + success_clusterings + ['UMAP1', 'UMAP2', 'failure_code']
+    dummy_clust = dummy_clust.select(col_select)
+
+    # 2: Dgex table <- this is the last step in the pipeline. so when the previous steps fail, we still need to create a placeholder
+    dummy_dgex = pl.DataFrame(schema=smp.src.Dgex.SCHEMA)
+    null_row = pl.DataFrame({col: pl.Series([None], dtype=dummy_dgex.schema[col]) for col in dummy_dgex.columns})
+    dummy_dgex = dummy_dgex.vstack(null_row).with_columns(failure_code=pl.lit(failure_code))
+
+    msg = str(smp.out.ClusteringUmap.p) + '\n'
+    msg += str(smp.out.Dgex.p) + '\n'
+    msg += str(smp.out.AdataH5.p)
+
+    logut.log_msg_wrapped(header='Writing clustering outputs with placeholders', msg=msg, prefix=logut.PGAP, logger=log)
+    dummy_clust.write_csv(smp.out.ClusteringUmap.p, compression='gzip')
+    dummy_dgex.write_csv(smp.out.Dgex.p, compression='gzip')
+    adata.write(smp.out.AdataH5.p)
+
+
 class FilterMethod:
     def __init__(
         self,
@@ -628,61 +685,6 @@ def _reorder_clusters_by_size(obs: pd.DataFrame, key: str, prefix: str = 'C') ->
     )
 
     return reordered_obs
-
-
-def write_dummy_clustering_outputs(
-    smp,
-    *,
-    adata,
-    success_clusterings: list[str] = [],
-    failure_code: str = 'failed',
-    logger: logging.Logger | None = None,
-) -> None:
-
-    log = logger or LOGGER
-    log.info('Filling missing outputs with placeholders due to failure code: %s', failure_code)
-
-    # 1: Clustering / UMAP table
-    if 'X_umap' not in adata.obsm:
-        log.debug('X_umap was not found, filling with NaNs')
-        umap = np.full((adata.n_obs, 2), np.nan)
-    else:
-        umap = adata.obsm['X_umap']
-
-    # get the adata.obs
-    obs_df = pl.from_pandas(adata.obs, include_index=True).cast({c.CELL_ID_NAME: pl.UInt64})
-    dummy_clust = obs_df.select([c.CELL_ID_NAME] + success_clusterings)
-
-    dummy_clust = dummy_clust.with_columns(
-        UMAP1=umap[:, 0],
-        UMAP2=umap[:, 1],
-    )
-
-    # add a default clustering if none were successful
-    if not success_clusterings:
-        log.debug('No successful clusterings found, adding default label "unassigned" for all cells')
-        dummy_clust = dummy_clust.with_columns(leiden=pl.lit('unassigned'))
-        success_clusterings.append('leiden')
-
-    dummy_clust = dummy_clust.with_columns(failure_code=pl.lit(failure_code))
-
-    # select the relevant columns for the output
-    col_select = [c.CELL_ID_NAME] + success_clusterings + ['UMAP1', 'UMAP2', 'failure_code']
-    dummy_clust = dummy_clust.select(col_select)
-
-    # 2: Dgex table <- this is the last step in the pipeline. so when the previous steps fail, we still need to create a placeholder
-    dummy_dgex = pl.DataFrame(schema=smp.src.Dgex.SCHEMA)
-    null_row = pl.DataFrame({col: pl.Series([None], dtype=dummy_dgex.schema[col]) for col in dummy_dgex.columns})
-    dummy_dgex = dummy_dgex.vstack(null_row).with_columns(failure_code=pl.lit(failure_code))
-
-    msg = str(smp.out.ClusteringUmap.p) + '\n'
-    msg += str(smp.out.Dgex.p) + '\n'
-    msg += str(smp.out.AdataH5.p)
-
-    logut.log_msg_wrapped(header='Writing clustering outputs with placeholders', msg=msg, prefix=logut.PGAP, logger=log)
-    dummy_clust.write_csv(smp.out.ClusteringUmap.p, compression='gzip')
-    dummy_dgex.write_csv(smp.out.Dgex.p, compression='gzip')
-    adata.write(smp.out.AdataH5.p)
 
 
 def _sanitize_categorical_columns(adata, threshold: int = 10):

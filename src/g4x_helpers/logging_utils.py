@@ -5,7 +5,8 @@ from pathlib import Path
 
 PACKAGE_LOGGER_NAME = __package__ or __name__.split('.')[0]
 LOGGER = logging.getLogger(__name__)
-PGAP = 2 * ' ' + '> '
+INDENT = 2 * ' '
+PGAP = INDENT + '> '
 
 
 def configure_g4x_logging(
@@ -26,6 +27,7 @@ def configure_g4x_logging(
     if clear_handlers:
         logger.handlers.clear()
 
+    level = level.upper() if isinstance(level, str) else level
     if format is None:
         format = '%(asctime)s | %(g4x_name)s | %(levelname)7s - %(message)s'
 
@@ -74,16 +76,25 @@ def log_msg_wrapped(
 
 
 def log_with_path(
-    message: str, path: str, logger: logging.Logger | None = None, *, after_path: str = '', level: int = logging.DEBUG
+    message: str,
+    path: str | list,
+    logger: logging.Logger | None = None,
+    *,
+    after_path: str = '',
+    level: int = logging.DEBUG,
 ):
     log = logger or LOGGER
 
     if isinstance(level, str):
         level = getattr(logging, level.upper())
 
+    paths = path if isinstance(path, (list, tuple)) else [path]
+
     msg = message
-    msg += f'\n{PGAP}{path}'
+    for p in paths:
+        msg += f'\n{PGAP}{p}'
+
     if after_path:
-        msg += f'\n{after_path}'
+        msg += f'\n{INDENT}{after_path}'
 
     log.log(level, msg)

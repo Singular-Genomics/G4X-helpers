@@ -96,7 +96,7 @@ def default_window_recipe(arr):
 def write_muliplex_img(smp, root_group, logger: logging.Logger | None = None):
 
     log = LOGGER or logger
-    log.info('Preparing multiplex image')
+    log.debug('Preparing multiplex image')
 
     dtype = np.uint16
     channel_arrays = []
@@ -141,7 +141,7 @@ def write_muliplex_img(smp, root_group, logger: logging.Logger | None = None):
 
 def write_he_img(smp, root_group, logger: logging.Logger | None = None):
     log = LOGGER or logger
-    log.info('Preparing fH&E image')
+    log.debug('Preparing fH&E image')
 
     dtype = np.uint8
     image = _load_image_dask(smp, img_type='h_and_e', protein_name=None, dtype=dtype)

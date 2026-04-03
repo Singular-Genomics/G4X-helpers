@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .. import logging_utils
+from .. import logging_utils as logut
 from ..io import pathval
 
 if TYPE_CHECKING:
@@ -33,11 +33,11 @@ def collect_input(
     if validate and not in_obj.is_valid:
         raise ValueError(f'Provided {validator.__name__} is not valid!\nreason: {in_obj.report_validation()}')
 
-    log.debug(f'Using {prefix} {validator.__name__} as input:\n%s%s', logging_utils.PGAP, in_obj.p)
+    log.debug(f'Using {prefix} {validator.__name__} as input:\n%s%s', logut.PGAP, in_obj.p)
     return in_obj
 
 
-def prepare_output(
+def route_output(
     smp,
     out_dir: str,
     validator: 'BaseValidator',
@@ -52,13 +52,12 @@ def prepare_output(
 
     if out_obj.path_exists and not overwrite:
         raise RuntimeError(
-            f'Operation aborted! {validator.__name__} already exists at:\n{logging_utils.PGAP}{out_obj.p}\nUse overwrite=True to ignore this.',
+            f'Operation aborted! {validator.__name__} already exists at:\n{logut.PGAP}{out_obj.p}\nUse overwrite=True to ignore this.',
         )
 
     suffix = 'overriding existing file' if out_obj.path_exists else 'creating new file'
-    log.debug(
-        f'Using the following path for {validator.__name__} output ({suffix}):\n%s%s', logging_utils.PGAP, out_obj.p
-    )
+    logut.log_with_path(f'Using the following path for {validator.__name__} output ({suffix}):', out_obj.p, logger=log)
+
     return True
 
 
@@ -68,7 +67,7 @@ def g4x_workflow(func):
         wflow_name = func.__name__.removesuffix('_core')
         logger = kwargs.pop('logger', None)
         if logger is None:
-            logger = logging_utils.configure_g4x_logging(level='DEBUG')
+            logger = logut.configure_g4x_logging(level='DEBUG')
             logger.info('No logger provided, using default package logger (stream only).')
 
         workflow_logger = logger.getChild(f'workflow.{wflow_name}')
