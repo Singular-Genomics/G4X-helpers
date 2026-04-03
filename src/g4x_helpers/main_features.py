@@ -94,7 +94,7 @@ def resegment(
         logger=logger,
     )
 
-    init_bin.init_bin_file(g4x_obj=g4x_obj, out_dir=out_dir, logger=logger, n_threads=n_threads)
+    init_bin.init_bin_file(g4x_obj=g4x_obj, seg_mask=labels, out_dir=out_dir, logger=logger, n_threads=n_threads)
 
     # TODO tell user to run update_bin afterwards
 
