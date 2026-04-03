@@ -35,6 +35,7 @@ def apply_segmentation(
     out_dir: Path,
     *,
     tx_table: Path | None = None,
+    manifest: Path | None = None,
     skip_protein_extraction: bool = False,
     signal_list: list[str] | None = None,
     logger: logging.Logger,
@@ -55,7 +56,9 @@ def apply_segmentation(
     logger.info('Creating cell_by_transcript table.')
     if tx_table is None:
         tx_table = g4x_obj.transcript_table_path
-    cell_x_gene, tx_table = create_cell_x_gene(g4x_obj=g4x_obj, tx_table=tx_table, mask=labels, nucleus_mask=nuc_mask)
+    cell_x_gene, tx_table = create_cell_x_gene(
+        g4x_obj=g4x_obj, tx_table=tx_table, manifest=manifest, mask=labels, nucleus_mask=nuc_mask
+    )
 
     logger.info(f'Writing cell_by_transcript matrix to: {cell_x_gene_out.relative_to(out_dir)}.')
     utils.write_csv_gz(df=cell_x_gene, path=cell_x_gene_out)
@@ -109,6 +112,7 @@ def apply_segmentation(
         g4x_obj=g4x_obj,
         cell_x_gene=cell_x_gene,
         cell_metadata=cell_metadata_pre,
+        manifest=manifest if manifest is not None else g4x_obj.data_dir / 'transcript_panel.csv',
     )
 
     adata.obs.index = pd.Index(np.asarray(adata.obs.index, dtype=object), dtype=object)
@@ -290,6 +294,8 @@ def build_custom_cell_properties(g4x_obj: G4Xoutput, mask: np.ndarray) -> pl.Dat
 def create_cell_x_gene(
     g4x_obj: G4Xoutput,
     tx_table: Path,
+    manifest: Path | None = None,
+    *,
     mask: np.ndarray,
     nucleus_mask: np.ndarray | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
@@ -333,7 +339,9 @@ def create_cell_x_gene(
 
     print('Adding missing genes with zero counts.')
     zero_count_probes = (
-        utils.parse_input_manifest(file_path=g4x_obj.data_dir / 'transcript_panel.csv')
+        utils.parse_input_manifest(
+            file_path=manifest if manifest is not None else g4x_obj.data_dir / 'transcript_panel.csv'
+        )
         .unique('gene_name')
         .filter(~pl.col('gene_name').is_in(cell_by_gene.columns))['gene_name']
         .to_list()
@@ -397,6 +405,7 @@ def create_adata(
     g4x_obj: G4Xoutput,
     cell_x_gene: pl.DataFrame,
     cell_metadata: pl.DataFrame,
+    manifest: Path | None = None,
 ) -> AnnData:
     X = cell_x_gene.drop('label').to_numpy().astype(np.uint16)
 
@@ -407,7 +416,7 @@ def create_adata(
     var_df = pl.DataFrame(gene_ids).with_columns(pl.lit('tx').alias('modality'))
 
     panel_type = (
-        utils.parse_input_manifest(g4x_obj.data_dir / 'transcript_panel.csv')
+        utils.parse_input_manifest(manifest if manifest is not None else g4x_obj.data_dir / 'transcript_panel.csv')
         .unique('gene_name')
         .select('gene_name', 'probe_type')
         .rename({'gene_name': 'gene_id'})

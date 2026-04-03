@@ -205,8 +205,13 @@ class G4Xoutput:
         )
 
     # region methods
-    def load_adata(self, *, remove_nontargeting: bool = True, load_clustering: bool = True) -> AnnData:
-        adata = read_h5ad(self.feature_mtx_path)
+    def load_adata(
+        self, *, single_cell_dir: str | None = None, remove_nontargeting: bool = True, load_clustering: bool = True
+    ) -> AnnData:
+        if single_cell_dir is not None:
+            single_cell_dir = self.data_dir / single_cell_dir
+
+        adata = read_h5ad(single_cell_dir / self.feature_mtx_path.name)
 
         adata.obs_names = adata.obs['cell_id']
         adata.var_names = adata.var['gene_id']
@@ -218,7 +223,7 @@ class G4Xoutput:
             adata = adata[:, adata.var.query(" probe_type == 'targeting' ").index].copy()
 
         if load_clustering:
-            df = pd.read_csv(self.data_dir / 'single_cell_data' / 'clustering_umap.csv.gz', index_col=0, header=0)
+            df = pd.read_csv(single_cell_dir / 'clustering_umap.csv.gz', index_col=0, header=0)
             adata.obs = adata.obs.merge(df, how='left', left_index=True, right_index=True)
             umap_key = '_'.join(sorted([x for x in adata.obs.columns if 'X_umap' in x])[0].split('_')[:-1])
             adata.obsm['X_umap'] = adata.obs[[f'{umap_key}_1', f'{umap_key}_2']].to_numpy(dtype=float)
