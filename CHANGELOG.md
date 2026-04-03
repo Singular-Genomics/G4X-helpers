@@ -1,5 +1,22 @@
 # Changelog
 
+## [2026-04-03] — `v3.0.1`
+
+- update changelog
+- remove "staging" as release-branch in uv-ship
+
+## [2026-04-03] — `v3.0.0`
+
+- feat: compatibility with "cytoplasmic" image label
+- fix: ensure new_bin feature handles init_bin logic
+- fix: resegment not updating bin file
+- fix: ensure new gene names propagate to sc-out during redemux
+- fix: cannot save adata object
+
+## [2025-12-30] — `v2.1.2`
+
+- Fix/auto revert migrate (#68)
+
 ## [2025-12-29] — `v2.1.1`
 
 - fix: migration tripping over file updates despite fail
