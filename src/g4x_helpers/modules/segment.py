@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import geopandas
 import numpy as np
+import pandas as pd
 import polars as pl
 import scanpy as sc
 import shapely.affinity
@@ -31,7 +32,6 @@ if TYPE_CHECKING:
 def apply_segmentation(
     g4x_obj: 'G4Xoutput',
     labels: np.ndarray,
-    
     out_dir: Path,
     *,
     tx_table: Path | None = None,
@@ -74,7 +74,7 @@ def apply_segmentation(
 
     if skip_protein_extraction and g4x_obj.includes_protein:
         logger.warning('Skipping protein extraction. Will try existing cell_by_protein table.')
-        
+
         cxp_path = g4x_obj.data_dir / 'single_cell_data' / 'cell_by_protein.csv.gz'
         cxp_short = Path(cxp_path.parent.name) / cxp_path.name
         print(f'Cell_x_protein table not provided, loading from: {cxp_short}')
@@ -83,10 +83,12 @@ def apply_segmentation(
         if signal_list is not None:
             logger.info(f'Selecting channels: {signal_list}')
             signal_list = ['nuclear', 'eosin'] + g4x_obj.proteins
-            cell_x_protein = cell_x_protein.select(['label'] + [f'{signal_name}_intensity_mean' for signal_name in signal_list])
+            cell_x_protein = cell_x_protein.select(
+                ['label'] + [f'{signal_name}_intensity_mean' for signal_name in signal_list]
+            )
     else:
         logger.info('Gathering image intensities.')
-    
+
         cell_x_protein = create_cell_x_protein(
             g4x_obj=g4x_obj,
             mask=labels,
@@ -109,6 +111,8 @@ def apply_segmentation(
         cell_metadata=cell_metadata_pre,
     )
 
+    adata.obs.index = pd.Index(np.asarray(adata.obs.index, dtype=object), dtype=object)
+    adata.var.index = pd.Index(np.asarray(adata.var.index, dtype=object), dtype=object)
     logger.info(f'Writing adata to: {feature_matrix_out.relative_to(out_dir)}.')
     adata.write_h5ad(feature_matrix_out)
 
