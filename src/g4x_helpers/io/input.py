@@ -102,7 +102,9 @@ def parse_input_manifest(file_path: str, verbose: bool = False):
 
     for i, parsed_column in enumerate(['gene_name', 'sequence', 'primer']):
         if parsed_column not in manifest.columns:
-            manifest = manifest.with_columns([manifest['probe'].str.extract(c.PROBE_PATTERN, i + 1).alias(parsed_column)])
+            manifest = manifest.with_columns(
+                [manifest['probe'].str.extract(c.PROBE_PATTERN, i + 1).alias(parsed_column)]
+            )
 
     null_count = manifest.null_count()['sequence'][0]
     if null_count > 0:
