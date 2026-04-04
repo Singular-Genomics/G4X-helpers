@@ -17,7 +17,7 @@ from .definition import (
     ProteinPanel,
     QCSummary,
     RawFeatures,
-    SampleMetadata,
+    SampleG4X,
     SampleSheet,
     Segmentation,
     SingleCellFolder,
@@ -30,7 +30,7 @@ class FileTree:
     def __init__(self, sample_dir):
         self.smp_dir = Path(sample_dir)
 
-        meta_validator = SampleMetadata(root=self.smp_dir)
+        meta_validator = SampleG4X(root=self.smp_dir)
 
         self.raw_validators = [meta_validator]
         self.secondary_validators = []
@@ -153,12 +153,12 @@ class FileTree:
 
     def _val_report_verbose(self, raw_only: bool = False, raise_exception: bool = True):
 
-        if self.SampleMetadata.path_exists:
-            msg = f'Detected G4X-metadata file:\n{self.SampleMetadata.target_path}'
+        if self.SampleG4X.path_exists:
+            msg = f'Detected G4X-metadata file:\n{self.SampleG4X.target_path}'
             msg += f'\nassay type: {self.assay_type}'
             msg += '\n\n> Validating required raw data ...'
         else:
-            return self.SampleMetadata.report_validation()
+            return self.SampleG4X.report_validation()
 
         for v in self.raw_validators:
             msg += f'\n{v.report_validation()}'

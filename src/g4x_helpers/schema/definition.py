@@ -9,7 +9,7 @@ from .validator import BaseValidator, validation_test
 
 
 # region root
-class SampleMetadata(BaseValidator):
+class SampleG4X(BaseValidator):
     DEFAULT_TARGET_PATH = c.SMP_META
 
     KEYS = [

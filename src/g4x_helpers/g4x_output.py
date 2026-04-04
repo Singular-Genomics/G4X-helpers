@@ -35,7 +35,7 @@ class G4Xoutput:
 
         self.src.validation_report(format='minimal', raw_only=True, report_pass=False, raise_exception=False)
 
-        with open(self.src.SampleMetadata.p, 'r') as f:
+        with open(self.src.SampleG4X.p, 'r') as f:
             self.smp_meta = json.load(f)
 
         nuc_img = self.src.HnEDir.existing_files['h_and_e/nuclear']
