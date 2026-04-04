@@ -4,15 +4,8 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-import glymur
-import imageio.v3 as iio
 import numpy as np
-import shapely.affinity
-import skimage.measure
 import tifffile as tiff
-from shapely.geometry import Polygon
-from skimage import exposure, transform
-from skimage.measure._regionprops import RegionProperties
 from tqdm import tqdm
 
 from .. import constants as c
@@ -55,12 +48,15 @@ def ndarray_to_gdf(
     nudge: bool = True,
     show_progress: bool | None = None,
 ) -> 'GeoDataFrame':
+    import shapely.affinity
+    import skimage.measure
     from geopandas import GeoDataFrame
+    from shapely.geometry import Polygon
 
     if mask.max() == 0:
         return GeoDataFrame(geometry=[])
 
-    def _region_props_to_polygons(region_props: RegionProperties) -> list[Polygon]:
+    def _region_props_to_polygons(region_props: skimage.measure._regionprops.RegionProperties) -> list[Polygon]:
         mask = np.pad(region_props.image, 1)
         contours = skimage.measure.find_contours(mask, 0.5)
 
@@ -98,14 +94,22 @@ def jp2_to_ometiff(
     img_type: Literal['rgb', 'grey', 'auto'] = 'auto',
     create_thumb: bool = True,
     report_size: bool = True,
+    n_threads: int = c.DEFAULT_THREADS,
+    # TODO N_threads parameter for glymur
 ):
+    import glymur
+    import imageio.v3 as iio
+
+    glymur.set_option('lib.num_threads', n_threads)
+
     in_file = Path(in_file)
     out_file = Path(out_file)
 
     if create_thumb:
-        thumb_dir = in_file.parent / 'thumbs'
+        thumb_dir = out_file.parent / 'thumbs'
         thumb_suffix = '_thumbnail'
-        thumb_dir.mkdir(exist_ok=True)
+        if not thumb_dir.exists():
+            thumb_dir.mkdir(exist_ok=True)
 
     if not in_file.exists():
         raise FileNotFoundError(f"Input file '{in_file}' does not exist.")
@@ -157,6 +161,7 @@ def jp2_to_ometiff(
         fname = out_file.name.split('.')[0]
         out_file_thumb = out_file.with_stem(f'{fname}{thumb_suffix}').with_suffix('.png')
         out_file_thumb = thumb_dir / out_file_thumb.name
+
         iio.imwrite(out_file_thumb, img_thumb)
 
     if report_size:
@@ -184,6 +189,8 @@ def create_img_thumbnail(
     dtype: type = np.uint8,
 ):
     """Create a smaller version of the input image with optional intensity clipping."""
+
+    from skimage import exposure, transform
 
     new_shape = (np.array(img.shape) * downsample_ratio).astype(int)
     new_shape = (new_shape[0], new_shape[1])
