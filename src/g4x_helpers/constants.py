@@ -6,7 +6,7 @@ DEFAULT_THREADS = default_workers(max_workers=16, reserve=1)
 
 # Files
 SMP_META = 'sample.g4x'
-TX_PANEL = 'transcript_panel.csv'
+TX_PANEL = 'transcript_manifest.csv'
 PR_PANEL = 'protein_panel.csv'
 SUMMARY = 'summary_{sample_id}.html'
 SSHEET = 'samplesheet.csv'
