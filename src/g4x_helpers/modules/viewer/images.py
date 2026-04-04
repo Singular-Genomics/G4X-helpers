@@ -125,8 +125,18 @@ def write_muliplex_img(smp, root_group, logger: logging.Logger | None = None):
             color = saturated_colors[channel_color_map[name]]
         else:
             color = saturated_colors[list(saturated_colors.keys())[channel_order.index(name) % len(saturated_colors)]]
-        # TODO define what to do when channel is not in channel_color_map ?!?!
-        active = True if name in DEFAULT_VISIBLE_CHANNELS else False
+
+        num_def = len(DEFAULT_VISIBLE_CHANNELS)
+        visbile_proteins = []
+        for protein in smp.proteins:
+            if protein in DEFAULT_VISIBLE_CHANNELS:
+                visbile_proteins.append(protein)
+            else:
+                visbile_proteins.append(protein)
+            if len(visbile_proteins) >= num_def:
+                break
+
+        active = True if name in visbile_proteins else False
         window = default_window_recipe(arr)
         color = color.removeprefix('#')
         ic = ImageChannel(

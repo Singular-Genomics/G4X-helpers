@@ -99,6 +99,7 @@ def aggregate_cell_data(
             smp=smp,
             mask=mask,
             signal_list=smp.proteins,
+            show_progress=show_progress,
             logger=log,
         )
 
@@ -149,6 +150,7 @@ def create_cell_metadata(
         smp=smp,
         mask=segmentation_mask,
         signal_list=smp.stains,
+        show_progress=show_progress,
         logger=logger,
     )
 

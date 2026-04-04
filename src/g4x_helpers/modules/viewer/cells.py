@@ -196,13 +196,13 @@ def generate_cluster_palette(ordered_unique_clusters: list, max_colors: int = 25
 
 
 @lru_cache(maxsize=None)
-def extract_vertices_cached(mask, shape):
+def extract_vertices_cached(mask, shape, show_progress: bool = False):
     mask = io.import_segmentation(mask, expected_shape=shape, labels_key='nuclei_exp', use_cache=True)
-    return extract_vertices(mask)
+    return extract_vertices(mask, show_progress=show_progress)
 
 
-def extract_vertices(mask):
-    gdf = io.convert.ndarray_to_gdf(mask)
+def extract_vertices(mask, show_progress: bool = False):
+    gdf = io.convert.ndarray_to_gdf(mask, show_progress=show_progress)
 
     # Keep only largest polygon per label
     gdf['_area'] = gdf.geometry.area
