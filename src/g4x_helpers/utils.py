@@ -11,30 +11,6 @@ def default_workers(max_workers: int = 16, reserve: int = 1) -> int:
     return min(max_workers, max(1, cpu - reserve))
 
 
-def validate_path(path_str, must_exist=True, is_dir_ok=True, is_file_ok=True, resolve_path=False) -> Path:
-    path = Path(path_str)  # .expanduser().resolve()
-    if resolve_path:
-        path = path.resolve()
-
-    if must_exist and not path.exists():
-        raise FileNotFoundError(f'Path does not exist: {path}')
-
-    if path.exists():
-        if path.is_dir() and not is_dir_ok:
-            raise ValueError(f'Expected a file but got a directory: {path}')
-        if path.is_file() and not is_file_ok:
-            raise ValueError(f'Expected a directory but got a file: {path}')
-
-    if not path.exists() and not must_exist:
-        if not is_file_ok:
-            path.mkdir(parents=True, exist_ok=True)
-        else:
-            parent = path.parent
-            parent.mkdir(parents=True, exist_ok=True)
-
-    return path
-
-
 def write_table_to_csv(table: pl.DataFrame | pl.LazyFrame, out_path, source_path: str = None):
     if not isinstance(table, (pl.DataFrame, pl.LazyFrame)):
         raise ValueError(f'Expected a Polars DataFrame or LazyFrame, got {type(table)}')
