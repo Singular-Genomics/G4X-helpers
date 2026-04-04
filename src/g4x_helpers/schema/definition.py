@@ -14,7 +14,6 @@ class SampleMetadata(BaseValidator):
 
     KEYS = [
         'run_name',
-        'sample_position',
         'sample_id',
         'tissue_type',
         'block',
@@ -24,6 +23,7 @@ class SampleMetadata(BaseValidator):
         'fc_layout',
         'fc',
         'lane',
+        'sample_position',
         'platform',
         'user_name',
         'user_email',
@@ -409,7 +409,7 @@ class SingleCellFolder(BaseValidator):
         for val in self.SUB_VALIDATORS:
             existing_files[val.name] = val.is_valid
         return existing_files
-    
+
     @validation_test
     def files_present(self):
         return all(self.existing_files.values())
