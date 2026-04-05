@@ -204,31 +204,42 @@ class G4Xoutput:
         adata.obs_names = f'{self.sample_id}-' + adata.obs['cell_id'].str.split('-').str[1]
         return adata
 
-    def load_protein_image(self, protein: str, use_cache: bool | None = None) -> np.ndarray:
+    def _return_image(
+        self,
+        img_path: str,
+        dask: bool = False,
+        shape: tuple[int] | None = None,
+        use_cache: bool = False,
+        dtype: np.dtype = np.uint16,
+    ) -> np.ndarray:
+        if dask:
+            return io.import_image_dask(img_path=img_path, shape=shape or self.shape, dtype=dtype, use_cache=use_cache)
+        else:
+            return io.import_image(img_path=img_path, use_cache=use_cache)
+
+    def load_nuclear_image(self, dask: bool = False, use_cache: bool = False) -> np.ndarray:
+        img_path = self.src.HnEDir.existing_files['h_and_e/nuclear']
+        return self._return_image(img_path=img_path, dask=dask, use_cache=use_cache)
+
+    def load_cytoplasmic_image(self, dask: bool = False, use_cache: bool = False) -> np.ndarray:
+        img_path = self.src.HnEDir.existing_files['h_and_e/cytoplasmic']
+        return self._return_image(img_path=img_path, dask=dask, use_cache=use_cache)
+
+    def load_he_image(self, dask: bool = False, use_cache: bool = False) -> np.ndarray:
+        img_path = self.src.HnEDir.existing_files['h_and_e/h_and_e']
+        return self._return_image(
+            img_path=img_path, shape=self.shape + (3,), dask=dask, dtype=np.uint8, use_cache=use_cache
+        )
+
+    def load_protein_image(self, protein: str, dask: bool = False, use_cache: bool = False) -> np.ndarray:
         img_path = self.src.ProteinDir.existing_files.get(protein)
         if img_path is None:
             print(f'Protein image for {protein} not found.')
             return None
 
-        cache = self.use_cache if use_cache is None else use_cache
-        return io.import_image(img_path=img_path, use_cache=cache)
+        return self._return_image(img_path=img_path, dask=dask, use_cache=use_cache)
 
-    def load_he_image(self, use_cache: bool | None = None) -> np.ndarray:
-        img_path = self.src.HnEDir.existing_files['h_and_e/h_and_e']
-        cache = self.use_cache if use_cache is None else use_cache
-        return io.import_image(img_path=img_path, use_cache=cache)
-
-    def load_nuclear_image(self, use_cache: bool | None = None) -> np.ndarray:
-        img_path = self.src.HnEDir.existing_files['h_and_e/nuclear']
-        cache = self.use_cache if use_cache is None else use_cache
-        return io.import_image(img_path=img_path, use_cache=cache)
-
-    def load_cytoplasmic_image(self, use_cache: bool | None = None) -> np.ndarray:
-        img_path = self.src.HnEDir.existing_files['h_and_e/cytoplasmic']
-        cache = self.use_cache if use_cache is None else use_cache
-        return io.import_image(img_path=img_path, use_cache=cache)
-
-    def load_segmentation(self, expanded: bool = True, key: str | None = None) -> np.ndarray:
+    def load_segmentation(self, expanded: bool = True, key: str = False) -> np.ndarray:
         key = 'nuclei_exp' if expanded else 'nuclei'
         return io.import_segmentation(
             seg_path=self.src.Segmentation.p, expected_shape=self.shape, labels_key=key, use_cache=self.use_cache

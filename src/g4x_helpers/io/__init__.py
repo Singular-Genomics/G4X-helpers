@@ -2,6 +2,7 @@ from . import convert, pathval
 from .compute_backend import ComputeBackend, get_backend
 from .input import (
     import_image,
+    import_image_dask,
     import_segmentation,
     import_table,
     parse_input_manifest,
@@ -15,6 +16,7 @@ __all__ = [
     'import_segmentation',
     'parse_input_manifest',
     'import_image',
+    'import_image_dask',
     'import_table',
     'parse_samplesheet',
     'convert',

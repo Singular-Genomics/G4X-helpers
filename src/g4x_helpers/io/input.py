@@ -6,6 +6,8 @@ from inspect import signature
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import dask
+import dask.array as da
 import geopandas
 import glymur
 import numpy as np
@@ -226,7 +228,7 @@ def import_table(file_path: str, lazy: bool = False, columns: tuple[str] | None 
 
 
 @optionally_cached(maxsize=8)
-def import_image(img_path: str):
+def import_image(img_path: str) -> np.ndarray:
     img_path = Path(img_path)
     suffix = img_path.suffix.lower()
 
@@ -252,6 +254,14 @@ def import_image(img_path: str):
         return readers[suffix](img_path)
     except KeyError:
         raise ValueError(f'Unsupported image format: {suffix}') from None
+
+
+def import_image_dask(img_path: str, shape: tuple[int], dtype=np.uint16, use_cache: bool = False) -> da.Array:
+    return da.from_delayed(
+        dask.delayed(import_image)(img_path, use_cache=use_cache),
+        shape=shape,
+        dtype=dtype,
+    )
 
 
 # def parse_input_manifest(file_path: Path, verbose: bool = False) -> pl.DataFrame:
