@@ -159,11 +159,26 @@ class ProteinPanel(BaseValidator):
 # region masks
 class Segmentation(BaseValidator):
     DEFAULT_TARGET_PATH = c.SEG_MASK
+    DEFAULT_KEYS = ['nuclei', 'nuclei_exp']
+    _main_key = 'nuclei_exp'
+
+    @property
+    def main_key(self):
+        return self._main_key
+
+    @main_key.setter
+    def main_key(self, value):
+        self._main_key = value
+        self.DEFAULT_KEYS = [value]
 
     @validation_test
     def correct_keys(self):
         path = self.target_path
-        return list(np.load(path).keys()) == ['nuclei', 'nuclei_exp']
+        return set(np.load(path).keys()) == set(self.DEFAULT_KEYS)
+
+    def load(self, key: str | None = None):
+        key = self.main_key if key is None else key
+        return io.import_segmentation(seg_path=self.target_path, labels_key=key, expected_shape=None, use_cache=True)
 
 
 class BeadMask(BaseValidator):

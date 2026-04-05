@@ -43,31 +43,27 @@ def aggregate_cell_data(
 
     # 1: Validate and collect input
     txtable_in = collect_input(smp, tx_table, TxTable, logger=log)
-    # TODO maybe reconsider validation methods for this validator
     segment_in = collect_input(smp, segmentation_mask, Segmentation, validate=False, logger=log)
 
-    # 2: Validate and prepare output
+    # 2: Import segmentation mask (keys will be validated here)
+    mask = io.import_segmentation(segment_in.p, labels_key=mask_key, expected_shape=smp.shape)
+
+    # 3: Validate and prepare output
     out_dir = smp.data_dir if out_dir == DEFAULT_INPUT else io.pathval.validate_dir_path(out_dir)
 
     log_with_path = partial(logut.log_with_path, logger=log, level='info')
-    prep_out = partial(route_output, smp, out_dir, overwrite=overwrite, logger=log)
-    prep_out(validator=CellMetadata)
-    prep_out(validator=CellxGene)
-    prep_out(validator=TxTable, overwrite=True)
+    route_out = partial(route_output, smp, out_dir, overwrite=overwrite, logger=log)
 
-    # 3: Import segmentation mask and create cell frame
-    mask = io.import_segmentation(
-        segment_in.p,
-        expected_shape=smp.shape,
-        labels_key=mask_key,
-        logger=log,
-    )
-    cell_frame = _cell_frame(segmentation_mask=mask)
+    route_out(validator=CellMetadata)
+    route_out(validator=CellxGene)
+    route_out(validator=TxTable, overwrite=True)  # Always overwrite TxTable since we're updating the input table
+
+    overwrite_segmentation = True if segmentation_mask == DEFAULT_INPUT else overwrite
+    route_out(validator=Segmentation, overwrite=overwrite_segmentation)
 
     # 4: Create cell metadata
     cell_metadata = create_cell_metadata(
         smp,
-        cell_frame=cell_frame,
         segmentation_mask=mask,
         seg_source=seg_source,
         show_progress=show_progress,
@@ -91,7 +87,7 @@ def aggregate_cell_data(
 
     # 6: Create cell x protein matrix (optional)
     if smp.src.pr_detected:
-        prep_out(validator=CellxProt)
+        route_out(validator=CellxProt)
         if protein_list != DEFAULT_INPUT:
             smp.set_proteins(protein_list)
 
@@ -118,6 +114,13 @@ def aggregate_cell_data(
     log_with_path(f'Writing {smp.out.CellMetadata.name} table:', smp.out.CellMetadata.p)
     cell_metadata.sink_csv(smp.out.CellMetadata.p, compression='gzip')
 
+    # 10: Write the segmentation mask (if using custom)
+    if segmentation_mask != DEFAULT_INPUT:
+        log_with_path(f'Writing {smp.out.Segmentation.name} mask:', smp.out.Segmentation.p)
+        mask_data = {mask_key: mask}
+        smp.out.Segmentation.main_key = mask_key
+        np.savez(smp.out.Segmentation.p, **mask_data)
+
     log.info('Completed aggregating cell data')
 
 
@@ -134,8 +137,7 @@ def create_cell_metadata(
     log = logger or LOGGER
     log.debug('Creating cell metadata')
 
-    if cell_frame is None:
-        cell_frame = _cell_frame(smp.cell_labels)
+    cell_frame = _cell_frame(segmentation_mask)
 
     cell_meta = cell_frame.with_columns(
         pl.lit(smp.sample_id).alias('sample_id'),

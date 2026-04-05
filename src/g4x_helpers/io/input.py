@@ -146,13 +146,11 @@ def parse_input_manifest(file_path: str, verbose: bool = False):
 
 @optionally_cached(maxsize=2)
 def import_segmentation(
-    seg_path: str, expected_shape: tuple[int], labels_key: str | None = None, logger: logging.Logger | None = None
+    seg_path: str, labels_key: str | None = None, *, expected_shape: tuple[int] | None
 ) -> np.ndarray:
 
-    # log = logger or LOGGER
-    # log.info('Importing segmentation with labels_key=%s from:\n%s%s', labels_key, log_p_gap, seg_path)
-
     SUPPORTED_MASK_FILETYPES = {'.npy', '.npz', '.geojson'}
+
     ## load new segmentation
     cell_labels = pathval.validate_file_path(seg_path, must_exist=True)
 
@@ -202,8 +200,9 @@ def import_segmentation(
         seg = convert.gdf_to_ndarray(gdf=gdf, target_shape=expected_shape)
 
     # validate shape for final numpy arrays
-    if seg.shape != expected_shape:
-        raise ValueError(f'provided mask shape {seg.shape} does not match G4X sample shape {expected_shape}')
+    if expected_shape is not None:
+        if seg.shape != expected_shape:
+            raise ValueError(f'provided mask shape {seg.shape} does not match G4X sample shape {expected_shape}')
 
     return seg
 
