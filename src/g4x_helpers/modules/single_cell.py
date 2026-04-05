@@ -311,7 +311,7 @@ def pre_process_adata(
         ('running UMAP', lambda: tl.umap(adata, **umap_kwargs)),
     ]
 
-    log.info('Running: normalization -> log-transform -> PCA -> neighbors -> UMAP')
+    log.info('Normalize -> Log-transform -> PCA -> Neighbors -> UMAP')
     for message, fn in steps:
         log.debug(message)
         fn()

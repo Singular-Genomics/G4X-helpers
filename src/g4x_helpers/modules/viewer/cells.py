@@ -18,9 +18,9 @@ def write_cells(
     cell_group,
     seg_path,
     seg_name: str | None = None,
-    prechew: None = None,
     overwrite: bool = False,
     logger: logging.Logger | None = None,
+    prechew: None = None,
 ):
     log = LOGGER or logger
 
