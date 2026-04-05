@@ -8,20 +8,39 @@ from numcodecs import Blosc
 from ... import c, io
 from ...schema.definition import CellMetadata, CellxGene, CellxProt, ClusteringUmap, Segmentation
 from ..workflow import DEFAULT_INPUT, collect_input
-from .utils import create_array, populate_zarr_metadata
+from .utils import create_array
 
 LOGGER = logging.getLogger(__name__)
 
 
-def write_cells(smp, root_group, prechew: None = None, overwrite: bool = False, logger: logging.Logger | None = None):
+def write_cells(
+    smp,
+    cell_group,
+    seg_path,
+    seg_name: str | None = None,
+    prechew: None = None,
+    overwrite: bool = False,
+    logger: logging.Logger | None = None,
+):
     log = LOGGER or logger
 
+    seg_name = seg_path if seg_name is None else seg_name
+
+    seg_sources = cell_group.attrs['segmentation_sources']
+    seg_order = cell_group.attrs['segmentation_order']
+
+    seg_sources.update({seg_name: seg_path})
+    seg_order.append(seg_name)
+
+    cell_group.attrs['segmentation_sources'] = seg_sources
+    cell_group.attrs['segmentation_order'] = list(set(seg_order))
+
     log.info('Preparing cell data')
-    cell_group = root_group['cells']
-    metadata_group = cell_group['metadata']
-    protein_group = cell_group['protein']
-    polygon_group = cell_group['polygons']
-    genes_group = cell_group['genes']
+    seg_group = cell_group.create_group(seg_path, overwrite=overwrite)
+    metadata_group = seg_group.create_group('metadata', overwrite=overwrite)
+    protein_group = seg_group.create_group('protein', overwrite=overwrite)
+    polygon_group = seg_group.create_group('polygons', overwrite=overwrite)
+    genes_group = seg_group.create_group('genes', overwrite=overwrite)
 
     compressor = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
 
@@ -31,10 +50,13 @@ def write_cells(smp, root_group, prechew: None = None, overwrite: bool = False, 
     else:
         metadata, gex, gene_names = prechew
 
+    clusterings = [c for c in metadata.columns if c.startswith('leiden_')]
+    clusterings_order = get_sorted_clusterings(metadata, clusterings)
+
     meta_columns = {
         'cell_id': metadata[c.CELL_ID_NAME].to_numpy().astype(np.uint32),
         'area': metadata[c.CELL_AREA_NAME].to_numpy().astype(np.uint16),
-        'cluster_id': metadata['leiden_fine'].to_numpy().astype('U10'),  # TODO this is hard coded
+        'cluster_id': metadata.select(clusterings_order).to_numpy().astype('U20'),
         'total_counts': metadata['total_counts'].to_numpy().astype(np.uint16),
         'total_genes': metadata['n_genes_by_counts'].to_numpy().astype(np.uint16),
         'umap': metadata.select(['UMAP1', 'UMAP2'])
@@ -87,8 +109,22 @@ def write_cells(smp, root_group, prechew: None = None, overwrite: bool = False, 
         if overwrite and key in genes_group:
             del genes_group[key]
 
-    uids = sort_clusters(metadata, key='leiden_fine')
-    populate_zarr_metadata(root_group, gene_mtx_shape=gex.shape, cluster_ids=generate_cluster_palette(uids))
+    cluster_labels_meta = {}
+    for i, key in enumerate(clusterings_order):
+        sorted_cluster_ids = get_sorted_cluster_ids(metadata, cluster_key=key)
+        cluster_color_map = generate_cluster_palette(sorted_cluster_ids)
+
+        cluster_labels_meta[key] = {
+            'index': i,
+            'clusterID_order': list(cluster_color_map.keys()),
+            'clusterID_colors': cluster_color_map,
+        }
+
+    seg_group['metadata'].attrs['cluster_labels'] = cluster_labels_meta
+    seg_group['metadata'].attrs['cluster_labels_order'] = clusterings_order
+
+    seg_group['genes'].attrs['shape'] = gex.shape
+
     write_csr(genes_group, csr=gex, gene_names=gene_names, compressor=compressor, chunks='auto')
 
 
@@ -168,6 +204,30 @@ def sort_clusters(metadata, key='cluster_id'):
 
     uids.append('unassigned')
     return uids
+
+
+def get_sorted_clusterings(df, cluster_keys: list[str]):
+    clusterings_order = (
+        df.select(cluster_keys)
+        .unpivot(cluster_keys)
+        .group_by('variable')
+        .agg(pl.col('value').n_unique())
+        .sort('value', descending=False)['variable']
+        .to_list()
+    )
+    return clusterings_order
+
+
+def get_sorted_cluster_ids(df, cluster_key: str):
+    cluster_ids_order = (
+        df.select(cluster_key).group_by(cluster_key).agg(pl.len()).sort('len', descending=True)[cluster_key].to_list()
+    )
+
+    if 'unassigned' in cluster_ids_order:
+        cluster_ids_order.remove('unassigned')
+        cluster_ids_order.append('unassigned')
+
+    return cluster_ids_order
 
 
 def generate_cluster_palette(ordered_unique_clusters: list, max_colors: int = 256) -> dict:

@@ -10,10 +10,9 @@ from ... import c, io
 from ... import logging_utils as logut
 from ...schema.definition import ViewerZarr
 from ..workflow import DEFAULT_INPUT, route_output
-from .cells import process_cell_data, write_cells
 from .images import write_images
 from .transcripts import write_transcripts
-from .utils import write_metadata_defaults
+from .utils import populate_zarr_metadata
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_ZARR_NAME = c.FILE_VIEWER_ZARR
@@ -21,7 +20,6 @@ DEFAULT_ZARR_NAME = c.FILE_VIEWER_ZARR
 
 def create_viewer_zarr(
     smp,
-    segmentation_mask: str = DEFAULT_INPUT,
     tx_table: str = DEFAULT_INPUT,
     manifest: str = DEFAULT_INPUT,
     single_cell_dir: str = DEFAULT_INPUT,
@@ -49,26 +47,17 @@ def create_viewer_zarr(
     root_group.attrs['run_metadata'] = {'Sample Information': smp.smp_meta}
     root_group.attrs['smp_info_order'] = list(smp.smp_meta.keys())
 
+    if smp.src.QCSummary.path_exists:
+        shutil.copy(smp.src.QCSummary.p, smp.out.ViewerZarr.p / 'misc' / 'summary.html')
+    else:
+        log.info('QCSummary file does not exist, skipping copy to ViewerZarr.')
+
     write_images(smp, root_group, logger=log)
     write_transcripts(
         smp, root_group, tx_table=tx_table, manifest=manifest, dgex=sc_dir / smp.out.Dgex.n, overwrite=True, logger=log
     )
 
-    prechew = process_cell_data(
-        smp,
-        segmentation_mask=segmentation_mask,
-        cell_metadata=sc_dir / smp.out.CellMetadata.n,
-        cell_x_gene=sc_dir / smp.out.CellxGene.n,
-        cell_x_protein=None if not smp.src.pr_detected else sc_dir / smp.out.CellxProt.n,
-        clustering_umap=sc_dir / smp.out.ClusteringUmap.n,
-        logger=log,
-    )
-    write_cells(smp, root_group, prechew=prechew, overwrite=True, logger=log)
-
-    if smp.src.QCSummary.path_exists:
-        shutil.copy(smp.src.QCSummary.p, smp.out.ViewerZarr.p / 'misc' / 'summary.html')
-    else:
-        log.info('QCSummary file does not exist, skipping copy to ViewerZarr.')
+    return root_group
 
 
 def setup_zarr_tree(
@@ -91,12 +80,34 @@ def setup_zarr_tree(
     root_group.create_group('transcripts', overwrite=overwrite)
 
     cell_group = root_group.create_group('cells', overwrite=overwrite)
-    cell_group.create_group('metadata', overwrite=overwrite)
-    cell_group.create_group('protein', overwrite=overwrite)
-    cell_group.create_group('polygons', overwrite=overwrite)
-    cell_group.create_group('genes', overwrite=overwrite)
+    cell_group.attrs['segmentation_sources'] = {}
+    cell_group.attrs['segmentation_order'] = []
+    # for seg_name in ['default_segmentation', 'custom_segmentation']:
+    #     seg_group = cell_group.create_group(seg_name, overwrite=overwrite)
+    #     seg_group.create_group('metadata', overwrite=overwrite)
+    #     seg_group.create_group('protein', overwrite=overwrite)
+    #     seg_group.create_group('polygons', overwrite=overwrite)
+    #     seg_group.create_group('genes', overwrite=overwrite)
 
     (target_dir / 'misc').mkdir(parents=True, exist_ok=True)
 
-    write_metadata_defaults(root_group)
+    # write_metadata_defaults
+    # set static image attrs once
+    root_group['images'].attrs['axes'] = {'unit': 'micrometer', 'pixel_per_um': c.PIXEL_PER_MICRON}
+
+    tx_layer_info = {
+        'layers': 1,
+        'tile_size': 1,
+        'layer_height': 1,
+        'layer_width': 1,
+        'coordinate_order': ['default_x', 'default_y'],
+    }
+    populate_zarr_metadata(
+        root_group,
+        sample_metadata={'sample_metadata': 'default'},
+        cluster_ids={'default': [114, 255, 171]},
+        gene_mtx_shape=(0, 0),
+        gene_colors={},
+        tx_layer_config=tx_layer_info,
+    )
     return root_group
