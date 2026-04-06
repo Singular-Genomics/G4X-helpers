@@ -7,7 +7,7 @@ from numcodecs import Blosc
 
 from ... import c, io
 from ...schema.definition import CellMetadata, CellxGene, CellxProt, ClusteringUmap, Segmentation
-from ..workflow import DEFAULT_INPUT, collect_input
+from ..workflow import PRESET_SOURCE, collect_input
 from .utils import create_array
 
 LOGGER = logging.getLogger(__name__)
@@ -130,11 +130,11 @@ def write_cells(
 
 def process_cell_data(
     smp,
-    segmentation_mask: str = DEFAULT_INPUT,
-    cell_metadata: str = DEFAULT_INPUT,
-    cell_x_gene: str = DEFAULT_INPUT,
-    cell_x_protein: str = DEFAULT_INPUT,
-    clustering_umap: str = DEFAULT_INPUT,
+    segmentation_mask: str = PRESET_SOURCE,
+    cell_metadata: str = PRESET_SOURCE,
+    cell_x_gene: str = PRESET_SOURCE,
+    cell_x_protein: str = PRESET_SOURCE,
+    clustering_umap: str = PRESET_SOURCE,
     logger: logging.Logger | None = None,
 ):
     from scipy.sparse import csr_matrix
@@ -175,7 +175,7 @@ def process_cell_data(
 
     # 2: extract cell vertices
     # mask = smp.load_segmentation(expanded=True)
-    vertices = extract_vertices_cached(segment_in.p, shape=smp.shape)
+    vertices = extract_vertices_cached(segment_in.p, key=segment_in.main_key, shape=smp.shape)
     cell_metadata = cell_metadata.join(vertices, on=c.CELL_ID_NAME)
     del vertices  # , mask
 
@@ -256,8 +256,8 @@ def generate_cluster_palette(ordered_unique_clusters: list, max_colors: int = 25
 
 
 @lru_cache(maxsize=None)
-def extract_vertices_cached(mask, shape, show_progress: bool = False):
-    mask = io.import_segmentation(mask, expected_shape=shape, labels_key='nuclei_exp', use_cache=True)
+def extract_vertices_cached(mask, shape, key, show_progress: bool = False):
+    mask = io.import_segmentation(mask, expected_shape=shape, labels_key=key, use_cache=True)
     return extract_vertices(mask, show_progress=show_progress)
 
 

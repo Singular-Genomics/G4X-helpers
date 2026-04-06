@@ -15,7 +15,7 @@ from scipy.sparse import csr_matrix
 from .. import c, io
 from .. import logging_utils as logut
 from ..schema.definition import AdataH5, CellMetadata, CellxGene, CellxProt, ClusteringUmap, Dgex, Manifest
-from .workflow import collect_input, route_output
+from .workflow import PRESET_SOURCE, collect_input, reroute_source
 
 if TYPE_CHECKING:
     from anndata import AnnData
@@ -24,7 +24,6 @@ if TYPE_CHECKING:
 
 
 LOGGER = logging.getLogger(__name__)
-DEFAULT_INPUT = '__g4x_default__'
 DEFAULT_CLUSTERINGS = {'leiden_coarse': (6, 0.25), 'leiden_fine': (12, 0.5)}
 
 DEFAULT_FILTER_CONFIG = [
@@ -38,18 +37,18 @@ DEFAULT_FILTER_CONFIG = [
 
 
 # region main functions
+# @g4x_workflow
 def init_adata(
     smp: 'G4Xoutput',
     *,
-    manifest: str = DEFAULT_INPUT,
-    cell_metadata: str = DEFAULT_INPUT,
-    cell_x_gene: str = DEFAULT_INPUT,
-    cell_x_protein: str = DEFAULT_INPUT,
+    manifest: str = PRESET_SOURCE,
+    cell_metadata: str = PRESET_SOURCE,
+    cell_x_gene: str = PRESET_SOURCE,
+    cell_x_protein: str = PRESET_SOURCE,
     logger: logging.Logger | None = None,
 ) -> 'AnnData':
 
     log = logger or LOGGER
-    log.info('Running init_adata')
 
     # 1: Validate and collect input
     manifest_in = collect_input(smp, manifest, Manifest, logger=log)
@@ -125,15 +124,14 @@ def init_adata(
     adata.var.drop(columns=['ctrl'], inplace=True)
 
     adata = _sanitize_categorical_columns(adata, threshold=10)
-
-    log.debug('Completed init_adata')
     return adata.copy()
 
 
+# @g4x_workflow
 def process_sc_output(
     smp: 'G4Xoutput',
     adata: 'AnnData',
-    out_dir: str = DEFAULT_INPUT,
+    out_dir: str = PRESET_SOURCE,
     *,
     overwrite: bool = False,
     filter_panel: 'FilterPanel' | None = None,
@@ -147,8 +145,8 @@ def process_sc_output(
     backend = io.get_backend(which=compute_backend)
 
     # Validate and prepare output, set up reusable functions
-    out_dir = smp.data_dir if out_dir == DEFAULT_INPUT else io.pathval.validate_dir_path(out_dir)
-    prep_out = partial(route_output, smp, out_dir, overwrite=overwrite, logger=log)
+    out_dir = smp.data_dir if out_dir == PRESET_SOURCE else io.pathval.validate_dir_path(out_dir)
+    prep_out = partial(reroute_source, smp, out_dir, overwrite=overwrite, logger=log)
     log_with_path = partial(logut.log_with_path, logger=log, level='info')
     write_dummys = partial(write_dummy_clustering_outputs, adata=adata, smp=smp, logger=log)
 

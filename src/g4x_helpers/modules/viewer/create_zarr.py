@@ -9,7 +9,7 @@ import zarr
 from ... import c, io
 from ... import logging_utils as logut
 from ...schema.definition import ViewerZarr
-from ..workflow import DEFAULT_INPUT, route_output
+from ..workflow import PRESET_SOURCE, reroute_source
 from .images import write_images
 from .transcripts import write_transcripts
 from .utils import populate_zarr_metadata
@@ -18,13 +18,14 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_ZARR_NAME = c.FILE_VIEWER_ZARR
 
 
+# @g4x_workflow
 def create_viewer_zarr(
     smp,
-    tx_table: str = DEFAULT_INPUT,
-    manifest: str = DEFAULT_INPUT,
-    single_cell_dir: str = DEFAULT_INPUT,
+    tx_table: str = PRESET_SOURCE,
+    manifest: str = PRESET_SOURCE,
+    single_cell_dir: str = PRESET_SOURCE,
     *,
-    out_dir: str = DEFAULT_INPUT,
+    out_dir: str = PRESET_SOURCE,
     overwrite=True,
     store_name: str = DEFAULT_ZARR_NAME,
     protein_list: list[str] | None = None,
@@ -36,13 +37,13 @@ def create_viewer_zarr(
     if protein_list is not None:
         smp.set_proteins(protein_list)
 
-    single_cell_dir = smp.out.SingleCellFolder.p if single_cell_dir == DEFAULT_INPUT else single_cell_dir
+    single_cell_dir = smp.out.SingleCellFolder.p if single_cell_dir == PRESET_SOURCE else single_cell_dir
     sc_dir = io.pathval.validate_dir_path(single_cell_dir, must_exist=True)
 
-    out_dir = smp.data_dir if out_dir == DEFAULT_INPUT else io.pathval.validate_dir_path(out_dir)
-    route_output(smp, out_dir, validator=ViewerZarr, overwrite=overwrite, logger=log)
+    out_dir = smp.data_dir if out_dir == PRESET_SOURCE else io.pathval.validate_dir_path(out_dir)
+    reroute_source(smp, out_dir, validator=ViewerZarr, overwrite=overwrite, logger=log)
 
-    root_group = setup_zarr_tree(smp.data_dir, store_name=store_name, overwrite=overwrite)
+    root_group = setup_zarr_tree(smp.data_dir, store_name=store_name, overwrite=overwrite, logger=log)
 
     root_group.attrs['run_metadata'] = {'Sample Information': smp.smp_meta}
     root_group.attrs['smp_info_order'] = list(smp.smp_meta.keys())

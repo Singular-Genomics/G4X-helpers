@@ -13,7 +13,7 @@ from tqdm import tqdm
 from .. import c, io
 from .. import logging_utils as logut
 from ..schema.definition import Manifest, TxTable
-from .workflow import DEFAULT_INPUT, collect_input, route_output
+from .workflow import PRESET_SOURCE, collect_input, reroute_source
 
 if TYPE_CHECKING:
     from ..g4x_output import G4Xoutput
@@ -21,12 +21,13 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 
+# region main function
 # @g4x_workflow
 def demux_raw_features(
     smp: 'G4Xoutput',
-    manifest: str = DEFAULT_INPUT,
+    manifest: str = PRESET_SOURCE,
     *,
-    out_dir: str = DEFAULT_INPUT,
+    out_dir: str = PRESET_SOURCE,
     batch_size: int = c.DEFAULT_BATCH_SIZE,
     overwrite: bool = False,
     show_progress: bool | None = None,
@@ -34,34 +35,33 @@ def demux_raw_features(
 ) -> None:
 
     log = logger or LOGGER
-    log.info('Running demux_raw_features')
 
     # 1: Validate and collect input
+    log.debug('Validating input and preparing output paths')
     manifest_in = collect_input(smp, manifest, Manifest, logger=log)
 
     # 2: Validate and prepare output
-    out_dir = smp.data_dir if out_dir == DEFAULT_INPUT else io.pathval.validate_dir_path(out_dir)
-    logut.log_with_path('Output directory:', out_dir, logger=log)
+    out_dir = smp.data_dir if out_dir == PRESET_SOURCE else io.pathval.validate_dir_path(out_dir)
 
-    route_output(smp, out_dir, validator=TxTable, overwrite=overwrite, logger=log)
+    overwrite_manifest = True if manifest == PRESET_SOURCE else overwrite
+    reroute_source(smp, out_dir, validator=Manifest, overwrite=overwrite_manifest, logger=log)
+    reroute_source(smp, out_dir, validator=TxTable, overwrite=overwrite, logger=log)
 
-    overwrite_manifest = True if manifest == DEFAULT_INPUT else overwrite
-    route_output(smp, out_dir, validator=Manifest, overwrite=overwrite_manifest, logger=log)
-
-    if manifest != DEFAULT_INPUT:
+    # if we're using a provided manifest, copy it into the output tree
+    if manifest != PRESET_SOURCE:
+        log.debug('Copying manifest from provided path into output tree')
         shutil.copy(manifest_in.p, smp.out.Manifest.p)
 
     # 3: Do the demuxing
     log.info('Starting batched demuxing of raw features')
-    if show_progress is None:
-        show_progress = sys.stderr.isatty()
 
-    tx_panel = manifest_in.parse()
+    manifest = manifest_in.parse()
+    show_progress = sys.stderr.isatty() if show_progress is None else show_progress
     try:
         batch_dir = io.pathval.ensure_dir(out_dir / 'demux_batches')
         batched_demuxing(
             feature_table_path=smp.src.RawFeatures.p,
-            manifest=tx_panel,
+            manifest=manifest,
             batch_dir=batch_dir,
             batch_size=batch_size,
             show_progress=show_progress,
@@ -77,6 +77,7 @@ def demux_raw_features(
         logut.log_with_path(f'Writing {smp.out.TxTable.name} table:', smp.out.TxTable.p, level='info', logger=log)
         tx_table.sink_csv(smp.out.TxTable.p, compression='gzip')
 
+        # make sure that the gene list is populated with new genes for downstream steps
         smp.set_genes()
 
     # 6: Remove temporary demux batches
@@ -84,8 +85,6 @@ def demux_raw_features(
         if batch_dir.exists():
             log.debug('Removing temporary demux-batch directory')
             shutil.rmtree(batch_dir)
-
-        log.info('Demuxing complete.')
 
 
 def batched_demuxing(

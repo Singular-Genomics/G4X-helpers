@@ -7,14 +7,15 @@ from .. import logging_utils as logut
 from ..io import pathval
 
 if TYPE_CHECKING:
+    from ..g4x_output import G4Xoutput
     from ..schema.validator import BaseValidator
 
 LOGGER = logging.getLogger(__name__)
-DEFAULT_INPUT = '__g4x_default__'
+PRESET_SOURCE = '__g4x_out_tree__'
 
 
 def collect_input(
-    smp,
+    smp: 'G4Xoutput',
     path: str,
     validator: 'BaseValidator',
     validate: bool = True,
@@ -22,9 +23,9 @@ def collect_input(
 ) -> 'BaseValidator':
     log = logger or LOGGER
 
-    if path == DEFAULT_INPUT:
-        in_obj = getattr(smp.src, validator.__name__)
-        prefix = 'default'
+    if path == PRESET_SOURCE:
+        in_obj = getattr(smp.out, validator.__name__)
+        prefix = 'pre-set'
     else:
         path_valid = pathval.validate_file_path(path)
         in_obj = validator(target_path=path_valid)
@@ -33,12 +34,12 @@ def collect_input(
     if validate and not in_obj.is_valid:
         raise ValueError(f'Provided {validator.__name__} is not valid!\nreason: {in_obj.report_validation()}')
 
-    log.debug(f'Using {prefix} {validator.__name__} as input:\n%s%s', logut.PGAP, in_obj.p)
+    logut.log_with_path(f'Using {prefix} {validator.__name__} as input:', in_obj.p, logger=log)
     return in_obj
 
 
-def route_output(
-    smp,
+def reroute_source(
+    smp: 'G4Xoutput',
     out_dir: str,
     validator: 'BaseValidator',
     overwrite: bool = False,
@@ -64,67 +65,26 @@ def route_output(
 def g4x_workflow(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        wflow_name = func.__name__.removesuffix('_core')
-        logger = kwargs.pop('logger', None)
-        if logger is None:
-            logger = logut.configure_g4x_logging(level='DEBUG')
-            logger.info('No logger provided, using default package logger (stream only).')
+        wflow_name = func.__name__
 
-        workflow_logger = logger.getChild(f'workflow.{wflow_name}')
-        workflow_logger.info('-' * 10)
-        workflow_logger.info('Initializing %s workflow.', wflow_name)
+        log = kwargs.pop('logger', None)
+        if log is None:
+            log = logut.configure_g4x_logging(
+                logger_name=f'{func.__module__}.{func.__name__}',
+                level='INFO',
+            )
+            # log.info('No logger provided, using default (stream only).')
+
+        log.info('-' * 10)
+        log.info('Initializing workflow: %s', wflow_name)
 
         try:
-            result = func(*args, logger=workflow_logger, **kwargs)
-        except Exception as e:
-            msg = f'Exception occurred during {wflow_name} workflow: \n\n{e}'
-            workflow_logger.error(msg)
-            raise RuntimeError(msg) from e
-        else:
-            workflow_logger.info('Completed %s workflow.', wflow_name)
-            return result
+            result = func(*args, logger=log, **kwargs)
+        except Exception:
+            log.exception('Exception occurred during workflow: %s', wflow_name)
+            raise
+
+        log.info('Completed workflow: %s', wflow_name)
+        return result
 
     return wrapper
-
-
-# def workflow(func):
-#     @functools.wraps(func)
-#     def wrapper(*args, **kwargs):
-#         wflow_name = func.__name__.removesuffix('_core')
-#         logger = kwargs.pop('logger', None)
-#         if logger is None:
-#             logger = setup_logger(logger_name=wflow_name, file_logger=False)
-#             logger.info('No logger provided, using default logger (stream only).')
-
-#         logger.info('-' * 10)
-#         logger.info(f'Initializing {wflow_name} workflow.')
-
-#         # Save the original stdout so we can restore it later
-#         original_stdout = sys.stdout
-#         sys.stdout = LoggerWriter(logger, logging.DEBUG)
-
-#         try:
-#             result = func(*args, logger=logger, **kwargs)
-#         except Exception as e:
-#             msg = f'Exception occurred during {wflow_name} workflow: \n\n{e}'
-#             logger.error(msg)
-#             raise RuntimeError(msg) from e
-#         else:
-#             logger.info(f'Completed {wflow_name} workflow.')
-#             return result
-#         finally:
-#             # Always restore stdout
-#             sys.stdout = original_stdout
-
-#     return wrapper
-
-
-# class OutSchema:
-#     def __init__(self, out_dir, subdirs=[]):
-#         self.out_dir = validate_path(out_dir, must_exist=False, is_dir_ok=True, is_file_ok=False, resolve_path=False)
-#         self.subdirs = subdirs
-
-#         for subdir in self.subdirs:
-#             p = self.out_dir / subdir
-#             p.mkdir(exist_ok=True, parents=True)
-#             setattr(self, subdir, p)

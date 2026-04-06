@@ -9,7 +9,7 @@ from numcodecs import Blosc
 from ... import c
 from ... import logging_utils as logut
 from ...schema.definition import Dgex, Manifest, TxTable
-from ..workflow import DEFAULT_INPUT, collect_input
+from ..workflow import PRESET_SOURCE, collect_input
 from .utils import create_array, populate_zarr_metadata
 
 if TYPE_CHECKING:
@@ -23,9 +23,9 @@ LOGGER = logging.getLogger(__name__)
 def write_transcripts(
     smp: 'G4Xoutput',
     root_group: 'zGroup',
-    tx_table: str = DEFAULT_INPUT,
-    manifest: str = DEFAULT_INPUT,
-    dgex: str = DEFAULT_INPUT,
+    tx_table: str = PRESET_SOURCE,
+    manifest: str = PRESET_SOURCE,
+    dgex: str = PRESET_SOURCE,
     overwrite: bool = False,
     logger: logging.Logger | None = None,
 ) -> None:

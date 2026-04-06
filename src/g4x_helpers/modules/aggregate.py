@@ -11,7 +11,7 @@ from tqdm import tqdm
 from .. import c, io
 from .. import logging_utils as logut
 from ..schema.definition import CellMetadata, CellxGene, CellxProt, Segmentation, TxTable
-from .workflow import DEFAULT_INPUT, collect_input, route_output
+from .workflow import PRESET_SOURCE, collect_input, reroute_source
 
 if TYPE_CHECKING:
     from ..g4x_output import G4Xoutput
@@ -21,27 +21,28 @@ DEFAULT_MASK_KEY = 'nuclei_exp'
 LOGGER = logging.getLogger(__name__)
 
 
-# @g4x_workflow
 # region main function
+# @g4x_workflow
 def aggregate_cell_data(
     smp: 'G4Xoutput',
-    segmentation_mask: str = DEFAULT_INPUT,
+    segmentation_mask: str = PRESET_SOURCE,
     mask_key: str | None = DEFAULT_MASK_KEY,
     *,
-    out_dir: str = DEFAULT_INPUT,
-    tx_table: str = DEFAULT_INPUT,
+    out_dir: str = PRESET_SOURCE,
+    tx_table: str = PRESET_SOURCE,
     overwrite: bool = False,
-    gene_list: list[str] = DEFAULT_INPUT,
-    protein_list: list[str] = DEFAULT_INPUT,
+    gene_list: list[str] = PRESET_SOURCE,
+    protein_list: list[str] = PRESET_SOURCE,
     show_progress: bool | None = None,
     logger: logging.Logger | None = None,
 ) -> None:
 
     log = logger or LOGGER
-    seg_source = 'g4x-default' if segmentation_mask == DEFAULT_INPUT else 'custom'
-    log.info('Running aggregate_cell_data with %s segmentation source', seg_source)
+    seg_source = 'g4x-default' if segmentation_mask == PRESET_SOURCE else 'custom'
+    log.info('Using %s segmentation source', seg_source)
 
     # 1: Validate and collect input
+    log.debug('Validating input and preparing output paths')
     txtable_in = collect_input(smp, tx_table, TxTable, logger=log)
     segment_in = collect_input(smp, segmentation_mask, Segmentation, validate=False, logger=log)
 
@@ -49,19 +50,19 @@ def aggregate_cell_data(
     mask = io.import_segmentation(segment_in.p, labels_key=mask_key, expected_shape=smp.shape)
 
     # 3: Validate and prepare output
-    out_dir = smp.data_dir if out_dir == DEFAULT_INPUT else io.pathval.validate_dir_path(out_dir)
+    out_dir = smp.data_dir if out_dir == PRESET_SOURCE else io.pathval.validate_dir_path(out_dir)
 
     log_with_path = partial(logut.log_with_path, logger=log, level='info')
-    route_out = partial(route_output, smp, out_dir, overwrite=overwrite, logger=log)
+    route_out = partial(reroute_source, smp, out_dir, overwrite=overwrite, logger=log)
 
     route_out(validator=CellMetadata)
     route_out(validator=CellxGene)
-    route_out(validator=TxTable, overwrite=True)  # Always overwrite TxTable since we're updating the input table
 
-    overwrite_segmentation = True if segmentation_mask == DEFAULT_INPUT else overwrite
+    overwrite_segmentation = True if segmentation_mask == PRESET_SOURCE else overwrite
     route_out(validator=Segmentation, overwrite=overwrite_segmentation)
 
     # 4: Create cell metadata
+    log.info('Creating cell metadata')
     cell_metadata = create_cell_metadata(
         smp,
         segmentation_mask=mask,
@@ -71,6 +72,7 @@ def aggregate_cell_data(
     )
 
     # 5: Create cell x gene matrix
+    log.info('Creating cell x gene matrix')
     cell_x_gene, tx_table_intersected = create_cell_x_gene(
         smp=smp,
         tx_table=txtable_in.load(lazy=False),
@@ -79,7 +81,8 @@ def aggregate_cell_data(
         logger=log,
     )
 
-    if segmentation_mask == DEFAULT_INPUT:
+    if segmentation_mask == PRESET_SOURCE:
+        log.debug('Adding nuclei properties to cell metadata and tx-table')
         cell_metadata = add_nuclei_properties(smp, cell_metadata, show_progress=show_progress)
         tx_table_intersected = intersect_tx_with_cells(
             tx_table_intersected, smp.load_segmentation(expanded=False), column_name='in_nucleus'
@@ -87,8 +90,11 @@ def aggregate_cell_data(
 
     # 6: Create cell x protein matrix (optional)
     if smp.src.pr_detected:
+        log.info('Creating cell x protein matrix')
+
         route_out(validator=CellxProt)
-        if protein_list != DEFAULT_INPUT:
+
+        if protein_list != PRESET_SOURCE:
             smp.set_proteins(protein_list)
 
         cell_x_protein = create_cell_x_signal(
@@ -103,6 +109,8 @@ def aggregate_cell_data(
         cell_x_protein.sink_csv(smp.out.CellxProt.p, compression='gzip')
 
     # 7: Write the demuxed transcript table
+    overwrite_txtable = True if tx_table == PRESET_SOURCE else overwrite
+    route_out(validator=TxTable, overwrite=overwrite_txtable)
     log_with_path(f'Writing {smp.out.TxTable.name} table:', smp.out.TxTable.p)
     tx_table_intersected.write_csv(smp.out.TxTable.p, compression='gzip')
 
@@ -115,13 +123,11 @@ def aggregate_cell_data(
     cell_metadata.sink_csv(smp.out.CellMetadata.p, compression='gzip')
 
     # 10: Write the segmentation mask (if using custom)
-    if segmentation_mask != DEFAULT_INPUT:
+    if segmentation_mask != PRESET_SOURCE:
         log_with_path(f'Writing {smp.out.Segmentation.name} mask:', smp.out.Segmentation.p)
         mask_data = {mask_key: mask}
         smp.out.Segmentation.main_key = mask_key
         np.savez(smp.out.Segmentation.p, **mask_data)
-
-    log.info('Completed aggregating cell data')
 
 
 # region high-level functions
@@ -134,8 +140,7 @@ def create_cell_metadata(
     seg_source: str = 'g4x-default',
     logger: logging.Logger | None = None,
 ):
-    log = logger or LOGGER
-    log.debug('Creating cell metadata')
+    # log = logger or LOGGER
 
     cell_frame = _cell_frame(segmentation_mask)
 
@@ -168,7 +173,6 @@ def create_cell_metadata(
         raise ValueError('The CELL_ID columns in cell_meta and mask_props do not match.')
 
     cell_meta = cell_meta.sort(c.CELL_ID_NAME)
-    log.info('Cell metadata created successfully')
 
     if return_lazy:
         return cell_meta
@@ -178,19 +182,18 @@ def create_cell_metadata(
 def create_cell_x_gene(
     smp: 'G4Xoutput',
     tx_table: pl.LazyFrame,
-    segmentation_mask: str | np.ndarray = DEFAULT_INPUT,
-    gene_labels: str | np.ndarray = DEFAULT_INPUT,
+    segmentation_mask: str | np.ndarray = PRESET_SOURCE,
+    gene_labels: str | np.ndarray = PRESET_SOURCE,
     return_lazy: bool = True,
     logger: logging.Logger | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
 
-    log = logger or LOGGER
-    log.debug('Creating cell x gene matrix')
+    # log = logger or LOGGER
 
     tx_table = intersect_tx_with_cells(tx_table, segmentation_mask)
     cell_frame = _cell_frame(segmentation_mask)
 
-    if gene_labels == DEFAULT_INPUT:
+    if gene_labels == PRESET_SOURCE:
         gene_labels = smp.genes
 
     cell_by_gene = (
@@ -211,8 +214,6 @@ def create_cell_x_gene(
     cell_by_gene = cell_by_gene.select([c.CELL_ID_NAME] + gene_labels)
     cell_by_gene = cell_by_gene.fill_null(0).sort(c.CELL_ID_NAME)
 
-    log.debug('Cell x gene matrix created successfully')
-
     if return_lazy:
         return cell_by_gene, tx_table
     return cell_by_gene.collect(), tx_table.collect()
@@ -230,7 +231,7 @@ def create_cell_x_signal(
 ) -> pl.LazyFrame:
 
     log = logger or LOGGER
-    log.debug('Creating cell x signal matrix for %d signals.', len(signal_list))
+    log.debug('Intersecting cells with signals: %s', signal_list)
 
     bead_mask = smp.load_bead_mask()
     bead_mask_flat = bead_mask.ravel() if bead_mask is not None else None
@@ -260,7 +261,6 @@ def create_cell_x_signal(
         channel_df = channel_df.join(intensity_df, on=c.CELL_ID_NAME, how='left')
 
     channel_df = channel_df.sort(c.CELL_ID_NAME)
-    log.debug('Cell x signal matrix created successfully')
     if return_lazy:
         return channel_df
     return channel_df.collect()
