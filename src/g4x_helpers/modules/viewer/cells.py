@@ -16,22 +16,23 @@ if TYPE_CHECKING:
     from ...g4x_output import G4Xoutput
 
 LOGGER = logging.getLogger(__name__)
+UNASSIGNED_CELL = 'unassigned'
 
 
 def write_cells(
     smp: 'G4Xoutput',
     seg_name: str,
+    components: tuple | None = None,
     cell_group: zarr.Group | None = None,
     overwrite: bool = False,
     logger: logging.Logger | None = None,
-    prechew: None = None,
 ):
     log = LOGGER or logger
 
     if cell_group is None:
         cell_group = zarr.open_group(smp.out.ViewerZarr.p / 'cells', mode='a')
 
-    seg_path = _sanitize_path_component(seg_name)
+    seg_path = _sanitize_path_component(seg_name) + '_segmentation'
 
     seg_sources = cell_group.attrs['segmentation_sources']
     seg_order = cell_group.attrs['segmentation_order']
@@ -51,11 +52,12 @@ def write_cells(
 
     compressor = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
 
-    log.info('Preparing cell group input')
-    if prechew is None:
+    if components is None:
+        log.info('Preparing cell group input')
         metadata, gex, gene_names = process_cell_data(smp)
     else:
-        metadata, gex, gene_names = prechew
+        log.info('Using provided cell group input')
+        metadata, gex, gene_names = components
 
     clusterings = [c for c in metadata.columns if c.startswith('leiden_')]
     clusterings_order = get_sorted_clusterings(metadata, clusterings)
@@ -189,7 +191,7 @@ def process_cell_data(
     # cluster_cols = [c for c in clust_umap.columns if 'leiden_' in c]
     clust_umap = clustumap_in.load()
     cell_metadata = cell_metadata.join(clust_umap, on=c.CELL_ID_NAME, how='left')
-    cell_metadata = cell_metadata.with_columns(pl.col('^leiden_.*$').fill_null('unassigned'))
+    cell_metadata = cell_metadata.with_columns(pl.col('^leiden_.*$').fill_null(UNASSIGNED_CELL))
 
     return cell_metadata, gex, gene_names
 
@@ -201,16 +203,6 @@ def write_csr(group, csr, gene_names, compressor=None, chunks=None):
 
     # TODO find maybe better spot for assigning this dtype
     create_array(group, 'gene_names', data=np.array(gene_names).astype('U12'), compressor=compressor, chunks='auto')
-
-
-def sort_clusters(metadata, key='cluster_id'):
-    uids = metadata.group_by(key).agg(pl.len())
-    uids = uids.sort('len', descending=True)[key].to_list()
-    if 'unassigned' in uids:
-        uids.remove('unassigned')
-
-    uids.append('unassigned')
-    return uids
 
 
 def get_sorted_clusterings(df, cluster_keys: list[str]):
@@ -230,9 +222,9 @@ def get_sorted_cluster_ids(df, cluster_key: str):
         df.select(cluster_key).group_by(cluster_key).agg(pl.len()).sort('len', descending=True)[cluster_key].to_list()
     )
 
-    if 'unassigned' in cluster_ids_order:
-        cluster_ids_order.remove('unassigned')
-        cluster_ids_order.append('unassigned')
+    if UNASSIGNED_CELL in cluster_ids_order:
+        cluster_ids_order.remove(UNASSIGNED_CELL)
+        cluster_ids_order.append(UNASSIGNED_CELL)
 
     return cluster_ids_order
 
@@ -257,7 +249,7 @@ def generate_cluster_palette(ordered_unique_clusters: list, max_colors: int = 25
     for i, cluster in enumerate(ordered_unique_clusters):
         cluster_palette[str(cluster)] = hex2rgb(hex_list[i])
 
-    cluster_palette['unassigned'] = hex2rgb(c.UNASSIGNED_COLOR)
+    cluster_palette[UNASSIGNED_CELL] = hex2rgb(c.UNASSIGNED_COLOR)
 
     return cluster_palette
 
