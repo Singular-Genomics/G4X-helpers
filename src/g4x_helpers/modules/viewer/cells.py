@@ -1,8 +1,10 @@
 import logging
 from functools import lru_cache, partial
+from typing import TYPE_CHECKING
 
 import numpy as np
 import polars as pl
+import zarr
 from numcodecs import Blosc
 
 from ... import c, io
@@ -10,21 +12,26 @@ from ...schema.definition import CellMetadata, CellxGene, CellxProt, ClusteringU
 from ..workflow import PRESET_SOURCE, collect_input
 from .utils import create_array
 
+if TYPE_CHECKING:
+    from ...g4x_output import G4Xoutput
+
 LOGGER = logging.getLogger(__name__)
 
 
 def write_cells(
-    smp,
-    cell_group,
-    seg_path,
-    seg_name: str | None = None,
+    smp: 'G4Xoutput',
+    seg_name: str,
+    cell_group: zarr.Group | None = None,
     overwrite: bool = False,
     logger: logging.Logger | None = None,
     prechew: None = None,
 ):
     log = LOGGER or logger
 
-    seg_name = seg_path if seg_name is None else seg_name
+    if cell_group is None:
+        cell_group = zarr.open_group(smp.out.ViewerZarr.p / 'cells', mode='a')
+
+    seg_path = _sanitize_path_component(seg_name)
 
     seg_sources = cell_group.attrs['segmentation_sources']
     seg_order = cell_group.attrs['segmentation_order']
@@ -293,3 +300,10 @@ def extract_vertices(mask, show_progress: bool = False):
 
     vertices = pl.from_pandas(gdf[[c.CELL_ID_NAME, 'vert_x', 'vert_y']]).sort(c.CELL_ID_NAME)
     return vertices
+
+
+def _sanitize_path_component(s, replacement='_'):
+    invalid = r'<>:"/\\|?*- '
+    for ch in invalid:
+        s = s.replace(ch, replacement)
+    return s.strip(' .')  # Windows disallows trailing space/dot
