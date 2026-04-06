@@ -41,7 +41,7 @@ def optionally_cached(*, maxsize=32, ignore_kwargs=()):
             return func(*bound.args, **bound.kwargs)
 
         @wraps(func)
-        def wrapper(*args, use_cache=True, **kwargs):
+        def wrapper(*args, use_cache=False, **kwargs):
             if not use_cache:
                 return func(*args, **kwargs)
 

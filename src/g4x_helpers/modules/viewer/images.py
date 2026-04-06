@@ -80,7 +80,7 @@ def write_muliplex_img(smp, root_group, logger: logging.Logger | None = None):
     channel_arrays = []
 
     # Prepare dask arrays for each channel
-    if smp.proteins:
+    if smp.src.pr_detected:
         for ch in smp.proteins:
             arr = smp.load_protein_image(protein=ch, dask=True, use_cache=False)
             channel_arrays.append(arr)
@@ -103,7 +103,11 @@ def write_muliplex_img(smp, root_group, logger: logging.Logger | None = None):
     # build the channels and their metadata
     channel_order = smp.proteins + list(reversed(smp.stains))
 
-    visible_channels = _determine_visible_channels(channel_order)
+    if smp.src.pr_detected:
+        visible_channels = _determine_visible_channels(channel_order)
+    else:
+        visible_channels = [c.NUCLEAR_STAIN]
+
     channels = []
     for arr, name in zip(channel_arrays, channel_order):
         log.debug(f'Processing channel: {name}')

@@ -297,7 +297,7 @@ class CellMetadata(BaseValidator):
 
     def load(self, lazy: bool = False):
         if self.is_valid:
-            return io.import_table(self.target_path, lazy=lazy)
+            return io.import_table(self.target_path, lazy=lazy, use_cache=False)
         else:
             return self.validation()
 
@@ -315,7 +315,7 @@ class CellxGene(BaseValidator):
 
     def load(self, lazy: bool = False):
         if self.is_valid:
-            return io.import_table(self.target_path, lazy=lazy)
+            return io.import_table(self.target_path, lazy=lazy, use_cache=False)
         else:
             return self.validation()
 
@@ -333,7 +333,7 @@ class CellxProt(BaseValidator):
 
     def load(self, lazy: bool = False):
         if self.is_valid:
-            return io.import_table(self.target_path, lazy=lazy)
+            return io.import_table(self.target_path, lazy=lazy, use_cache=False)
         else:
             return self.validation()
 
@@ -347,7 +347,7 @@ class ClusteringUmap(BaseValidator):
 
     def load(self, lazy: bool = False):
         if self.is_valid:
-            return io.import_table(self.target_path, lazy=lazy)
+            return io.import_table(self.target_path, lazy=lazy, use_cache=False)
         else:
             return self.validation()
 
@@ -370,7 +370,7 @@ class Dgex(BaseValidator):
     # import_method
     def _try_load(self, lazy: bool = False):
         try:
-            res = io.import_table(self.target_path, lazy=lazy)
+            res = io.import_table(self.target_path, lazy=lazy, use_cache=False)
         except Exception as _:
             return None
         return res
