@@ -139,26 +139,6 @@ class G4Xoutput:
         self.proteins = self.available_proteins.copy()
 
     @property
-    def cell_labels(self) -> np.ndarray:
-        cache_key = 'cell_labels'
-        if self.use_cache and cache_key in self.cache:
-            return self.cache[cache_key].copy()
-
-        nuc_mask = io.import_segmentation(
-            seg_path=self.src.Segmentation.p,
-            expected_shape=self.shape,
-            labels_key='nuclei',  # TODO figure out what to do with custom segmentations
-            use_cache=self.use_cache,
-        )
-        nuc_labels = np.unique(nuc_mask)
-        nuc_labels = nuc_labels[nuc_labels != 0]
-
-        if self.use_cache:
-            self.cache[cache_key] = nuc_labels.copy()
-
-        return nuc_labels
-
-    @property
     def is_demuxed(self):
         return False if not self.src.tx_detected else self.src.TxTable.is_valid
 
