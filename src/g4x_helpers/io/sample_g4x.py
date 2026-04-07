@@ -30,6 +30,8 @@ def create_sample_g4x(sample_id: str, run_meta: dict, ssheet: str, out_path: str
     sample_g4x = {k: DEFAULT_VALUE for k in SampleG4X.KEYS}
     sample_g4x['sample_id'] = sample_id
     sample_g4x['output_version'] = __version__
+    sample_g4x['transcript_panel'] = None
+    sample_g4x['protein_panel'] = None
 
     # sanitize run_meta input
     run_meta = _format_keys(run_meta)
