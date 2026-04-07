@@ -5,9 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
-import pandas as pd
 import polars as pl
-from anndata import AnnData, read_h5ad
 
 from . import c, io, schema, ut
 
@@ -158,30 +156,26 @@ class G4Xoutput:
         return self.src.ViewerZarr.is_valid
 
     # region methods
-    def load_adata(self, *, remove_nontargeting: bool = True, load_clustering: bool = True) -> AnnData:
-        adata = read_h5ad(self.feature_mtx_path)
+    def load_adata(self, *, processed: bool = True, load_clustering: bool = False, remove_nontargeting: bool = False):
+        if processed:
+            adata = self.src.AdataH5.load()
+            leiden_cols = [c for c in adata.obs.columns if c.startswith('leiden')]
+            adata.obs = adata.obs.drop(columns=leiden_cols)
+        else:
+            from .modules.single_cell import init_adata
 
-        adata.obs_names = adata.obs['cell_id']
-        adata.var_names = adata.var['gene_id']
-
-        adata.obs['sample_id'] = adata.uns['sample_id'] = self.sample_id
-        adata.uns['software_version'] = self.software_version
+            adata = init_adata(self)
 
         if remove_nontargeting:
             adata = adata[:, adata.var.query(" probe_type == 'targeting' ").index].copy()
 
-        if load_clustering:
-            df = pd.read_csv(self.data_dir / 'single_cell_data' / 'clustering_umap.csv.gz', index_col=0, header=0)
+        if load_clustering and self.src.ClusteringUmap.is_valid:
+            df = self.src.ClusteringUmap.load().cast({'cell_id': pl.Utf8}).to_pandas().set_index('cell_id')
             adata.obs = adata.obs.merge(df, how='left', left_index=True, right_index=True)
-            umap_key = '_'.join(sorted([x for x in adata.obs.columns if 'X_umap' in x])[0].split('_')[:-1])
-            adata.obsm['X_umap'] = adata.obs[[f'{umap_key}_1', f'{umap_key}_2']].to_numpy(dtype=float)
 
-            # convert clustering columns to categorical
-            for col in adata.obs.columns:
-                if 'leiden' in col:
-                    adata.obs[col] = adata.obs[col].astype('category')
+            if not processed:
+                adata.obsm['X_umap'] = adata.obs[['UMAP1', 'UMAP2']].to_numpy(dtype=np.float32)
 
-        adata.obs_names = f'{self.sample_id}-' + adata.obs['cell_id'].str.split('-').str[1]
         return adata
 
     def _return_image(

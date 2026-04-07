@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import anndata as ad
 import numpy as np
 import polars as pl
 
@@ -340,6 +341,25 @@ class CellxProt(BaseValidator):
 
 class AdataH5(BaseValidator):
     DEFAULT_TARGET_PATH = c.FILE_FEAT_MTX
+
+    @property
+    def has_qc(self) -> bool:
+        qc_cols = [
+            'n_genes_by_counts',
+            'log1p_n_genes_by_counts',
+            'total_counts',
+            'log1p_total_counts',
+            'total_counts_ctrl',
+            'log1p_total_counts_ctrl',
+            'pct_counts_ctrl',
+        ]
+
+        ad_cols = ad.read_h5ad(self.target_path, backed='r').obs.columns
+
+        return set(qc_cols).issubset(set(ad_cols))
+
+    def load(self):
+        return ad.read_h5ad(self.target_path)
 
 
 class ClusteringUmap(BaseValidator):
