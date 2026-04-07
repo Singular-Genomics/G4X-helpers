@@ -15,6 +15,7 @@ from ...schema.definition import AdataH5, CellMetadata, ClusteringUmap, Dgex
 from ..workflow import PRESET_SOURCE, reroute_source
 from .cluster_dgex import optimize_leiden_clusters, run_dgex
 from .filtering import FilterPanel, _get_default_filter_panel, filter_adata
+from .init_adata import init_adata
 
 if TYPE_CHECKING:
     from anndata import AnnData
@@ -30,7 +31,7 @@ DEFAULT_CLUSTERINGS = {'leiden_coarse': (6, 0.25), 'leiden_fine': (12, 0.5)}
 # region main functions
 def process_sc_output(
     smp: 'G4Xoutput',
-    adata: 'AnnData',
+    adata: 'AnnData' | None = None,
     out_dir: str = PRESET_SOURCE,
     *,
     overwrite: bool = False,
@@ -43,6 +44,12 @@ def process_sc_output(
 ):
     log = logger or LOGGER
     backend = io.get_backend(which=compute_backend)
+
+    if adata is None:
+        log.info('Initializing AnnData object from raw data')
+        adata = init_adata(smp, logger=log)
+    else:
+        log.info('Using provided AnnData object with %d cells and %d genes', adata.n_obs, adata.n_vars)
 
     # Validate and prepare output, set up reusable functions
     out_dir = smp.data_dir if out_dir == PRESET_SOURCE else io.pathval.validate_dir_path(out_dir)
