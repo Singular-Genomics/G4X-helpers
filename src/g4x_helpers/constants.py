@@ -63,9 +63,14 @@ primer_read_map = {
 # Metadata column names
 CELL_ID_NAME = 'cell_id'
 GENE_ID_NAME = 'gene_id'
-CELL_AREA_NAME = 'cell_area_um'
+AREA_SUFFIX = '_area_um'
+CELL_AREA_NAME = f'cell{AREA_SUFFIX}'
+NUC_AREA_NAME = f'nuclei{AREA_SUFFIX}'
 CELL_COORD_X = 'cell_x'
 CELL_COORD_Y = 'cell_y'
+IMG_INTENSITY_HANDLE = '_intensity_mean'
+NUC_STAIN_INTENSITY = f'{NUCLEAR_STAIN}stain{IMG_INTENSITY_HANDLE}'
+CYT_STAIN_INTENSITY = f'{CYTOPLASMIC_STAIN}stain{IMG_INTENSITY_HANDLE}'
 
 # Cell colors in G4X-viewer
 UNASSIGNED_COLOR = '#BFBFBF'

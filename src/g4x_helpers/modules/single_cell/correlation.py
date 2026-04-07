@@ -5,6 +5,7 @@ import pandas as pd
 from anndata import AnnData
 from scipy.stats import rankdata
 
+from ... import constants as c
 from .filtering import FilterMethod
 
 ## RNA-protein pairs
@@ -37,7 +38,7 @@ LOGGER = logging.getLogger(__name__)
 
 def run_correlation_analysis(smp, logger: logging.Logger = LOGGER) -> None:
     adata = smp.load_adata(processed=False)
-    fm = FilterMethod(filter_type='cells', key='nuclearstain_intensity_mean', subset='__notna__')
+    fm = FilterMethod(filter_type='cells', key=c.NUC_STAIN_INTENSITY, subset='__notna__')
     adata = fm.filter(adata, apply=True)
 
     pr_corr_df = protein_protein(adata, logger)
@@ -66,14 +67,14 @@ def protein_rna(adata: AnnData, logger: logging.Logger = LOGGER) -> None:
 
     filtered_pairs = {}
     for k, v in PAIRS.items():
-        if k in adata.var_names and f'{v}_intensity_mean' in prot_df.columns:
+        if k in adata.var_names and f'{v}{c.IMG_INTENSITY_HANDLE}' in prot_df.columns:
             filtered_pairs[k] = v
     if len(filtered_pairs) == 0:
         logger.warning('No matching protein-RNA pairs in this data')
         return None
 
     ## get protein data for pairs
-    prot_df = prot_df[[f'{x}_intensity_mean' for x in filtered_pairs.values()]].copy()
+    prot_df = prot_df[[f'{x}{c.IMG_INTENSITY_HANDLE}' for x in filtered_pairs.values()]].copy()
     logger.info(f'Filtered protein intensity Data Frame: {prot_df.shape=}')
 
     ## get RNA data
@@ -90,7 +91,7 @@ def protein_rna(adata: AnnData, logger: logging.Logger = LOGGER) -> None:
 
     ## get ordering for later
     row_order = rna_df.columns.tolist()
-    prot_row_order = [f'{filtered_pairs[y]}_intensity_mean' for y in row_order]
+    prot_row_order = [f'{filtered_pairs[y]}{c.IMG_INTENSITY_HANDLE}' for y in row_order]
 
     ## merge RNA and Protein and specify order
     final_df = rna_df.merge(prot_df, how='left', left_index=True, right_index=True)
@@ -119,7 +120,7 @@ def _drop_zeros_mask(arr):
 def _get_protein_df(adata):
     if 'protein' not in adata.obsm:
         raise ValueError('Protein data not found in adata.obsm["protein"]')
-    names_handle = [n + '_intensity_mean' for n in adata.uns['protein_names']]
+    names_handle = [n + c.IMG_INTENSITY_HANDLE for n in adata.uns['protein_names']]
     prot_df = pd.DataFrame(adata.obsm['protein'], columns=names_handle, index=adata.obs_names)
     return prot_df
 

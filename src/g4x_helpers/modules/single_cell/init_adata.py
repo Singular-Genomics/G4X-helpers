@@ -99,7 +99,7 @@ def init_adata(
 
     if smp.src.pr_detected:
         log.debug('Adding protein data to AnnData object')
-        adata.uns['protein_names'] = [c.removesuffix('_intensity_mean') for c in cellxprot.columns]
+        adata.uns['protein_names'] = [c.removesuffix(c.IMG_INTENSITY_HANDLE) for c in cellxprot.columns]
         adata.obsm['protein'] = cellxprot.to_numpy()
 
     # 5: Calculate QC metrics

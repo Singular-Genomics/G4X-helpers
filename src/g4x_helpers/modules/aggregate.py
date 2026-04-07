@@ -232,7 +232,7 @@ def create_cell_x_signal(
     mask: np.ndarray,
     *,
     signal_list: list[str],
-    suffix: str = '_intensity_mean',
+    suffix: str = c.IMG_INTENSITY_HANDLE,
     show_progress: bool | None = None,
     return_lazy: bool = True,
     backend: io.ComputeBackend = io.get_backend(which='auto'),
@@ -326,7 +326,7 @@ def extract_cell_props(
 def add_nuclei_properties(smp, cell_metadata, show_progress=True):
     segmentation_mask = smp.load_segmentation(expanded=False)
     mask_props_nuc = extract_cell_props(mask=segmentation_mask, mask_name='nuclei', show_progress=show_progress)
-    mask_props_nuc = mask_props_nuc.rename({c.CELL_AREA_NAME: 'nuclei_area_um'})
+    mask_props_nuc = mask_props_nuc.rename({c.CELL_AREA_NAME: c.NUC_AREA_NAME})
 
     cell_metadata = cell_metadata.drop([c.CELL_COORD_X, c.CELL_COORD_Y]).join(mask_props_nuc, on=c.CELL_ID_NAME)
 
@@ -338,10 +338,10 @@ def add_nuclei_properties(smp, cell_metadata, show_progress=True):
         'seg_source',
         c.CELL_COORD_X,
         c.CELL_COORD_Y,
-        'nuclei_area_um',
+        c.NUC_AREA_NAME,
         c.CELL_AREA_NAME,
-        'nuclearstain_intensity_mean',
-        'cytoplasmicstain_intensity_mean',
+        c.NUC_STAIN_INTENSITY,
+        c.CYT_STAIN_INTENSITY,
     ]
     return cell_metadata.select(col_order)
 
@@ -360,7 +360,7 @@ def image_intensity_extraction(
     img: np.ndarray,
     mask_flat: np.ndarray,
     bead_mask_flat: np.ndarray | None = None,
-    ch_label: str = 'img_intensity_mean',
+    ch_label: str = 'img_mean',
     backend: io.ComputeBackend = io.get_backend(which='auto'),
 ) -> tuple[np.ndarray, np.ndarray]:
 

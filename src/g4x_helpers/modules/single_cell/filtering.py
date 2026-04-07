@@ -8,6 +8,8 @@ import pandas as pd
 import polars as pl
 from anndata import AnnData
 
+from ... import c
+
 if TYPE_CHECKING:
     from anndata import AnnData
 
@@ -15,8 +17,8 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_FILTER_CONFIG = [
-    dict(filter_type='cells', alias='area', key='cell_area_um', quantile_min=0.01, quantile_max=0.995),
-    dict(filter_type='cells', alias='intensity', key='nuclearstain_intensity_mean', subset='__notna__'),
+    dict(filter_type='cells', alias='area', key=c.CELL_AREA_NAME, quantile_min=0.01, quantile_max=0.995),
+    dict(filter_type='cells', alias='intensity', key=c.NUC_STAIN_INTENSITY, subset='__notna__'),
     dict(filter_type='cells', alias='counts', key='total_counts', value_min=10, quantile_max=0.995),
     dict(filter_type='cells', alias='genes', key='n_genes_by_counts', value_min=5),
     dict(filter_type='cells', alias='controls', key='pct_counts_ctrl', value_max=5),
