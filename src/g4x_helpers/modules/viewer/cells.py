@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 UNASSIGNED_CELL = 'unassigned'
 
+COMPRESSOR = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
+
 
 def write_cells(
     smp: 'G4Xoutput',
@@ -25,99 +27,35 @@ def write_cells(
     components: tuple | None = None,
     cell_group: zarr.Group | None = None,
     overwrite: bool = False,
-    logger: logging.Logger | None = None,
+    logger: logging.Logger = LOGGER,
 ):
-    log = LOGGER or logger
+    logger.info('Using provided cell group input')
 
     if cell_group is None:
         cell_group = zarr.open_group(smp.out.ViewerZarr.p / 'cells', mode='a')
 
-    seg_path = _sanitize_path_component(seg_name) + '_segmentation'
+    logger.info('Setting up cell data group')
+    seg_path = _add_segmentation_attrs(cell_group, seg_name)
 
-    seg_sources = cell_group.attrs['segmentation_sources']
-    seg_order = cell_group.attrs['segmentation_order']
+    # if overwrite and seg_path in cell_group:
+    #     del cell_group[seg_path]
 
-    seg_sources.update({seg_name: seg_path})
-    seg_order.append(seg_name)
-
-    cell_group.attrs['segmentation_sources'] = seg_sources
-    cell_group.attrs['segmentation_order'] = list(set(seg_order))
-
-    log.info('Preparing cell data')
     seg_group = cell_group.create_group(seg_path, overwrite=overwrite)
-    metadata_group = seg_group.create_group('metadata', overwrite=overwrite)
-    protein_group = seg_group.create_group('protein', overwrite=overwrite)
-    polygon_group = seg_group.create_group('polygons', overwrite=overwrite)
-    genes_group = seg_group.create_group('genes', overwrite=overwrite)
 
-    compressor = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
+    ################## getting data ready for tiling
 
-    if components is None:
-        log.info('Preparing cell group input')
-        metadata, gex, gene_names = process_cell_data(smp)
-    else:
-        log.info('Using provided cell group input')
+    if components is not None:
+        logger.info('Using provided components to select data')
         metadata, gex, gene_names = components
+    else:
+        logger.info('No components provided, processing cell data from source')
+        metadata, gex, gene_names = process_cell_data(smp)
 
     clusterings = [c for c in metadata.columns if c.startswith('leiden_')]
     clusterings_order = get_sorted_clusterings(metadata, clusterings)
 
-    meta_columns = {
-        'cell_id': metadata[c.CELL_ID_NAME].to_numpy().astype(np.uint32),
-        'area': metadata[c.CELL_AREA_NAME].to_numpy().astype(np.uint16),
-        'position': metadata.select([c.CELL_COORD_X, c.CELL_COORD_Y]).to_numpy().astype(np.float16),
-        'cluster_id': metadata.select(clusterings_order).to_numpy().astype('U20'),
-        'total_counts': metadata['total_counts'].to_numpy().astype(np.uint16),
-        'total_genes': metadata['n_genes_by_counts'].to_numpy().astype(np.uint16),
-        'umap': metadata.select(['UMAP1', 'UMAP2'])
-        .rename({'UMAP1': 'umap_1', 'UMAP2': 'umap_2'})
-        .to_numpy()
-        .astype(np.float16),
-    }
-
-    log.info('Writing cell metadata arrays')
-    for key, arr in meta_columns.items():
-        if overwrite and key in metadata_group:
-            del metadata_group[key]
-        create_array(metadata_group, key, data=arr, compressor=compressor)
-
-    log.info('Writing cell protein arrays')
-    for key in ['protein_values', 'protein_names']:
-        if overwrite and key in protein_group:
-            del protein_group[key]
-
-    protein_df = metadata.select(*[c for c in metadata.columns if c.IMG_INTENSITY_HANDLE in c])
-    arr = protein_df.to_numpy().astype(np.uint16)
-    create_array(protein_group, 'protein_values', data=arr, compressor=compressor)
-    protein_names = np.array([s.removesuffix(c.IMG_INTENSITY_HANDLE) for s in protein_df.columns]).astype('U50')
-    create_array(protein_group, 'protein_names', data=protein_names, compressor=compressor)
-
-    log.info('Writing cell polygon arrays')
-    for key in ['polygon_offsets', 'polygon_vertices_xy']:
-        if overwrite and key in polygon_group:
-            del polygon_group[key]
-
-    # write ragged array of polygon vertices
-    x_vert = metadata['vert_x'].to_numpy()
-    y_vert = metadata['vert_y'].to_numpy()
-
-    n_cells = len(x_vert)
-    lengths = np.array([p.shape[0] for p in x_vert], dtype=np.uint8)
-    offsets = np.empty(n_cells + 1, dtype=np.int64)
-    offsets[0] = 0
-    np.cumsum(lengths, out=offsets[1:])
-
-    x_long = np.concatenate(x_vert, axis=0)
-    y_long = np.concatenate(y_vert, axis=0)
-    verts_xy = np.stack([x_long, y_long], axis=1)
-
-    create_array(polygon_group, 'polygon_offsets', data=offsets, compressor=compressor)
-    create_array(polygon_group, 'polygon_vertices_xy', data=verts_xy, compressor=compressor)
-
-    log.info('Writing cell gene expression arrays')
-    for key in ['data', 'indices', 'indptr', 'gene_names']:
-        if overwrite and key in genes_group:
-            del genes_group[key]
+    protein_columns = [col for col in metadata.columns if c.IMG_INTENSITY_HANDLE in col]
+    protein_names = [s.removesuffix(c.IMG_INTENSITY_HANDLE) for s in protein_columns]
 
     cluster_labels_meta = {}
     for i, key in enumerate(clusterings_order):
@@ -130,12 +68,79 @@ def write_cells(
             'clusterID_colors': cluster_color_map,
         }
 
-    seg_group['metadata'].attrs['cluster_labels'] = cluster_labels_meta
-    seg_group['metadata'].attrs['cluster_labels_order'] = clusterings_order
+    seg_group.attrs['cluster_labels'] = cluster_labels_meta
+    seg_group.attrs['cluster_labels_order'] = clusterings_order
+    seg_group.attrs['genes_shape'] = gex.shape
 
-    seg_group['genes'].attrs['shape'] = gex.shape
+    create_array(seg_group, 'gene_names', data=np.array(gene_names), compressor=COMPRESSOR, chunks='auto')
+    create_array(seg_group, 'protein_names', data=np.array(protein_names), compressor=COMPRESSOR, chunks='auto')
 
-    write_csr(genes_group, csr=gex, gene_names=gene_names, compressor=compressor, chunks='auto')
+    ################## preparing for tiling
+
+    metadata = prepare_metadata_for_tiling(metadata, tile_size=800, img_res=smp.shape)
+
+    #### this is where tiling happens
+    tile_ids = metadata.unique(['tile_y', 'tile_x'], maintain_order=True).select(['tile_y', 'tile_x']).to_numpy()
+    for tile in tile_ids:
+        y = str(tile[0]).zfill(2)
+        x = str(tile[1]).zfill(2)
+        tile_path = f'tiles/y{y}/x{x}'
+        tile_group = seg_group.require_group(tile_path, overwrite=True)
+        metadata_tile = metadata.filter((pl.col('tile_x') == tile[1]) & (pl.col('tile_y') == tile[0]))
+        gex_tile = gex[metadata_tile['index']]
+
+        meta_columns = {
+            'cell_id': metadata_tile[c.CELL_ID_NAME].to_numpy().astype(np.uint32),
+            'area': metadata_tile[c.CELL_AREA_NAME].to_numpy().astype(np.uint16),
+            'position': metadata_tile.select([c.CELL_COORD_X, c.CELL_COORD_Y]).to_numpy().astype(np.float16),
+            'cluster_id': metadata_tile.select(clusterings_order).to_numpy().astype('U20'),
+            'total_counts': metadata_tile['total_counts'].to_numpy().astype(np.uint16),
+            'total_genes': metadata_tile['n_genes_by_counts'].to_numpy().astype(np.uint16),
+            'protein_values': metadata_tile.select(protein_columns).to_numpy().astype(np.uint16),
+            'gene_counts': gex_tile.data.astype(np.uint16),
+            'gene_indices': gex_tile.indices.astype(np.int32),
+            'gene_indptr': gex_tile.indptr.astype(np.int32),
+            'umap': metadata_tile.select(['UMAP1', 'UMAP2']).to_numpy().astype(np.float16),
+        }
+
+        logger.info('Writing cell metadata arrays')
+        for key, arr in meta_columns.items():
+            create_array(tile_group, key, data=arr, compressor=COMPRESSOR, chunks='auto')
+
+        logger.info('Writing cell polygon arrays')
+
+        # write ragged array of polygon vertices
+        x_vert = metadata_tile['vert_x'].to_numpy()
+        y_vert = metadata_tile['vert_y'].to_numpy()
+
+        n_cells = len(x_vert)
+        lengths = np.array([p.shape[0] for p in x_vert], dtype=np.uint8)
+        offsets = np.empty(n_cells + 1, dtype=np.int64)
+        offsets[0] = 0
+        np.cumsum(lengths, out=offsets[1:])
+
+        x_long = np.concatenate(x_vert, axis=0)
+        y_long = np.concatenate(y_vert, axis=0)
+        verts_xy = np.stack([x_long, y_long], axis=1)
+
+        create_array(tile_group, 'polygon_offsets', data=offsets, compressor=COMPRESSOR)
+        create_array(tile_group, 'polygon_vertices_xy', data=verts_xy, compressor=COMPRESSOR)
+
+
+def prepare_metadata_for_tiling(metadata, tile_size, img_res):
+    metadata = metadata.with_row_index()
+
+    image_resolution_hw = img_res
+    n_tiles_w = image_resolution_hw[1] // tile_size
+    n_tiles_h = image_resolution_hw[0] // tile_size
+    n_tiles_w, n_tiles_h
+
+    metadata = metadata.with_columns(
+        (pl.col('cell_x') / tile_size).cast(pl.Int32).alias('tile_x'),
+        (pl.col('cell_y') / tile_size).cast(pl.Int32).alias('tile_y'),
+    ).sort('tile_y', 'tile_x')
+
+    return metadata
 
 
 def process_cell_data(
@@ -203,7 +208,7 @@ def write_csr(group, csr, gene_names, compressor=None, chunks=None):
     create_array(group, 'indptr', data=csr.indptr.astype('int64'), compressor=compressor, chunks=chunks)
 
     # TODO find maybe better spot for assigning this dtype
-    create_array(group, 'gene_names', data=np.array(gene_names).astype('U12'), compressor=compressor, chunks='auto')
+    # create_array(group, 'gene_names', data=np.array(gene_names).astype('U12'), compressor=compressor, chunks='auto')
 
 
 def get_sorted_clusterings(df, cluster_keys: list[str]):
@@ -300,3 +305,17 @@ def _sanitize_path_component(s, replacement='_'):
     for ch in invalid:
         s = s.replace(ch, replacement)
     return s.strip(' .')  # Windows disallows trailing space/dot
+
+
+def _add_segmentation_attrs(cell_group, seg_name):
+    seg_path = _sanitize_path_component(seg_name) + '_segmentation'
+
+    seg_sources = cell_group.attrs['segmentation_sources']
+    seg_order = cell_group.attrs['segmentation_order']
+
+    seg_sources.update({seg_name: seg_path})
+    seg_order.append(seg_name)
+
+    cell_group.attrs['segmentation_sources'] = seg_sources
+    cell_group.attrs['segmentation_order'] = list(set(seg_order))
+    return seg_path
