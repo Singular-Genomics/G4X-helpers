@@ -14,6 +14,7 @@ from ... import logging_utils as logut
 from ...schema.definition import AdataH5, CellMetadata, ClusteringUmap, Dgex
 from ..workflow import PRESET_SOURCE, reroute_source
 from .cluster_dgex import optimize_leiden_clusters, run_dgex
+from .correlation import run_correlation_analysis
 from .filtering import FilterPanel, _get_default_filter_panel, filter_adata
 from .init_adata import init_adata
 
@@ -35,7 +36,7 @@ def process_sc_output(
     out_dir: str = PRESET_SOURCE,
     *,
     overwrite: bool = False,
-    filter_panel: 'FilterPanel' | None = None,
+    filter_panel: 'FilterPanel' = _get_default_filter_panel(),
     n_neighbors: int = 15,
     cluster_attempts: int = 10,
     rnd_st: int = 111,
@@ -68,9 +69,6 @@ def process_sc_output(
     sc_meta.write_csv(smp.out.CellMetadata.p, compression='gzip')
 
     # 1. Filter AnnData object
-    if filter_panel is None:
-        filter_panel = _get_default_filter_panel()
-
     adata_init = adata.copy()
     adata, cell_summary, gene_summary = filter_adata(adata=adata_init, filter_panel=filter_panel, logger=log)
 
@@ -79,6 +77,10 @@ def process_sc_output(
         write_dummys(adata=adata_init, failure_code='filter_not_passed')
         return
     del adata_init
+
+    pr_corr_df, rna_pr_corr_df = run_correlation_analysis(adata, logger=log)
+    pr_corr_df.to_csv(smp.out.AdataH5.p.parent / 'protein_sc_correlation.csv')
+    rna_pr_corr_df.to_csv(smp.out.AdataH5.p.parent / 'rna_protein_sc_correlation.csv')
 
     # 2. Pre-Processings (CPU/GPU) split path
     try:

@@ -85,7 +85,7 @@ def write_cells(
         if overwrite and key in protein_group:
             del protein_group[key]
 
-    protein_df = metadata.select(*[c for c in metadata.columns if c.IMG_INTENSITY_HANDLE in c])
+    protein_df = metadata.select(*[col for col in metadata.columns if c.IMG_INTENSITY_HANDLE in col])
     arr = protein_df.to_numpy().astype(np.uint16)
     create_array(protein_group, 'protein_values', data=arr, compressor=compressor)
     protein_names = np.array([s.removesuffix(c.IMG_INTENSITY_HANDLE) for s in protein_df.columns]).astype('U50')

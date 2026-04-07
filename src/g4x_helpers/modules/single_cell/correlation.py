@@ -36,8 +36,8 @@ PAIRS = {
 LOGGER = logging.getLogger(__name__)
 
 
-def run_correlation_analysis(smp, logger: logging.Logger = LOGGER) -> None:
-    adata = smp.load_adata(processed=False)
+def run_correlation_analysis(adata: AnnData, logger: logging.Logger = LOGGER) -> None:
+    # adata = smp.load_adata(processed=False)
     fm = FilterMethod(filter_type='cells', key=c.NUC_STAIN_INTENSITY, subset='__notna__')
     adata = fm.filter(adata, apply=True)
 

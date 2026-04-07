@@ -1,4 +1,5 @@
 from . import cluster_dgex, correlation, filtering, process
+from .correlation import run_correlation_analysis
 from .filtering import FilterMethod, FilterPanel
 from .init_adata import init_adata
 from .process import process_sc_output
@@ -12,4 +13,5 @@ __all__ = [
     'filtering',
     'cluster_dgex',
     'process',
+    'run_correlation_analysis',
 ]
