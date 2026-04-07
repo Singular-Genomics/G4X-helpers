@@ -34,10 +34,13 @@ def aggregate_cell_data(
     gene_list: list[str] = PRESET_SOURCE,
     protein_list: list[str] = PRESET_SOURCE,
     show_progress: bool | None = None,
+    compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
     logger: logging.Logger | None = None,
 ) -> None:
 
     log = logger or LOGGER
+    backend = io.get_backend(which=compute_backend)
+
     seg_source = 'g4x-default' if segmentation_mask == PRESET_SOURCE else 'custom'
     log.info('Using %s segmentation source', seg_source)
 
@@ -68,6 +71,7 @@ def aggregate_cell_data(
         segmentation_mask=mask,
         seg_source=seg_source,
         show_progress=show_progress,
+        backend=backend,
         logger=log,
     )
 
@@ -102,6 +106,7 @@ def aggregate_cell_data(
             mask=mask,
             signal_list=smp.proteins,
             show_progress=show_progress,
+            backend=backend,
             logger=log,
         )
 
@@ -134,10 +139,12 @@ def aggregate_cell_data(
 def create_cell_metadata(
     smp: 'G4Xoutput',
     segmentation_mask: np.ndarray,
+    *,
     cell_frame: pl.DataFrame | None = None,
     show_progress: bool | None = None,
     return_lazy: bool = True,
     seg_source: str = 'g4x-default',
+    backend: io.ComputeBackend = io.get_backend(which='auto'),
     logger: logging.Logger | None = None,
 ):
     # log = logger or LOGGER
@@ -158,6 +165,7 @@ def create_cell_metadata(
         mask=segmentation_mask,
         signal_list=smp.stains,
         show_progress=show_progress,
+        backend=backend,
         logger=logger,
     )
 
@@ -222,10 +230,12 @@ def create_cell_x_gene(
 def create_cell_x_signal(
     smp: 'G4Xoutput',
     mask: np.ndarray,
+    *,
     signal_list: list[str],
     suffix: str = '_intensity_mean',
     show_progress: bool | None = None,
     return_lazy: bool = True,
+    backend: io.ComputeBackend = io.get_backend(which='auto'),
     logger: logging.Logger | None = None,
     **kwargs,
 ) -> pl.LazyFrame:
@@ -234,6 +244,7 @@ def create_cell_x_signal(
     log.debug('Intersecting cells with signals: %s', signal_list)
 
     bead_mask = smp.load_bead_mask()
+    # bead_mask = _add_artifically_large_beads(bead_mask)
     bead_mask_flat = bead_mask.ravel() if bead_mask is not None else None
     mask_flat = mask.ravel()
 
@@ -256,7 +267,12 @@ def create_cell_x_signal(
         ch_label = f'{signal_name}{suffix}'
 
         intensity_df = image_intensity_extraction(
-            signal_img, mask_flat=mask_flat, bead_mask_flat=bead_mask_flat, ch_label=ch_label, **kwargs
+            signal_img,
+            mask_flat=mask_flat,
+            bead_mask_flat=bead_mask_flat,
+            ch_label=ch_label,
+            backend=backend,
+            **kwargs,
         )
         channel_df = channel_df.join(intensity_df, on=c.CELL_ID_NAME, how='left')
 
@@ -345,10 +361,8 @@ def image_intensity_extraction(
     mask_flat: np.ndarray,
     bead_mask_flat: np.ndarray | None = None,
     ch_label: str = 'img_intensity_mean',
-    compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
+    backend: io.ComputeBackend = io.get_backend(which='auto'),
 ) -> tuple[np.ndarray, np.ndarray]:
-
-    backend = io.get_backend(which=compute_backend)
 
     if backend.use_gpu:
         unique_labels, means = _image_intensity_extraction_gpu(img, mask_flat, bead_mask_flat, gpu_backend=backend)
@@ -448,3 +462,13 @@ def _cell_frame(segmentation_mask: np.ndarray, lazy: bool = True) -> int:
     cell_labels = cell_labels[cell_labels != 0]
     lf = pl.LazyFrame(cell_labels, schema={c.CELL_ID_NAME: pl.Int32}).sort(c.CELL_ID_NAME)
     return lf if lazy else lf.collect()
+
+
+def _add_artifically_large_beads(beads, sq_size=500):
+    half = sq_size // 2
+    rows, cols = beads.shape
+    center_row, center_col = rows // 2, cols // 2
+
+    # set center block to True
+    beads[center_row - half : center_row + half, center_col - half : center_col + half] = True
+    return beads
