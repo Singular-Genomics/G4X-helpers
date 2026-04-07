@@ -55,7 +55,7 @@ def process_sc_output(
     out_dir = smp.data_dir if out_dir == PRESET_SOURCE else io.pathval.validate_dir_path(out_dir)
     prep_out = partial(reroute_source, smp, out_dir, overwrite=overwrite, logger=log)
     log_with_path = partial(logut.log_with_path, logger=log, level='info')
-    write_dummys = partial(write_dummy_clustering_outputs, adata=adata, smp=smp, logger=log)
+    write_dummys = partial(write_dummy_clustering_outputs, smp=smp, logger=log)
 
     prep_out(validator=AdataH5)
     prep_out(validator=Dgex)
@@ -85,7 +85,7 @@ def process_sc_output(
         adata = pre_process_adata(adata=adata, n_neighbors=n_neighbors, compute_backend=backend, logger=log)
     except Exception as e:
         log.warning(f'Preprocessing failed: {e}')
-        write_dummys(failure_code='preprocessing_failed')
+        write_dummys(adata=adata, failure_code='preprocessing_failed')
         return
 
     # 3. Optimize Leiden clusters (CPU/GPU) split path
@@ -109,7 +109,7 @@ def process_sc_output(
 
     if not success_clusterings:
         log.warning('No successful clusterings to run differential gene expression analysis.')
-        write_dummys(failure_code='clustering_failed')
+        write_dummys(adata=adata, failure_code='clustering_failed')
         return
 
     # Move AnnData object to CPU for downstream processing
@@ -131,7 +131,7 @@ def process_sc_output(
         dgex.write_csv(smp.out.Dgex.p, compression='gzip')
     except Exception as e:
         log.warning(f'Failed to run differential gene expression analysis: {e}')
-        write_dummys(failure_code='dgex_failed')
+        write_dummys(adata=adata, failure_code='dgex_failed')
 
     log_with_path(f'Writing {smp.out.AdataH5.name} h5ad:', smp.out.AdataH5.p)
     adata.write(smp.out.AdataH5.p)
