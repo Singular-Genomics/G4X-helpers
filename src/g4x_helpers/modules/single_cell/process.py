@@ -78,9 +78,10 @@ def process_sc_output(
         return
     del adata_init
 
-    pr_corr_df, rna_pr_corr_df = run_correlation_analysis(adata, logger=log)
-    pr_corr_df.to_csv(smp.out.AdataH5.p.parent / 'protein_sc_correlation.csv')
-    rna_pr_corr_df.to_csv(smp.out.AdataH5.p.parent / 'rna_protein_sc_correlation.csv')
+    if smp.src.pr_detected:
+        pr_corr_df, rna_pr_corr_df = run_correlation_analysis(adata, logger=log)
+        pr_corr_df.to_csv(smp.out.AdataH5.p.parent / 'protein_sc_correlation.csv')
+        rna_pr_corr_df.to_csv(smp.out.AdataH5.p.parent / 'rna_protein_sc_correlation.csv')
 
     # 2. Pre-Processings (CPU/GPU) split path
     try:
