@@ -245,7 +245,12 @@ def create_cell_x_signal(
 
     bead_mask = smp.load_bead_mask()
     # bead_mask = _add_artifically_large_beads(bead_mask)
-    bead_mask_flat = bead_mask.ravel() if bead_mask is not None else None
+    if bead_mask is not None:
+        bead_mask_flat = bead_mask.ravel()
+    else:
+        log.warning('Bead mask not found. Proceeding without excluding beads from signal extraction.')
+        bead_mask_flat = None
+
     mask_flat = mask.ravel()
 
     channel_df = _cell_frame(mask)
