@@ -3,6 +3,7 @@ from functools import lru_cache, partial
 from typing import TYPE_CHECKING
 
 import numpy as np
+import pandas as pd
 import polars as pl
 import zarr
 from numcodecs import Blosc
@@ -10,6 +11,7 @@ from numcodecs import Blosc
 from ... import c, io
 from ...schema.definition import CellMetadata, CellxGene, CellxProt, ClusteringUmap, Segmentation
 from ..workflow import PRESET_SOURCE, collect_input
+from .images import write_rgb_img
 from .utils import create_array
 
 if TYPE_CHECKING:
@@ -41,6 +43,7 @@ def write_cells(
     #     del cell_group[seg_path]
 
     seg_group = cell_group.create_group(seg_path, overwrite=overwrite)
+    cluster_group = seg_group.create_group('clustering_images', overwrite=overwrite)
 
     ################## getting data ready for tiling
 
@@ -74,6 +77,12 @@ def write_cells(
 
     create_array(seg_group, 'gene_names', data=np.array(gene_names), compressor=COMPRESSOR, chunks='auto')
     create_array(seg_group, 'protein_names', data=np.array(protein_names), compressor=COMPRESSOR, chunks='auto')
+
+    for clustering in clusterings_order:
+        img_group = cluster_group.create_group(clustering, overwrite=overwrite)
+        mask = smp.src.Segmentation.load()
+        rgb = map_clusters_to_mask(meta=metadata, cluster_key=clustering, mask=mask)
+        write_rgb_img(rgb, img_group, logger=logger)
 
     ################## preparing for tiling
 
@@ -319,3 +328,49 @@ def _add_segmentation_attrs(cell_group, seg_name):
     cell_group.attrs['segmentation_sources'] = seg_sources
     cell_group.attrs['segmentation_order'] = list(set(seg_order))
     return seg_path
+
+
+def map_categories(mask: np.ndarray, labels: np.ndarray, categories: np.ndarray, missing_val=-1):
+    flat_mask = mask.ravel()
+
+    idx = pd.Index(labels)
+    pos = idx.get_indexer(flat_mask)  # -1 where not found
+
+    out_flat = np.full(flat_mask.shape, missing_val, dtype=int)
+
+    valid = pos != -1
+    if valid.any():
+        out_flat[valid] = categories[pos[valid]]
+
+    return out_flat.reshape(mask.shape)
+
+
+def hex_to_rgb(hex_color, normalized=False):
+    hex_color = hex_color.lstrip('#')
+    rgb = tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+
+    if normalized:
+        return tuple(v / 255 for v in rgb)
+    return rgb
+
+
+def map_clusters_to_mask(meta: pl.DataFrame, cluster_key: str, mask: np.ndarray):
+    cluster_cat = pd.Categorical(meta[cluster_key])
+
+    if 'unassigned' not in cluster_cat.categories:
+        cluster_cat = cluster_cat.add_categories('unassigned')
+
+    cats = list(cluster_cat.categories)
+    cats = ['unassigned'] + [c for c in cats if c != 'unassigned']
+    cluster_cat = cluster_cat.reorder_categories(cats)
+
+    cluster_codes = cluster_cat.codes  # integers 0..n-1
+    p_mask = map_categories(mask=mask, labels=meta['cell_id'].to_numpy(), categories=cluster_codes)
+
+    pal = [c.UNASSIGNED_COLOR] + c.SG_PALETTE
+    pal = np.array([hex_to_rgb(c, normalized=False) for c in pal])
+
+    rgb = pal[p_mask]
+    rgb[p_mask == -1] = [0, 0, 0]
+
+    return rgb

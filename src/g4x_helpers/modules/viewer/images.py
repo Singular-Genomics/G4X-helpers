@@ -65,11 +65,9 @@ OMERO_DEFAULT = {
 }
 
 
-def write_images(smp, root_group, logger: logging.Logger | None = None):
-    log = LOGGER or logger
-
-    write_muliplex_img(smp, root_group, logger=log)
-    write_he_img(smp, root_group, logger=log)
+def write_images(smp, root_group, logger: logging.Logger or LOGGER):
+    write_muliplex_img(smp, root_group, logger=logger)
+    write_he_img(smp, root_group, logger=logger)
 
 
 def write_muliplex_img(smp, root_group, logger: logging.Logger | None = None):
@@ -149,6 +147,25 @@ def write_he_img(smp, root_group, logger: logging.Logger | None = None):
 
     log.info('Writing fH&E image')
     img_group = root_group['images']['h_and_e']
+    write_channel_stack(img_group, [c1, c2, c3])
+
+
+def write_rgb_img(image, img_group, logger: logging.Logger | None = None):
+    log = LOGGER or logger
+    log.debug('Preparing RGB image')
+
+    if image.ndim == 3 and image.shape[-1] == 3:
+        image = da.moveaxis(image, -1, 0)
+    elif image.ndim == 3 and image.shape[0] == 3:
+        pass
+    else:
+        raise ValueError(f'Unexpected RGB image shape: {image.shape}')
+
+    c1 = ImageChannel(image[0], label='R', omero_attrs={'color': 'FF0000', 'active': True})
+    c2 = ImageChannel(image[1], label='G', omero_attrs={'color': '00FF00', 'active': True})
+    c3 = ImageChannel(image[2], label='B', omero_attrs={'color': '0000FF', 'active': True})
+
+    log.info('Writing RGB image')
     write_channel_stack(img_group, [c1, c2, c3])
 
 
