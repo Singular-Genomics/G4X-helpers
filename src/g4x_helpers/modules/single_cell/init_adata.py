@@ -91,6 +91,7 @@ def init_adata(
         .to_pandas()
         .set_index(c.GENE_ID_NAME)
     )
+    var_df['probe_type'] = var_df['probe_type'].str.lower()
     var_df.index = var_df.index.astype(str)
 
     # 4: bring it all together
@@ -104,7 +105,7 @@ def init_adata(
 
     # 5: Calculate QC metrics
     log.info('Calculating QC metrics')
-    adata.var['ctrl'] = adata.var['probe_type'].str.lower() != 'targeting'
+    adata.var['ctrl'] = adata.var['probe_type'] != 'targeting'
     sc.pp.calculate_qc_metrics(adata, qc_vars=['ctrl'], inplace=True, percent_top=None)
     adata.var.drop(columns=['ctrl'], inplace=True)
 
