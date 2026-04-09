@@ -36,16 +36,10 @@ PAIRS = {
 LOGGER = logging.getLogger(__name__)
 
 
-def check_correlation_feasibility(df, data_type: str, logger: logging.Logger = LOGGER) -> None:
-    if df.shape[0] < 100 or df.shape[1] < 2:
-        logger.warning(
-            f'Only {df.shape[0]} cells and {df.shape[1]} {data_type} left after filtering. Returning empty correlation matrix.'
-        )
-        return False
-    return True
+def run_correlation_analysis(
+    adata: AnnData, downsample: int = 25_000, logger: logging.Logger = LOGGER
+) -> tuple[pd.DataFrame, pd.DataFrame]:
 
-
-def run_correlation_analysis(adata: AnnData, downsample: int = 25_000, logger: logging.Logger = LOGGER) -> None:
     n_obs_in = adata.n_obs
     fm = FilterMethod(filter_type='cells', key=c.NUC_STAIN_INTENSITY, subset='__notna__')
     adata = fm.filter(adata, apply=True)
@@ -54,9 +48,8 @@ def run_correlation_analysis(adata: AnnData, downsample: int = 25_000, logger: l
     mask_protein = _drop_zeros_mask(adata.obsm['protein'])
     adata = adata[mask_X & mask_protein].copy()
 
-    if downsample is not None and len(adata) > downsample:
-        adata = adata[np.random.sample(adata.obs_names.tolist(), downsample), :].copy()
-        logger.info(f'Protein correlation data subsampled to {adata.shape[0]} cells.')
+    if downsample is not None:
+        adata = downsample_adata(adata, downsample=downsample, logger=logger)
 
     if adata.n_obs < n_obs_in:
         logger.warning(
@@ -64,7 +57,7 @@ def run_correlation_analysis(adata: AnnData, downsample: int = 25_000, logger: l
         )
 
     pr_corr_df = protein_protein(adata, logger)
-    rna_corr_df, rna_pr_corr_df = protein_rna(adata, logger)
+    _, rna_pr_corr_df = protein_rna(adata, logger)
     return pr_corr_df, rna_pr_corr_df
 
 
@@ -82,10 +75,9 @@ def protein_protein(adata: AnnData, logger: logging.Logger = LOGGER) -> None:
         return create_dummy_output()
 
 
-def protein_rna(adata: AnnData, prot_df: pd.DataFrame | None = None, logger: logging.Logger = LOGGER) -> None:
-    if prot_df is None:
-        prot_df = _get_protein_df(adata)
-        prot_df = _drop_zero_variance_proteins(prot_df, logger)
+def protein_rna(adata: AnnData, logger: logging.Logger = LOGGER) -> None:
+    prot_df = _get_protein_df(adata)
+    prot_df = _drop_zero_variance_proteins(prot_df, logger)
 
     if not check_correlation_feasibility(prot_df, 'proteins', logger):
         return create_dummy_output(), create_dummy_output()
@@ -147,6 +139,15 @@ def create_dummy_output():
     return df
 
 
+def check_correlation_feasibility(df, data_type: str, logger: logging.Logger = LOGGER) -> None:
+    if df.shape[0] < 100 or df.shape[1] < 20:
+        logger.warning(
+            f'Only {df.shape[0]} cells and {df.shape[1]} {data_type} left after filtering. Returning empty correlation matrix.'
+        )
+        return False
+    return True
+
+
 def _calculate_correlation(df, index=None, columns=None):
     index = index if index is not None else df.index.tolist()
     columns = columns if columns is not None else df.columns.tolist()
@@ -186,3 +187,13 @@ def _drop_zero_count_genes(rna_df, logger: logging.Logger = LOGGER) -> None:
         logger.warning(f'Genes total 0 counts in sampled cells: {zero_count_genes}')
 
     return rna_df.loc[:, non_zero_counts]
+
+
+def downsample_adata(adata: AnnData, downsample: int, logger: logging.Logger = LOGGER):
+    if adata.n_obs > downsample:
+        idx = np.random.choice(adata.n_obs, size=downsample, replace=False)
+        logger.debug(f'Protein correlation data subsampled to {downsample} cells.')
+        return adata[idx, :].copy()
+    else:
+        logger.debug(f'Protein correlation data has {adata.shape[0]} cells, no subsampling applied.')
+        return adata
