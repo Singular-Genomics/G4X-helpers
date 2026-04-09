@@ -10,7 +10,7 @@ from ... import c, io
 from ... import logging_utils as logut
 from ...schema.definition import ViewerZarr
 from ..workflow import PRESET_SOURCE, reroute_source
-from .images import write_images
+from .images import write_he_img, write_muliplex_img
 from .transcripts import write_transcripts
 from .utils import populate_zarr_metadata
 
@@ -53,7 +53,10 @@ def create_viewer_zarr(
     else:
         log.info('QCSummary file does not exist, skipping copy to ViewerZarr.')
 
-    write_images(smp, root_group, logger=log)
+    chunk_size = 1024
+    write_muliplex_img(smp, root_group, chunk_size=chunk_size, logger=log)
+    write_he_img(smp, root_group, chunk_size=chunk_size, logger=log)
+
     write_transcripts(
         smp, root_group, tx_table=tx_table, manifest=manifest, dgex=sc_dir / smp.out.Dgex.n, overwrite=True, logger=log
     )

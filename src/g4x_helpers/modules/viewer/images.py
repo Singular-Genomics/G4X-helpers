@@ -65,17 +65,9 @@ OMERO_DEFAULT = {
 }
 
 
-def write_images(smp, root_group, logger: logging.Logger | None = None):
-    log = LOGGER or logger
+def write_muliplex_img(smp, root_group, chunk_size: int = 256, logger: logging.Logger = LOGGER):
 
-    write_muliplex_img(smp, root_group, logger=log)
-    write_he_img(smp, root_group, logger=log)
-
-
-def write_muliplex_img(smp, root_group, logger: logging.Logger | None = None):
-
-    log = LOGGER or logger
-    log.debug('Preparing multiplex image')
+    logger.debug('Preparing multiplex image')
 
     channel_arrays = []
 
@@ -91,7 +83,7 @@ def write_muliplex_img(smp, root_group, logger: logging.Logger | None = None):
         elif ch == c.NUCLEAR_STAIN:
             arr = smp.load_nuclear_image(dask=True, use_cache=False)
         else:
-            log.warning(f'Unknown stain type: {ch}, skipping.')
+            logger.warning(f'Unknown stain type: {ch}, skipping.')
             continue
 
         channel_arrays.append(arr)
@@ -110,7 +102,7 @@ def write_muliplex_img(smp, root_group, logger: logging.Logger | None = None):
 
     channels = []
     for arr, name in zip(channel_arrays, channel_order):
-        log.debug(f'Processing channel: {name}')
+        logger.debug(f'Processing channel: {name}')
         if name in channel_color_map:
             color = saturated_colors[channel_color_map[name]]
         else:
@@ -124,14 +116,14 @@ def write_muliplex_img(smp, root_group, logger: logging.Logger | None = None):
         )
         channels.append(ic)
 
-    log.info('Writing multiplex image')
+    logger.info('Writing multiplex image')
     img_group = root_group['images']['multiplex']
-    write_channel_stack(img_group, channels)
+    write_channel_stack(img_group, channels, chunk_size=chunk_size)
 
 
-def write_he_img(smp, root_group, logger: logging.Logger | None = None):
-    log = LOGGER or logger
-    log.debug('Preparing fH&E image')
+def write_he_img(smp, root_group, chunk_size: int = 256, logger: logging.Logger = LOGGER):
+
+    logger.debug('Preparing fH&E image')
 
     image = smp.load_he_image(dask=True, use_cache=False)
     # image = _add_rgb_astronaut_to_img(image)
@@ -147,12 +139,14 @@ def write_he_img(smp, root_group, logger: logging.Logger | None = None):
     c2 = ImageChannel(image[1], label='G', omero_attrs={'color': '00FF00', 'active': True})
     c3 = ImageChannel(image[2], label='B', omero_attrs={'color': '0000FF', 'active': True})
 
-    log.info('Writing fH&E image')
+    logger.info('Writing fH&E image')
     img_group = root_group['images']['h_and_e']
-    write_channel_stack(img_group, [c1, c2, c3])
+    write_channel_stack(img_group, [c1, c2, c3], chunk_size=chunk_size)
 
 
-def write_channel_stack(img_group, channels: list[ImageChannel], levels: int = 4, clevel: int = 5):
+def write_channel_stack(
+    img_group, channels: list[ImageChannel], chunk_size: int = 256, levels: int = 4, clevel: int = 5
+):
     channel_arrays = [ch.img for ch in channels]
     data = da.stack(channel_arrays, axis=0)
     axes = ['c', 'z', 'y', 'x'] if data.ndim == 4 else ['c', 'y', 'x']
@@ -160,7 +154,7 @@ def write_channel_stack(img_group, channels: list[ImageChannel], levels: int = 4
     scaler = oz_scale.Scaler(downscale=2, max_layer=levels)
     compressor = Blosc(cname='zstd', clevel=clevel, shuffle=Blosc.SHUFFLE)
 
-    chunks = (1, 1, 256, 256)[-data.ndim :]
+    chunks = (1, 1, chunk_size, chunk_size)[-data.ndim :]
     storage_options = {'chunks': chunks, 'compressor': compressor}
 
     omero = {'channels': [ch.omero for ch in channels]}
