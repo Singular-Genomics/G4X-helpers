@@ -112,7 +112,7 @@ class G4Xoutput:
             return
 
         if self.src.tx_detected:
-            tx_panel = self.out.Manifest.parse()
+            tx_panel = self.out.Manifest.load()
             tx_panel = tx_panel.sort(by=['probe_type', 'probe'], descending=[True, False])
             self.genes = tx_panel['gene_name'].unique(maintain_order=True).to_list()
 

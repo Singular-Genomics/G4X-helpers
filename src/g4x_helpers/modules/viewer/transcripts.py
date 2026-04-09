@@ -195,7 +195,7 @@ def get_gene_metadata(smp, manifest, dgex, logger: logging.Logger | None = None)
     manifest_in = collect_input(smp, manifest, validator=Manifest, logger=log)
     dgex_in = collect_input(smp, dgex, validator=Dgex, validate=False, logger=log)
 
-    tx_panel = manifest_in.parse()
+    tx_panel = manifest_in.load()
 
     if dgex_in.is_valid:
         dgex = dgex_in.load()

@@ -124,7 +124,7 @@ class SampleSheet(BaseValidator):
 class Manifest(BaseValidator):
     DEFAULT_TARGET_PATH = c.TX_PANEL
 
-    SCHEMA = ['probe', 'gene_name', 'panel_type']
+    SCHEMA = ['probe']
 
     @validation_test
     def correct_schema(self):
@@ -133,7 +133,7 @@ class Manifest(BaseValidator):
 
         return set(self.SCHEMA).issubset(lf_names)
 
-    def parse(self):
+    def load(self):
         if self.is_valid:
             return io.parse_input_manifest(self.target_path)
         return self.validation()

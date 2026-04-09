@@ -98,10 +98,6 @@ def parse_samplesheet(ss_path: str):
 def parse_input_manifest(file_path: str, verbose: bool = False):
     manifest = pl.read_csv(file_path)
 
-    # col = 'probe_name'
-    # if col not in manifest.columns:
-    #     raise ValueError(f"transcript manifest must contain column '{col}'")
-
     for i, parsed_column in enumerate(['gene_name', 'sequence', 'primer']):
         if parsed_column not in manifest.columns:
             manifest = manifest.with_columns(
@@ -116,7 +112,7 @@ def parse_input_manifest(file_path: str, verbose: bool = False):
             for ns in null_seqs:
                 print(f'- {ns}')
 
-    if 'read' not in manifest.columns:
+    if 'read_num' not in manifest.columns:
         plist = manifest['primer'].unique().to_list()
         ign_primer = [p for p in plist if p not in c.primer_read_map]
         if len(ign_primer) > 0:
@@ -125,7 +121,14 @@ def parse_input_manifest(file_path: str, verbose: bool = False):
                 for ip in ign_primer:
                     print(f'- {ip}')
         manifest = manifest.filter(pl.col('primer').is_in(c.primer_read_map.keys())).with_columns(
-            pl.col('primer').replace(c.primer_read_map).cast(pl.Int8).alias('read')
+            pl.col('primer').replace(c.primer_read_map).cast(pl.Int8).alias('read_num')
+        )
+
+    if 'probe_id' not in manifest.columns:
+        manifest = (
+            manifest.with_columns(gene_probe_idx=pl.int_range(0, pl.len()).over('gene_name'))
+            .with_columns(pl.col('gene_probe_idx').cast(pl.Utf8).str.zfill(4) + '-' + pl.col('gene_name'))
+            .rename({'gene_probe_idx': 'probe_id'})
         )
 
     if 'probe_type' not in manifest.columns:
@@ -141,7 +144,7 @@ def parse_input_manifest(file_path: str, verbose: bool = False):
             )
         )
 
-    return manifest.select(['probe', 'gene_name', 'sequence', 'primer', 'read', 'probe_type'])
+    return manifest.select(['probe', 'probe_id', 'gene_name', 'sequence', 'primer', 'read_num', 'probe_type'])
 
 
 @optionally_cached(maxsize=2)

@@ -49,13 +49,16 @@ def demux_raw_features(
 
     # if we're using a provided manifest, copy it into the output tree
     if manifest != PRESET_SOURCE:
-        log.debug('Copying manifest from provided path into output tree')
-        shutil.copy(manifest_in.p, smp.out.Manifest.p)
+        if manifest_in.p == smp.out.Manifest.p:
+            log.debug('Provided manifest is already in the output tree, skipping copy')
+        else:
+            log.debug('Copying manifest from provided path into output tree')
+            shutil.copy(manifest_in.p, smp.out.Manifest.p)
 
     # 3: Do the demuxing
     log.info('Starting batched demuxing of raw features')
 
-    manifest = manifest_in.parse()
+    manifest = manifest_in.load()
     show_progress = sys.stderr.isatty() if show_progress is None else show_progress
     try:
         batch_dir = io.pathval.ensure_dir(out_dir / 'demux_batches')
@@ -96,12 +99,12 @@ def batched_demuxing(
     logger: logging.Logger | None = None,
 ):
     log = logger or LOGGER
-    probe_dict = dict(zip(manifest['probe'].to_list(), manifest['gene_name'].to_list()))
+    probe_dict = dict(zip(manifest['probe_id'].to_list(), manifest['gene_name'].to_list()))
     probe_dict['UNDETERMINED'] = 'UNDETERMINED'
 
-    seq_reads = manifest['read'].unique().to_list()
+    seq_reads = manifest['read_num'].unique().to_list()
     seq_reads = [int(x.split('_')[-1]) if isinstance(x, str) else x for x in seq_reads]
-    manifest_by_read = {seq_read: manifest.filter(pl.col('read') == seq_read) for seq_read in seq_reads}
+    manifest_by_read = {seq_read: manifest.filter(pl.col('read_num') == seq_read) for seq_read in seq_reads}
 
     num_features = pl.scan_parquet(feature_table_path).select(pl.len()).collect().item()
     num_expected_batches = math.ceil(num_features / batch_size)
@@ -122,10 +125,12 @@ def batched_demuxing(
         position=0,
         disable=not show_progress,
     ):
-        feature_batch = feature_batch.with_columns(pl.col('TXUID').str.split('_').list.last().cast(int).alias('read'))
+        feature_batch = feature_batch.with_columns(
+            pl.col('TXUID').str.split('_').list.last().cast(int).alias('read_num')
+        )
         redemuxed_feature_batch = []
         for seq_read in seq_reads:
-            feature_batch_read = feature_batch.filter(pl.col('read') == seq_read)
+            feature_batch_read = feature_batch.filter(pl.col('read_num') == seq_read)
             manifest_read = manifest_by_read[seq_read]
 
             if len(feature_batch_read) == 0 or len(manifest_read) == 0:
@@ -133,11 +138,11 @@ def batched_demuxing(
 
             seqs = feature_batch_read['sequence'].to_list()
             codes = manifest_read['sequence'].to_list()
-            codebook_target_ids = np.array(manifest_read['probe'].to_list())
+            codebook_target_ids = np.array(manifest_read['probe_id'].to_list())
 
             hammings = batched_dot_product_hamming_matrix(seqs, codes, lut=LUT, batch_size=batch_size)
             feature_batch_read = demux(hammings, feature_batch_read, codebook_target_ids, probe_dict)
-            feature_batch_read = feature_batch_read.drop(['sequence', 'read'])
+            feature_batch_read = feature_batch_read.drop(['sequence', 'read_num'])
             redemuxed_feature_batch.append(feature_batch_read)
 
         batch_dir = Path(batch_dir)
