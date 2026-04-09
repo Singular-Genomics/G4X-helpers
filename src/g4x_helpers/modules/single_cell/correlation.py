@@ -36,10 +36,32 @@ PAIRS = {
 LOGGER = logging.getLogger(__name__)
 
 
-def run_correlation_analysis(adata: AnnData, logger: logging.Logger = LOGGER) -> None:
-    # adata = smp.load_adata(processed=False)
+def check_correlation_feasibility(df, data_type: str, logger: logging.Logger = LOGGER) -> None:
+    if df.shape[0] < 100 or df.shape[1] < 2:
+        logger.warning(
+            f'Only {df.shape[0]} cells and {df.shape[1]} {data_type} left after filtering. Returning empty correlation matrix.'
+        )
+        return False
+    return True
+
+
+def run_correlation_analysis(adata: AnnData, downsample: int = 25_000, logger: logging.Logger = LOGGER) -> None:
+    n_obs_in = adata.n_obs
     fm = FilterMethod(filter_type='cells', key=c.NUC_STAIN_INTENSITY, subset='__notna__')
     adata = fm.filter(adata, apply=True)
+
+    mask_X = _drop_zeros_mask(adata.X)
+    mask_protein = _drop_zeros_mask(adata.obsm['protein'])
+    adata = adata[mask_X & mask_protein].copy()
+
+    if downsample is not None and len(adata) > downsample:
+        adata = adata[np.random.sample(adata.obs_names.tolist(), downsample), :].copy()
+        logger.info(f'Protein correlation data subsampled to {adata.shape[0]} cells.')
+
+    if adata.n_obs < n_obs_in:
+        logger.warning(
+            f'Filtered out {n_obs_in - adata.n_obs} ({(n_obs_in - adata.n_obs) / n_obs_in:.2%}) cells with no RNA or Protein data'
+        )
 
     pr_corr_df = protein_protein(adata, logger)
     rna_corr_df, rna_pr_corr_df = protein_rna(adata, logger)
@@ -47,64 +69,84 @@ def run_correlation_analysis(adata: AnnData, logger: logging.Logger = LOGGER) ->
 
 
 def protein_protein(adata: AnnData, logger: logging.Logger = LOGGER) -> None:
-    mask = _drop_zeros_mask(adata.obsm['protein'])
-    prot_df = _get_protein_df(adata[mask])
-    logger.info(f'Un-Filtered protein intensity Data Frame: {prot_df.shape=}')
-
-    prot_df = _drop_zero_variance_proteins(prot_df, logger)
-    logger.info(f'Filtered protein intensity Data Frame: {prot_df.shape=}')
-
-    return _calculate_correlation(prot_df)
-
-
-def protein_rna(adata: AnnData, logger: logging.Logger = LOGGER) -> None:
-    mask_X = _drop_zeros_mask(adata.X)
-    mask_protein = _drop_zeros_mask(adata.obsm['protein'])
-    adata = adata[mask_X & mask_protein].copy()
-
     prot_df = _get_protein_df(adata)
     prot_df = _drop_zero_variance_proteins(prot_df, logger)
+
+    if not check_correlation_feasibility(prot_df, 'proteins', logger):
+        return create_dummy_output()
+
+    try:
+        return _calculate_correlation(prot_df)
+    except Exception as e:
+        logger.error(f'Error calculating protein-protein correlation: {e}')
+        return create_dummy_output()
+
+
+def protein_rna(adata: AnnData, prot_df: pd.DataFrame | None = None, logger: logging.Logger = LOGGER) -> None:
+    if prot_df is None:
+        prot_df = _get_protein_df(adata)
+        prot_df = _drop_zero_variance_proteins(prot_df, logger)
+
+    if not check_correlation_feasibility(prot_df, 'proteins', logger):
+        return create_dummy_output(), create_dummy_output()
 
     filtered_pairs = {}
     for k, v in PAIRS.items():
         if k in adata.var_names and f'{v}{c.IMG_INTENSITY_HANDLE}' in prot_df.columns:
             filtered_pairs[k] = v
     if len(filtered_pairs) == 0:
-        logger.warning('No matching protein-RNA pairs in this data')
-        return pd.DataFrame(), pd.DataFrame()
+        logger.warning('No matching protein-RNA pairs in this data. Returning empty correlation matrices.')
+        return create_dummy_output(), create_dummy_output()
 
     ## get protein data for pairs
     prot_df = prot_df[[f'{x}{c.IMG_INTENSITY_HANDLE}' for x in filtered_pairs.values()]].copy()
-    logger.info(f'Filtered protein intensity Data Frame: {prot_df.shape=}')
+    if not check_correlation_feasibility(prot_df, 'proteins', logger):
+        return create_dummy_output(), create_dummy_output()
 
     ## get RNA data
     rna_df = pd.DataFrame(
         adata[:, list(filtered_pairs.keys())].X.toarray(), index=adata.obs_names, columns=list(filtered_pairs.keys())
     )
-    logger.info(f'Filtered RNA counts Data Frame: {rna_df.shape=}')
-
     rna_df = _drop_zero_count_genes(rna_df, logger)
-    logger.info(f'Filtered RNA counts Data Frame after removing zero counts: {rna_df.shape=}')
 
-    ## calculate correlation
-    rna_corr_df = _calculate_correlation(rna_df)
+    if not check_correlation_feasibility(rna_df, 'genes', logger):
+        return create_dummy_output(), create_dummy_output()
 
-    ## get ordering for later
-    row_order = rna_df.columns.tolist()
-    prot_row_order = [f'{filtered_pairs[y]}{c.IMG_INTENSITY_HANDLE}' for y in row_order]
+    try:
+        ## calculate correlation
+        rna_corr_df = _calculate_correlation(rna_df)
 
-    ## merge RNA and Protein and specify order
-    final_df = rna_df.merge(prot_df, how='left', left_index=True, right_index=True)
-    final_df = final_df[row_order + prot_row_order].copy()
+        ## get ordering for later
+        row_order = rna_df.columns.tolist()
+        prot_row_order = [f'{filtered_pairs[y]}{c.IMG_INTENSITY_HANDLE}' for y in row_order]
 
-    ## calculate correlation
-    ranked_final_df = rankdata(final_df.to_numpy(), axis=0)
-    rna_pr_corr_df = _calculate_correlation(ranked_final_df, index=final_df.columns, columns=final_df.columns)
+        ## merge RNA and Protein and specify order
+        final_df = rna_df.merge(prot_df, how='left', left_index=True, right_index=True)
+        final_df = final_df[row_order + prot_row_order].copy()
+
+        ## calculate correlation
+        ranked_final_df = rankdata(final_df.to_numpy(), axis=0)
+        rna_pr_corr_df = _calculate_correlation(ranked_final_df, index=final_df.columns, columns=final_df.columns)
+    except Exception as e:
+        logger.error(f'Error calculating protein-RNA correlation: {e}')
+        return create_dummy_output(), create_dummy_output()
 
     return rna_corr_df, rna_pr_corr_df
 
 
 # region helper functions
+def create_dummy_output():
+    df = pd.DataFrame(
+        [
+            [1.0, 0.0],
+            [0.0, 1.0],
+        ],
+        columns=['not', 'available'],
+        index=['not', 'available'],
+    )
+    return df
+
+
 def _calculate_correlation(df, index=None, columns=None):
     index = index if index is not None else df.index.tolist()
     columns = columns if columns is not None else df.columns.tolist()
