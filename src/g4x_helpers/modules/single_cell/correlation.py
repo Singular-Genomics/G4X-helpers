@@ -71,7 +71,7 @@ def protein_rna(adata: AnnData, logger: logging.Logger = LOGGER) -> None:
             filtered_pairs[k] = v
     if len(filtered_pairs) == 0:
         logger.warning('No matching protein-RNA pairs in this data')
-        return None
+        return pd.DataFrame(), pd.DataFrame()
 
     ## get protein data for pairs
     prot_df = prot_df[[f'{x}{c.IMG_INTENSITY_HANDLE}' for x in filtered_pairs.values()]].copy()

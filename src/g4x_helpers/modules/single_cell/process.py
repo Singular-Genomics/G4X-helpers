@@ -41,6 +41,7 @@ def process_sc_output(
     cluster_attempts: int = 10,
     rnd_st: int = 111,
     compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
+    omit_correlation: bool = False,
     logger: logging.Logger | None = None,
 ):
     log = logger or LOGGER
@@ -78,7 +79,7 @@ def process_sc_output(
         return
     del adata_init
 
-    if smp.src.pr_detected:
+    if smp.src.pr_detected and not omit_correlation:
         pr_corr_df, rna_pr_corr_df = run_correlation_analysis(adata, logger=log)
         pr_corr_df.to_csv(smp.out.AdataH5.p.parent / 'protein_sc_correlation.csv')
         rna_pr_corr_df.to_csv(smp.out.AdataH5.p.parent / 'rna_protein_sc_correlation.csv')
