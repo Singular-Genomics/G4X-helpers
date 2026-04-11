@@ -79,7 +79,7 @@ def aggregate_cell_data(
     log.info('Creating cell x gene matrix')
     cell_x_gene, tx_table_intersected = create_cell_x_gene(
         smp=smp,
-        tx_table=txtable_in.load(lazy=False),
+        tx_table=txtable_in.load(),
         segmentation_mask=mask,
         gene_labels=gene_list,
         logger=log,

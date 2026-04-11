@@ -1,16 +1,15 @@
 import json
-from pathlib import Path
 
 import anndata as ad
 import numpy as np
 import polars as pl
 
 from .. import c, io
-from .validator import BaseValidator, validation_test
+from .validator import BaseValidator, FileValidator, FolderValidator, TableValidator, validation_test
 
 
 # region root
-class SampleG4X(BaseValidator):
+class SampleG4X(FileValidator):
     DEFAULT_TARGET_PATH = c.SMP_META
 
     KEYS = [
@@ -37,31 +36,15 @@ class SampleG4X(BaseValidator):
         'output_version',
     ]
 
-    def _try_load_json(self):
-        try:
-            with open(self.target_path, 'r') as f:
-                meta = json.load(f)
-        except Exception as _:
-            return {}
-        return meta
-
-    @validation_test
-    def is_readable(self):
-        return bool(self._try_load_json())
-
     @validation_test
     def correct_schema(self):
-        if self.is_readable():
-            smp_meta = self._try_load_json()
-            return set(self.KEYS).issubset(set(smp_meta.keys()))
-        return False
+        smp_meta = self.load()
+        return set(self.KEYS).issubset(set(smp_meta.keys()))
 
-    def load(self):
-        if self.is_valid:
-            with open(self.target_path, 'r') as f:
-                smp_meta = json.load(f)
-            return smp_meta
-        return self.validation()
+    def _load_method(self):
+        with open(self.target_path, 'r') as f:
+            smp_meta = json.load(f)
+        return smp_meta
 
 
 class QCSummary(BaseValidator):
@@ -121,22 +104,13 @@ class SampleSheet(BaseValidator):
         return run_section_valid and data_section_valid
 
 
-class Manifest(BaseValidator):
+class Manifest(TableValidator):
     DEFAULT_TARGET_PATH = c.TX_PANEL
 
-    SCHEMA = ['probe']
+    SCHEMA = {'probe': pl.String}
 
-    @validation_test
-    def correct_schema(self):
-        lf = pl.scan_csv(self.target_path)
-        lf_names = lf.collect_schema().names()
-
-        return set(self.SCHEMA).issubset(lf_names)
-
-    def load(self):
-        if self.is_valid:
-            return io.parse_input_manifest(self.target_path)
-        return self.validation()
+    def parse(self):
+        return io.parse_input_manifest(self.target_path)
 
 
 class ProteinPanel(BaseValidator):
@@ -158,7 +132,7 @@ class ProteinPanel(BaseValidator):
 
 
 # region masks
-class Segmentation(BaseValidator):
+class Segmentation(FileValidator):
     DEFAULT_TARGET_PATH = c.SEG_MASK
     DEFAULT_KEYS = ['nuclei', 'nuclei_exp']
     _main_key = 'nuclei_exp'
@@ -177,48 +151,166 @@ class Segmentation(BaseValidator):
         path = self.target_path
         return set(np.load(path).keys()) == set(self.DEFAULT_KEYS)
 
-    def load(self, key: str | None = None):
+    def _load_method(self, key: str | None = None):
         key = self.main_key if key is None else key
         return io.import_segmentation(seg_path=self.target_path, labels_key=key, expected_shape=None, use_cache=True)
 
 
-class BeadMask(BaseValidator):
+class BeadMask(FileValidator):
     DEFAULT_TARGET_PATH = c.BEAD_MASK
+    DEFAULT_KEY = 'bead_mask'
 
     @validation_test
     def correct_keys(self):
         path = self.target_path
-        return list(np.load(path).keys()) == ['bead_mask']
+        return list(np.load(path).keys()) == [self.DEFAULT_KEY]
+
+    def _load_method(self):
+        return np.load(self.target_path)[self.DEFAULT_KEY]
 
 
 # region rna
-class RawFeatures(BaseValidator):
+class RawFeatures(TableValidator):
     DEFAULT_TARGET_PATH = c.RAW_FEATURES
 
-    SCHEMA = [
-        'TXUID',
-        'sequence',
-        'confidence_score',
-        'y_pixel_coordinate',
-        'x_pixel_coordinate',
-        'z_level',
-    ]
-
-    @validation_test
-    def correct_schema(self):
-        lf = pl.scan_parquet(self.target_path)
-        lf_schema = lf.collect_schema().names()
-        return lf_schema == self.SCHEMA
+    SCHEMA = {
+        'TXUID': pl.String,
+        'sequence': pl.String,
+        'confidence_score': pl.Float64,
+        'y_pixel_coordinate': pl.Float64,
+        'x_pixel_coordinate': pl.Float64,
+        'z_level': pl.Float64,
+    }
 
 
-class TxTable(BaseValidator):
+class TxTable(TableValidator):
     DEFAULT_TARGET_PATH = c.FILE_TX_TABLE
 
-    def load(self, lazy: bool = False):
-        if self.is_valid:
-            return io.import_table(self.target_path, lazy=lazy)
-        else:
-            return self.validation()
+    SCHEMA = {
+        'TXUID': pl.String,
+        'confidence_score': pl.Float64,
+        'y_pixel_coordinate': pl.Float64,
+        'x_pixel_coordinate': pl.Float64,
+        'z_level': pl.Float64,
+        'probe_name': pl.String,
+        'gene_id': pl.String,
+    }
+
+
+# region single cell
+class AdataH5(BaseValidator):
+    DEFAULT_TARGET_PATH = c.FILE_FEAT_MTX
+
+    @property
+    def has_qc(self) -> bool:
+        qc_cols = [
+            'n_genes_by_counts',
+            'log1p_n_genes_by_counts',
+            'total_counts',
+            'log1p_total_counts',
+            'total_counts_ctrl',
+            'log1p_total_counts_ctrl',
+            'pct_counts_ctrl',
+        ]
+
+        ad_cols = ad.read_h5ad(self.target_path, backed='r').obs.columns
+
+        return set(qc_cols).issubset(set(ad_cols))
+
+    def load(self):
+        return ad.read_h5ad(self.target_path)
+
+
+class CellMetadata(TableValidator):
+    DEFAULT_TARGET_PATH = c.FILE_CELL_METADATA
+
+    SCHEMA = {
+        c.CELL_ID_NAME: pl.String,
+        'sample_id': pl.String,
+        'tissue_type': pl.String,
+        'block': pl.String,
+        'seg_source': pl.String,
+        c.CELL_COORD_X: pl.String,
+        c.CELL_COORD_Y: pl.String,
+        c.NUC_AREA_NAME: pl.String,
+        c.CELL_AREA_NAME: pl.String,
+        c.NUC_STAIN_INTENSITY: pl.String,
+        c.CYT_STAIN_INTENSITY: pl.String,
+    }
+
+
+class CellxGene(TableValidator):
+    DEFAULT_TARGET_PATH = c.FILE_CELL_X_GENE
+
+    SCHEMA = {c.CELL_ID_NAME: pl.String}
+
+
+class CellxProt(TableValidator):
+    DEFAULT_TARGET_PATH = c.FILE_CELL_X_PROTEIN
+
+    SCHEMA = {c.CELL_ID_NAME: pl.String}
+
+
+class ClusteringUmap(TableValidator):
+    DEFAULT_TARGET_PATH = c.FILE_CLUSTERING_UMAP
+
+    SCHEMA = {
+        c.CELL_ID_NAME: pl.String,
+        'UMAP1': pl.Float32,
+        'UMAP2': pl.Float32,
+    }
+
+
+class Dgex(TableValidator):
+    DEFAULT_TARGET_PATH = c.FILE_DGEX
+
+    SCHEMA = {
+        'leiden_res': pl.String,
+        'cluster_id': pl.String,
+        'gene_id': pl.String,
+        'score': pl.Float64,
+        'logfoldchange': pl.Float64,
+        'pval': pl.Float64,
+        'pval_adj': pl.Float64,
+        'pct_nz_group': pl.Float64,
+        'pct_nz_reference': pl.Float64,
+    }
+
+    @validation_test
+    def has_clusters(self):
+        df = self.load(lazy=False)
+        max_clusters = df.unique(['leiden_res', 'cluster_id']).group_by(['leiden_res']).agg(pl.len())['len'].max()
+        return max_clusters > 2
+
+
+class SingleCellFolder(BaseValidator):
+    DEFAULT_TARGET_PATH = c.SINGLE_CELL_DIR
+
+    SUB_VALIDATORS = [
+        CellMetadata(root='.'),
+        CellxGene(root='.'),
+        CellxProt(root='.'),
+        AdataH5(root='.'),
+        Dgex(root='.'),
+        ClusteringUmap(root='.'),
+    ]
+
+    def __init__(self, root=None, target_path=None):
+        super().__init__(root=root, target_path=target_path or self.DEFAULT_TARGET_PATH)
+        for val in self.SUB_VALIDATORS:
+            val.root = self.root
+            setattr(self, val.name, val)
+
+    @property
+    def existing_files(self):
+        existing_files = {}
+        for val in self.SUB_VALIDATORS:
+            existing_files[val.name] = val.is_valid
+        return existing_files
+
+    @validation_test
+    def files_present(self):
+        return all(self.existing_files.values())
 
 
 # region protein
@@ -252,202 +344,58 @@ class ProteinDir(BaseValidator):
 
 
 # region hne
-class HnEDir(BaseValidator):
+class HnEDir(FolderValidator):
     DEFAULT_TARGET_PATH = c.HE_DIR
-
-    IMG_SUFFIXES = [c.PREFERRED_IMG_SUFFIX, c.ALT_IMG_SUFFIX]
-
-    IMAGES = [
-        c.NUC_IMG,
-        c.CYT_IMG,
-        c.HNE_IMG,
-    ]
-
-    def __init__(self, root):
-        super().__init__(root=root)
-
-        self.existing_files = {}
-        for img in self.IMAGES:
-            img_path = Path(f'{img}__missing__')
-            for suffix in self.IMG_SUFFIXES:
-                candidate = (self.root / img).with_suffix(suffix)
-                if candidate.exists():
-                    img_path = candidate
-
-            self.existing_files[img] = img_path  # is not None
-
-    @validation_test
-    def images_present(self):
-        existing_files = {}
-        for img_name, img_path in self.existing_files.items():
-            existing_files[img_name] = img_path.exists()
-        return all(existing_files.values())
-
-
-# region single cell
-class CellMetadata(BaseValidator):
-    DEFAULT_TARGET_PATH = c.FILE_CELL_METADATA
-    SCHEMA = [c.CELL_ID_NAME]
-
-    @validation_test
-    def correct_schema(self):
-        lf = pl.scan_csv(self.target_path)
-        lf_names = lf.collect_schema().names()
-
-        return set(self.SCHEMA).issubset(lf_names)
-
-    def load(self, lazy: bool = False):
-        if self.is_valid:
-            return io.import_table(self.target_path, lazy=lazy, use_cache=False)
-        else:
-            return self.validation()
-
-
-class CellxGene(BaseValidator):
-    DEFAULT_TARGET_PATH = c.FILE_CELL_X_GENE
-    SCHEMA = [c.CELL_ID_NAME]
-
-    @validation_test
-    def correct_schema(self):
-        lf = pl.scan_csv(self.target_path)
-        lf_names = lf.collect_schema().names()
-
-        return set(self.SCHEMA).issubset(lf_names)
-
-    def load(self, lazy: bool = False):
-        if self.is_valid:
-            return io.import_table(self.target_path, lazy=lazy, use_cache=False)
-        else:
-            return self.validation()
-
-
-class CellxProt(BaseValidator):
-    DEFAULT_TARGET_PATH = c.FILE_CELL_X_PROTEIN
-    SCHEMA = [c.CELL_ID_NAME]
-
-    @validation_test
-    def correct_schema(self):
-        lf = pl.scan_csv(self.target_path)
-        lf_names = lf.collect_schema().names()
-
-        return set(self.SCHEMA).issubset(lf_names)
-
-    def load(self, lazy: bool = False):
-        if self.is_valid:
-            return io.import_table(self.target_path, lazy=lazy, use_cache=False)
-        else:
-            return self.validation()
-
-
-class AdataH5(BaseValidator):
-    DEFAULT_TARGET_PATH = c.FILE_FEAT_MTX
-
-    @property
-    def has_qc(self) -> bool:
-        qc_cols = [
-            'n_genes_by_counts',
-            'log1p_n_genes_by_counts',
-            'total_counts',
-            'log1p_total_counts',
-            'total_counts_ctrl',
-            'log1p_total_counts_ctrl',
-            'pct_counts_ctrl',
-        ]
-
-        ad_cols = ad.read_h5ad(self.target_path, backed='r').obs.columns
-
-        return set(qc_cols).issubset(set(ad_cols))
-
-    def load(self):
-        return ad.read_h5ad(self.target_path)
-
-
-class ClusteringUmap(BaseValidator):
-    DEFAULT_TARGET_PATH = c.FILE_CLUSTERING_UMAP
-
-    def load(self, lazy: bool = False):
-        if self.is_valid:
-            return io.import_table(self.target_path, lazy=lazy, use_cache=False)
-        else:
-            return self.validation()
-
-
-class Dgex(BaseValidator):
-    DEFAULT_TARGET_PATH = c.FILE_DGEX
-
-    SCHEMA = {
-        'leiden_res': pl.String,
-        'cluster_id': pl.String,
-        'gene_id': pl.String,
-        'score': pl.Float64,
-        'logfoldchange': pl.Float64,
-        'pval': pl.Float64,
-        'pval_adj': pl.Float64,
-        'pct_nz_group': pl.Float64,
-        'pct_nz_reference': pl.Float64,
+    EXPECTED_FILES = {
+        f'{c.CYTOPLASMIC_STAIN}.ome.tiff',
+        f'{c.H_AND_E}.ome.tiff',
+        f'{c.NUCLEAR_STAIN}.ome.tiff',
     }
 
-    # import_method
-    def _try_load(self, lazy: bool = False):
-        try:
-            res = io.import_table(self.target_path, lazy=lazy, use_cache=False)
-        except Exception as _:
-            return None
-        return res
+    ALT_FILES = {
+        f'{c.CYTOPLASMIC_STAIN}.jp2',
+        f'{c.H_AND_E}.jp2',
+        f'{c.NUCLEAR_STAIN}.jp2',
+    }
 
-    @validation_test
-    def correct_schema(self):
-        lf = pl.scan_csv(self.target_path)
-        lf_names = lf.collect_schema().names()
+    EXPECTED_DIRS = {'thumbs'}
 
-        return set(self.SCHEMA.keys()).issubset(lf_names)
-
-    @validation_test
-    def is_readable(self):
-        return self._try_load() is not None
-
-    @validation_test
-    def has_clusters(self):
-        df = self._try_load()
-        if df is not None:
-            max_clusters = df.unique(['leiden_res', 'cluster_id']).group_by(['leiden_res']).agg(pl.len())['len'].max()
-        return max_clusters > 2
-
-    def load(self, lazy: bool = False):
-        if self.is_valid:
-            return self._try_load(lazy=lazy)
-        else:
-            return self.validation()
+    def get_img(self, query: str):
+        search_pool = self.ALT_FILES if self.alt_present else self.EXPECTED_FILES
+        fname = next(x for x in search_pool if query in x)
+        return self.p / fname
 
 
-class SingleCellFolder(BaseValidator):
-    DEFAULT_TARGET_PATH = c.SINGLE_CELL_DIR
+# class HnEDir(BaseValidator):
+#     DEFAULT_TARGET_PATH = c.HE_DIR
 
-    SUB_VALIDATORS = [
-        CellMetadata(root='.'),
-        CellxGene(root='.'),
-        CellxProt(root='.'),
-        AdataH5(root='.'),
-        Dgex(root='.'),
-        ClusteringUmap(root='.'),
-    ]
+#     IMG_SUFFIXES = [c.PREFERRED_IMG_SUFFIX, c.ALT_IMG_SUFFIX]
 
-    def __init__(self, root=None, target_path=None):
-        super().__init__(root=root, target_path=target_path or self.DEFAULT_TARGET_PATH)
-        for val in self.SUB_VALIDATORS:
-            val.root = self.root
-            setattr(self, val.name, val)
+#     IMAGES = [
+#         c.NUC_IMG,
+#         c.CYT_IMG,
+#         c.HNE_IMG,
+#     ]
 
-    @property
-    def existing_files(self):
-        existing_files = {}
-        for val in self.SUB_VALIDATORS:
-            existing_files[val.name] = val.is_valid
-        return existing_files
+#     def __init__(self, root):
+#         super().__init__(root=root)
 
-    @validation_test
-    def files_present(self):
-        return all(self.existing_files.values())
+#         self.existing_files = {}
+#         for img in self.IMAGES:
+#             img_path = Path(f'{img}__missing__')
+#             for suffix in self.IMG_SUFFIXES:
+#                 candidate = (self.root / img).with_suffix(suffix)
+#                 if candidate.exists():
+#                     img_path = candidate
+
+#             self.existing_files[img] = img_path  # is not None
+
+#     @validation_test
+#     def images_present(self):
+#         existing_files = {}
+#         for img_name, img_path in self.existing_files.items():
+#             existing_files[img_name] = img_path.exists()
+#         return all(existing_files.values())
 
 
 # region viewer

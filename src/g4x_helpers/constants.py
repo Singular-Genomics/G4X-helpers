@@ -13,11 +13,12 @@ SSHEET = 'samplesheet.csv'
 
 NUCLEAR_STAIN = 'nuclear'
 CYTOPLASMIC_STAIN = 'cytoplasmic'
+H_AND_E = 'h_and_e'
 
 HE_DIR = 'h_and_e'
 NUC_IMG = f'{HE_DIR}/{NUCLEAR_STAIN}'
 CYT_IMG = f'{HE_DIR}/{CYTOPLASMIC_STAIN}'
-HNE_IMG = f'{HE_DIR}/h_and_e'
+HNE_IMG = f'{HE_DIR}/{H_AND_E}'
 
 PR_DIR = 'protein'
 

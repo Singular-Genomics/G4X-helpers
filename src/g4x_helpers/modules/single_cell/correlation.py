@@ -140,7 +140,7 @@ def create_dummy_output():
 
 
 def check_correlation_feasibility(df, data_type: str, logger: logging.Logger = LOGGER) -> None:
-    if df.shape[0] < 100 or df.shape[1] < 20:
+    if df.shape[0] < 100 or df.shape[1] < 2:
         logger.warning(
             f'Only {df.shape[0]} cells and {df.shape[1]} {data_type} left after filtering. Returning empty correlation matrix.'
         )

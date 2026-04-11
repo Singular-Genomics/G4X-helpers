@@ -58,7 +58,7 @@ def demux_raw_features(
     # 3: Do the demuxing
     log.info('Starting batched demuxing of raw features')
 
-    manifest = manifest_in.load()
+    manifest = manifest_in.parse()
     show_progress = sys.stderr.isatty() if show_progress is None else show_progress
     try:
         batch_dir = io.pathval.ensure_dir(out_dir / 'demux_batches')

@@ -36,7 +36,7 @@ class G4Xoutput:
         with open(self.src.SampleG4X.p, 'r') as f:
             self.smp_meta = json.load(f)
 
-        nuc_img = self.src.HnEDir.existing_files['h_and_e/nuclear']
+        nuc_img = self.src.HnEDir.get_img(c.NUCLEAR_STAIN)
         self.shape = ut.get_image_shape(nuc_img)
 
         self.set_meta_attrs()
@@ -112,7 +112,7 @@ class G4Xoutput:
             return
 
         if self.src.tx_detected:
-            tx_panel = self.out.Manifest.load()
+            tx_panel = self.out.Manifest.parse()
             tx_panel = tx_panel.sort(by=['probe_type', 'probe'], descending=[True, False])
             self.genes = tx_panel['gene_name'].unique(maintain_order=True).to_list()
 
@@ -192,15 +192,15 @@ class G4Xoutput:
             return io.import_image(img_path=img_path, use_cache=use_cache)
 
     def load_nuclear_image(self, dask: bool = False, use_cache: bool = False) -> np.ndarray:
-        img_path = self.src.HnEDir.existing_files['h_and_e/nuclear']
+        img_path = self.src.HnEDir.get_img(c.NUCLEAR_STAIN)
         return self._return_image(img_path=img_path, dask=dask, use_cache=use_cache)
 
     def load_cytoplasmic_image(self, dask: bool = False, use_cache: bool = False) -> np.ndarray:
-        img_path = self.src.HnEDir.existing_files['h_and_e/cytoplasmic']
+        img_path = self.src.HnEDir.get_img(c.CYTOPLASMIC_STAIN)
         return self._return_image(img_path=img_path, dask=dask, use_cache=use_cache)
 
     def load_he_image(self, dask: bool = False, use_cache: bool = False) -> np.ndarray:
-        img_path = self.src.HnEDir.existing_files['h_and_e/h_and_e']
+        img_path = self.src.HnEDir.get_img(c.H_AND_E)
         return self._return_image(
             img_path=img_path, shape=self.shape + (3,), dask=dask, dtype=np.uint8, use_cache=use_cache
         )

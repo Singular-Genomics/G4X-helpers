@@ -40,7 +40,7 @@ def init_adata(
     cellmeta_in = collect_input(smp, cell_metadata, CellMetadata, logger=log)
     cellxgene_in = collect_input(smp, cell_x_gene, CellxGene, logger=log)
 
-    manifest = manifest_in.load()
+    manifest = manifest_in.parse()
     cellmeta = cellmeta_in.load().sort(c.CELL_ID_NAME)
     cellxgene = cellxgene_in.load().sort(c.CELL_ID_NAME)
 
