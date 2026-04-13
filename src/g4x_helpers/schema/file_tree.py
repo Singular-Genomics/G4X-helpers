@@ -153,7 +153,7 @@ class FileTree:
 
     def _val_report_verbose(self, raw_only: bool = False, raise_exception: bool = True):
 
-        if self.SampleG4X.path_exists:
+        if self.SampleG4X.path_exists():
             msg = f'Detected G4X-metadata file:\n{self.SampleG4X.target_path}'
             msg += f'\nassay type: {self.assay_type}'
             msg += '\n\n> Validating required raw data ...'

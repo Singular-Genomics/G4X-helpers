@@ -128,7 +128,7 @@ class ProteinPanel(BaseValidator):
     @validation_test
     def folder_present(self):
         folder = ProteinPanel(self.root)
-        return folder.path_exists
+        return folder.path_exists()
 
 
 # region masks

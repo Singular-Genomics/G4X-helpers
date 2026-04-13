@@ -48,7 +48,7 @@ def create_viewer_zarr(
     root_group.attrs['run_metadata'] = {'Sample Information': smp.smp_meta}
     root_group.attrs['smp_info_order'] = list(smp.smp_meta.keys())
 
-    if smp.src.QCSummary.path_exists:
+    if smp.src.QCSummary.path_exists():
         shutil.copy(smp.src.QCSummary.p, smp.out.ViewerZarr.p / 'misc' / 'summary.html')
     else:
         log.info('QCSummary file does not exist, skipping copy to ViewerZarr.')

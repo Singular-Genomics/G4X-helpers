@@ -51,12 +51,12 @@ def reroute_source(
     out_obj.root = Path(out_dir)
     pathval.ensure_parent_dir(out_obj.p)
 
-    if out_obj.path_exists and not overwrite:
+    if out_obj.path_exists() and not overwrite:
         raise RuntimeError(
             f'Operation aborted! {validator.__name__} already exists at:\n{logut.PGAP}{out_obj.p}\nUse overwrite=True to ignore this.',
         )
 
-    suffix = 'overriding existing file' if out_obj.path_exists else 'creating new file'
+    suffix = 'overriding existing file' if out_obj.path_exists() else 'creating new file'
     logut.log_with_path(f'Using the following path for {validator.__name__} output ({suffix}):', out_obj.p, logger=log)
 
     return True

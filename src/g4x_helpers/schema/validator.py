@@ -106,8 +106,11 @@ class BaseValidator:
             validation_results['absent'] = not self.path_exists()
             return validation_results
 
-        for test_name in self.VALIDATION_TESTS:
-            validation_results[test_name] = getattr(self, test_name)()
+        validation_results['path_exists'] = self.path_exists()
+
+        if self.VALIDATION_TESTS and self.path_exists():
+            for test_name in self.VALIDATION_TESTS:
+                validation_results[test_name] = getattr(self, test_name)()
 
         return validation_results
 
