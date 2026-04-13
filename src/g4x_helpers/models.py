@@ -208,8 +208,8 @@ class G4Xoutput:
     def load_adata(
         self, *, single_cell_dir: str | None = None, remove_nontargeting: bool = True, load_clustering: bool = True
     ) -> AnnData:
-        if single_cell_dir is not None:
-            single_cell_dir = self.data_dir / single_cell_dir
+        if single_cell_dir is None:
+            single_cell_dir = self.data_dir / 'single_cell_data'
 
         adata = read_h5ad(single_cell_dir / self.feature_mtx_path.name)
 

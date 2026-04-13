@@ -203,7 +203,13 @@ def migrate_g4x_data(
 
         if bin_file_schema != 'valid' and bin_file_schema != 'unknown':
             smp = G4Xoutput(data_dir)
-            init_bin_file(g4x_obj=smp, out_dir=data_dir, n_threads=n_threads, logger=logger)
+            init_bin_file(
+                g4x_obj=smp,
+                out_dir=data_dir,
+                single_cell_dir=data_dir / 'single_cell_data',
+                n_threads=n_threads,
+                logger=logger,
+            )
             edit_bin_file(
                 g4x_obj=smp, bin_file=data_dir / 'g4x_viewer' / f'{sample_id}_segmentation.bin', logger=logger
             )
