@@ -45,7 +45,7 @@ dev = [
     "ipykernel ~= 7.1",
     "ipywidgets ~= 8.1",
     "pre-commit ~= 4.2",
-    "pytest ~= 8.4",
+    "pytest>=8.4,<10.0",
     "ruff == 0.14.5",    # pinned to match pre-commit version
 ]
 docs = [
