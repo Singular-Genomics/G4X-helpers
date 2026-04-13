@@ -1,5 +1,9 @@
 # Changelog
 
+## [2026-04-13] — `v3.0.2`
+
+- fix: load adata from correct location
+
 ## [2026-04-03] — `v3.0.1`
 
 - update changelog
