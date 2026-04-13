@@ -1391,7 +1391,7 @@ s3 = [
 
 [[package]]
 name = "g4x-helpers"
-version = "4.0.0.dev4"
+version = "4.0.0.dev5"
 source = { editable = "." }
 dependencies = [
     { name = "geopandas" },
