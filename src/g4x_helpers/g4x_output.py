@@ -25,13 +25,14 @@ class G4Xoutput:
 
     """
 
-    def __init__(self, data_dir: str, use_cache: bool = False):
+    def __init__(self, data_dir: str, use_cache: bool = False, validate: bool = True):
         self.data_dir = Path(data_dir)
         self.src = schema.FileTree(self.data_dir)
         self.out = self.src.copy()
         self.use_cache = use_cache
 
-        self.src.validation_report(format='minimal', raw_only=True, report_pass=False, raise_exception=False)
+        if validate:
+            self.src.validation_report(format='minimal', raw_only=True, report_pass=False, raise_exception=True)
 
         with open(self.src.SampleG4X.p, 'r') as f:
             self.smp_meta = json.load(f)

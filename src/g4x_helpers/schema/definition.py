@@ -232,7 +232,7 @@ class CellMetadata(TableValidator):
         'seg_source': pl.String,
         c.CELL_COORD_X: pl.String,
         c.CELL_COORD_Y: pl.String,
-        c.NUC_AREA_NAME: pl.String,
+        # c.NUC_AREA_NAME: pl.String,
         c.CELL_AREA_NAME: pl.String,
         c.NUC_STAIN_INTENSITY: pl.String,
         c.CYT_STAIN_INTENSITY: pl.String,

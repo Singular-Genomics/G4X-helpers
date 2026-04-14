@@ -43,7 +43,7 @@ def create_viewer_zarr(
     out_dir = smp.data_dir if out_dir == PRESET_SOURCE else io.pathval.validate_dir_path(out_dir)
     reroute_source(smp, out_dir, validator=ViewerZarr, overwrite=overwrite, logger=log)
 
-    root_group = setup_zarr_tree(smp.data_dir, store_name=store_name, overwrite=overwrite, logger=log)
+    root_group = setup_zarr_tree(out_dir, store_name=store_name, overwrite=overwrite, logger=log)
 
     root_group.attrs['run_metadata'] = {'Sample Information': smp.smp_meta}
     root_group.attrs['smp_info_order'] = list(smp.smp_meta.keys())
