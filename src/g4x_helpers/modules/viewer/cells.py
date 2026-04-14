@@ -65,6 +65,7 @@ def write_cells(
     meta_columns = {
         'cell_id': metadata[c.CELL_ID_NAME].to_numpy().astype(np.uint32),
         'area': metadata[c.CELL_AREA_NAME].to_numpy().astype(np.uint16),
+        'position': metadata.select([c.CELL_COORD_X, c.CELL_COORD_Y]).to_numpy().astype(np.float16),
         'cluster_id': metadata.select(clusterings_order).to_numpy().astype('U20'),
         'total_counts': metadata['total_counts'].to_numpy().astype(np.uint16),
         'total_genes': metadata['n_genes_by_counts'].to_numpy().astype(np.uint16),
