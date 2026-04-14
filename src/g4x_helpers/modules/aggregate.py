@@ -61,8 +61,8 @@ def aggregate_cell_data(
     route_out(validator=CellMetadata)
     route_out(validator=CellxGene)
 
-    overwrite_segmentation = True if segmentation_mask == PRESET_SOURCE else overwrite
-    route_out(validator=Segmentation, overwrite=overwrite_segmentation)
+    # overwrite_segmentation = True if segmentation_mask == PRESET_SOURCE else overwrite
+    # route_out(validator=Segmentation, overwrite=overwrite_segmentation)
 
     # 4: Create cell metadata
     log.info('Creating cell metadata')
@@ -129,6 +129,7 @@ def aggregate_cell_data(
 
     # 10: Write the segmentation mask (if using custom)
     if segmentation_mask != PRESET_SOURCE:
+        route_out(validator=Segmentation, overwrite=overwrite)
         log_with_path(f'Writing {smp.out.Segmentation.name} mask:', smp.out.Segmentation.p)
         mask_data = {mask_key: mask}
         smp.out.Segmentation.main_key = mask_key
