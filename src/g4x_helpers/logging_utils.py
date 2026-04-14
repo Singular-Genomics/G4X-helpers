@@ -19,7 +19,7 @@ def configure_g4x_logging(
     append_time: bool = True,
     file_mode: str = 'a',
     clear_handlers: bool = True,
-    format: str | None = None,
+    # format: str | None = None,
 ) -> logging.Logger:
     logger = logging.getLogger(logger_name)
     logger.setLevel(logging.DEBUG)
@@ -28,15 +28,17 @@ def configure_g4x_logging(
         logger.handlers.clear()
 
     level = level.upper() if isinstance(level, str) else level
-    if format is None:
-        format = '%(asctime)s | %(g4x_name)s | %(levelname)7s - %(message)s'
+    # if format is None:
+    stream_format = '%(g4x_name)s - %(message)s'
+    file_format = '%(asctime)s %(levelname)7s | %(g4x_name)s - %(message)s'
 
-    formatter = G4XFormatter(format, datefmt='%H:%M:%S')
+    stream_formatter = G4XFormatter(stream_format)
+    file_formatter = G4XFormatter(file_format, datefmt='%H:%M:%S')
 
     if stream_log:
         sh = logging.StreamHandler()
         sh.setLevel(level)
-        sh.setFormatter(formatter)
+        sh.setFormatter(stream_formatter)
         logger.addHandler(sh)
 
     if file_log:
@@ -49,8 +51,8 @@ def configure_g4x_logging(
         log_path = out_dir / f'g4x_{timestamp}.log' if append_time else out_dir / 'g4x.log'
 
         fh = logging.FileHandler(log_path, mode=file_mode, encoding='utf-8')
-        fh.setLevel(level)
-        fh.setFormatter(formatter)
+        fh.setLevel(logging.DEBUG)
+        fh.setFormatter(file_formatter)
         logger.addHandler(fh)
 
     logger.propagate = False
@@ -59,7 +61,8 @@ def configure_g4x_logging(
 
 class G4XFormatter(logging.Formatter):
     def format(self, record):
-        record.g4x_name = f'g4x.{record.name.split(".")[-1]}'
+        # record.g4x_name = f'g4x.{record.name.split(".")[-1]}'
+        record.g4x_name = f'{record.name}'  # .split(".")[-1]}'
         return super().format(record)
 
 
