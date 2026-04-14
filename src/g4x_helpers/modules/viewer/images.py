@@ -65,9 +65,11 @@ OMERO_DEFAULT = {
 }
 
 
-def write_muliplex_img(smp, root_group, chunk_size: int = 256, logger: logging.Logger = LOGGER):
+def write_muliplex_img(smp, root_group, chunk_size: int = 256, logger: logging.Logger | None = None):
 
-    logger.debug('Preparing multiplex image')
+    log = logger or LOGGER
+
+    log.debug('Preparing multiplex image')
 
     channel_arrays = []
 
@@ -83,7 +85,7 @@ def write_muliplex_img(smp, root_group, chunk_size: int = 256, logger: logging.L
         elif ch == c.NUCLEAR_STAIN:
             arr = smp.load_nuclear_image(dask=True, use_cache=False)
         else:
-            logger.warning(f'Unknown stain type: {ch}, skipping.')
+            log.warning(f'Unknown stain type: {ch}, skipping.')
             continue
 
         channel_arrays.append(arr)
@@ -102,7 +104,7 @@ def write_muliplex_img(smp, root_group, chunk_size: int = 256, logger: logging.L
 
     channels = []
     for arr, name in zip(channel_arrays, channel_order):
-        logger.debug(f'Processing channel: {name}')
+        log.debug(f'Processing channel: {name}')
         if name in channel_color_map:
             color = saturated_colors[channel_color_map[name]]
         else:
@@ -116,14 +118,15 @@ def write_muliplex_img(smp, root_group, chunk_size: int = 256, logger: logging.L
         )
         channels.append(ic)
 
-    logger.info('Writing multiplex image')
+    log.info('Writing multiplex image')
     img_group = root_group['images']['multiplex']
     write_channel_stack(img_group, channels, chunk_size=chunk_size)
 
 
-def write_he_img(smp, root_group, chunk_size: int = 256, logger: logging.Logger = LOGGER):
+def write_he_img(smp, root_group, chunk_size: int = 256, logger: logging.Logger | None = None):
 
-    logger.debug('Preparing fH&E image')
+    log = logger or LOGGER
+    log.debug('Preparing fH&E image')
 
     image = smp.load_he_image(dask=True, use_cache=False)
     # image = _add_rgb_astronaut_to_img(image)
@@ -139,7 +142,7 @@ def write_he_img(smp, root_group, chunk_size: int = 256, logger: logging.Logger 
     c2 = ImageChannel(image[1], label='G', omero_attrs={'color': '00FF00', 'active': True})
     c3 = ImageChannel(image[2], label='B', omero_attrs={'color': '0000FF', 'active': True})
 
-    logger.info('Writing fH&E image')
+    log.info('Writing fH&E image')
     img_group = root_group['images']['h_and_e']
     write_channel_stack(img_group, [c1, c2, c3], chunk_size=chunk_size)
 

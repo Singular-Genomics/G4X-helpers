@@ -43,3 +43,20 @@ def get_image_shape(img_path):
         return glymur.Jp2k(img_path).shape
     else:
         raise ValueError(f'Unsupported image format: {img_path.suffix}')
+
+
+def kv_line_gap(key, value, gap=2):
+    value = '<undefined>' if not value else value
+    line = f'{key:<{gap}}'
+    line += ' - '
+    line += f'{value}'
+
+    return line
+
+
+def pretty_dict_str(d):
+    max_len = max([len(k) for k in d.keys()])
+    msg = ''
+    for k, v in d.items():
+        msg += kv_line_gap(k, v, gap=max_len) + '\n'
+    return msg
