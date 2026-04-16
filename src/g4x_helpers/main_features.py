@@ -51,7 +51,7 @@ def _base_command(func):
 
         backend = io.get_backend(compute_backend)
         compute_eng = f'{backend.kind}'
-        compute_eng += ' (detected)' if compute_backend == 'auto' else ''
+        compute_eng += ' (auto-detected)' if compute_backend == 'auto' else ''
 
         d = {
             'sample_dir': f'{smp.data_dir}',
