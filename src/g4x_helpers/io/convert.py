@@ -144,6 +144,7 @@ def jp2_to_ometiff(
         img,
         ome=True,
         bigtiff=True,
+        tile=(256, 256),
         compression='zstd',
         metadata={
             'axes': settings['axes'],
