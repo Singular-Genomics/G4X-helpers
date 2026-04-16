@@ -82,11 +82,21 @@ def write_cells(
         img_group = cluster_group.create_group(clustering, overwrite=overwrite)
         mask = smp.src.Segmentation.load()
         rgb = map_clusters_to_mask(meta=metadata, cluster_key=clustering, mask=mask)
-        write_rgb_img(rgb, img_group, logger=logger)
+        write_rgb_img(rgb.astype(np.uint8), img_group, logger=logger)
 
     ################## preparing for tiling
 
-    metadata = prepare_metadata_for_tiling(metadata, tile_size=800, img_res=smp.shape)
+    tile_size = 800
+    metadata = prepare_metadata_for_tiling(metadata, tile_size=tile_size, img_res=smp.shape)
+
+    layer_config = {
+        'coordinate_order': ['cell_x', 'cell_y'],
+        'layer_height': smp.shape[0],
+        'layer_width': smp.shape[1],
+        'layers': 1,
+        'tile_size': tile_size,
+    }
+    seg_group.attrs['layer_config'] = layer_config
 
     #### this is where tiling happens
     tile_ids = metadata.unique(['tile_y', 'tile_x'], maintain_order=True).select(['tile_y', 'tile_x']).to_numpy()
