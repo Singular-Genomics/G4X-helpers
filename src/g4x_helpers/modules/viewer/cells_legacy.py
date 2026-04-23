@@ -3,7 +3,6 @@ from functools import lru_cache, partial
 from typing import TYPE_CHECKING
 
 import numpy as np
-import pandas as pd
 import polars as pl
 import zarr
 from numcodecs import Blosc
@@ -11,7 +10,7 @@ from numcodecs import Blosc
 from ... import c, io
 from ...schema.definition import CellMetadata, CellxGene, CellxProt, ClusteringUmap, Segmentation
 from ..workflow import PRESET_SOURCE, collect_input
-from .utils import calculate_chunks, create_array
+from .utils import create_array
 
 if TYPE_CHECKING:
     from ...g4x_output import G4Xoutput
@@ -22,6 +21,40 @@ UNASSIGNED_CELL = 'unassigned'
 COMPRESSOR = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
 
 
+def compute_chunks(shape, dtype, target_mb=5, round_base=1024):
+    dtype = np.dtype(dtype)
+    target_bytes = target_mb * 1024**2
+
+    target_elems = target_bytes // dtype.itemsize
+    ndim = len(shape)
+
+    scale = (target_elems / np.prod(shape)) ** (1 / ndim)
+
+    chunk_shape = []
+    for s in shape:
+        c = max(1, int(s * scale))
+
+        # 🔥 round to nearest base (e.g. 1000)
+        c = max(round_base, int(round_base * round(c / round_base)))
+
+        # don’t exceed original dimension
+        c = min(s, c)
+
+        chunk_shape.append(c)
+
+    return tuple(chunk_shape)
+
+
+def normalize_string_array(arr):
+    array = arr  # .to_numpy()
+
+    if array.dtype == 'U':
+        max_len = max(len(str(x)) for x in array)
+        return array.astype(f'U{max_len}')
+
+    return array, array.dtype
+
+
 def write_cells(
     smp: 'G4Xoutput',
     seg_name: str,
@@ -30,52 +63,39 @@ def write_cells(
     overwrite: bool = False,
     logger: logging.Logger | None = None,
 ):
-    log = logger or LOGGER
+    log = LOGGER or logger
 
     if cell_group is None:
-        log.debug('No cell group provided, opening default cell group')
         cell_group = zarr.open_group(smp.out.ViewerZarr.p / 'cells', mode='a')
-    else:
-        log.debug('Using provided cell group input')
 
-    log.debug('Setting up cell data group')
-    seg_path = _add_segmentation_attrs(cell_group, seg_name)
+    seg_path = _sanitize_path_component(seg_name) + '_segmentation'
+
+    seg_sources = cell_group.attrs['segmentation_sources']
+    seg_order = cell_group.attrs['segmentation_order']
+
+    seg_sources.update({seg_name: seg_path})
+    seg_order.append(seg_name)
+
+    cell_group.attrs['segmentation_sources'] = seg_sources
+    cell_group.attrs['segmentation_order'] = list(set(seg_order))
+
+    log.info('Preparing cell data')
     seg_group = cell_group.create_group(seg_path, overwrite=overwrite)
+    metadata_group = seg_group.create_group('metadata', overwrite=overwrite)
+    protein_group = seg_group.create_group('protein', overwrite=overwrite)
+    polygon_group = seg_group.create_group('polygons', overwrite=overwrite)
+    genes_group = seg_group.create_group('genes', overwrite=overwrite)
 
     if components is None:
-        log.info('No components provided, processing cell data from source')
+        log.info('Preparing cell group input')
         metadata, gex, gene_names = process_cell_data(smp, logger=log)
     else:
-        log.info('Using provided components to select data')
+        log.info('Using provided cell group input')
         metadata, gex, gene_names = components
 
     clusterings = [c for c in metadata.columns if c.startswith('leiden_')]
     clusterings_order = get_sorted_clusterings(metadata, clusterings)
 
-    protein_columns = [col for col in metadata.columns if c.IMG_INTENSITY_HANDLE in col]
-    protein_names = [s.removesuffix(c.IMG_INTENSITY_HANDLE) for s in protein_columns]
-
-    cluster_labels_meta = {}
-    for i, key in enumerate(clusterings_order):
-        sorted_cluster_ids = get_sorted_cluster_ids(metadata, cluster_key=key)
-        cluster_color_map = generate_cluster_palette(sorted_cluster_ids)
-
-        cluster_labels_meta[key] = {
-            'index': i,
-            'clusterID_order': list(cluster_color_map.keys()),
-            'clusterID_colors': cluster_color_map,
-        }
-
-    seg_group.attrs['cluster_labels'] = cluster_labels_meta
-    seg_group.attrs['cluster_labels_order'] = clusterings_order
-    seg_group.attrs['genes_shape'] = gex.shape
-
-    gene_name_array = np.array(gene_names).astype('U')
-    prot_name_array = np.array(protein_names).astype('U')
-    create_array(seg_group, 'gene_names', data=gene_name_array, compressor=COMPRESSOR, chunks=gene_name_array.shape)
-    create_array(seg_group, 'protein_names', data=prot_name_array, compressor=COMPRESSOR, chunks=prot_name_array.shape)
-
-    ################## preparing to write arrays
     meta_columns = {
         'cell_id': (metadata[c.CELL_ID_NAME], 'uint32'),
         'area': (metadata[c.CELL_AREA_NAME], 'uint16'),
@@ -83,23 +103,36 @@ def write_cells(
         'cluster_id': (metadata.select(clusterings_order), 'U'),
         'total_counts': (metadata['total_counts'], 'uint16'),
         'total_genes': (metadata['n_genes_by_counts'], 'uint16'),
-        'protein_values': (metadata.select(protein_columns).fill_null(np.nan), 'float16'),
-        'umap': (metadata.select(['UMAP1', 'UMAP2']).fill_null(np.nan), 'float16'),
-        'gene_counts': (gex.data, 'uint16'),
-        'gene_indices': (gex.indices, 'int32'),
-        'gene_indptr': (gex.indptr, 'int32'),
+        'umap': (metadata.select(['UMAP1', 'UMAP2']), 'float16'),
     }
 
     log.info('Writing cell metadata arrays')
     for key, (arr, dtype) in meta_columns.items():
-        array = arr.to_numpy() if isinstance(arr, (pl.DataFrame, pl.Series)) else arr
+        # if overwrite and key in metadata_group:
+        #     del metadata_group[key]
+        array = arr.to_numpy().astype(dtype)
+        if dtype == 'U':
+            array, dtype = normalize_string_array(array)
+        chunks = compute_chunks(array.shape, dtype, target_mb=40)
+        create_array(metadata_group, key, data=array, chunks=chunks, compressor=COMPRESSOR)
 
-        array = array.astype(dtype)
-        chunks = calculate_chunks(array, target_mb=4)
+    log.info('Writing cell protein arrays')
+    for key in ['protein_values', 'protein_names']:
+        if overwrite and key in protein_group:
+            del protein_group[key]
 
-        create_array(seg_group, key, data=array, compressor=COMPRESSOR, chunks=chunks)
+    protein_df = metadata.select(*[col for col in metadata.columns if c.IMG_INTENSITY_HANDLE in col])
+    arr = protein_df.to_numpy().astype(np.uint16)
+    create_array(protein_group, 'protein_values', data=arr, compressor=COMPRESSOR)
+    protein_names = np.array([s.removesuffix(c.IMG_INTENSITY_HANDLE) for s in protein_df.columns]).astype('U50')
+    create_array(protein_group, 'protein_names', data=protein_names, compressor=COMPRESSOR)
 
     log.info('Writing cell polygon arrays')
+    for key in ['polygon_offsets', 'polygon_vertices_xy']:
+        if overwrite and key in polygon_group:
+            del polygon_group[key]
+
+    # write ragged array of polygon vertices
     x_vert = metadata['vert_x'].to_numpy()
     y_vert = metadata['vert_y'].to_numpy()
 
@@ -113,28 +146,31 @@ def write_cells(
     y_long = np.concatenate(y_vert, axis=0)
     verts_xy = np.stack([x_long, y_long], axis=1)
 
-    verts_xy = verts_xy.astype('float16')
-    offsets = offsets.astype('int64')
+    create_array(polygon_group, 'polygon_offsets', data=offsets, compressor=COMPRESSOR)
+    create_array(polygon_group, 'polygon_vertices_xy', data=verts_xy, compressor=COMPRESSOR)
 
-    for array, name in zip([offsets, verts_xy], ['polygon_offsets', 'polygon_vertices_xy']):
-        chunks = calculate_chunks(array, target_mb=4)
-        create_array(seg_group, name, data=array, compressor=COMPRESSOR, chunks=chunks)
+    log.info('Writing cell gene expression arrays')
+    for key in ['data', 'indices', 'indptr', 'gene_names']:
+        if overwrite and key in genes_group:
+            del genes_group[key]
 
+    cluster_labels_meta = {}
+    for i, key in enumerate(clusterings_order):
+        sorted_cluster_ids = get_sorted_cluster_ids(metadata, cluster_key=key)
+        cluster_color_map = generate_cluster_palette(sorted_cluster_ids)
 
-def prepare_metadata_for_tiling(metadata, tile_size, img_res):
-    metadata = metadata.with_row_index()
+        cluster_labels_meta[key] = {
+            'index': i,
+            'clusterID_order': list(cluster_color_map.keys()),
+            'clusterID_colors': cluster_color_map,
+        }
 
-    image_resolution_hw = img_res
-    n_tiles_w = image_resolution_hw[1] // tile_size
-    n_tiles_h = image_resolution_hw[0] // tile_size
-    n_tiles_w, n_tiles_h
+    seg_group['metadata'].attrs['cluster_labels'] = cluster_labels_meta
+    seg_group['metadata'].attrs['cluster_labels_order'] = clusterings_order
 
-    metadata = metadata.with_columns(
-        (pl.col('cell_x') / tile_size).cast(pl.Int32).alias('tile_x'),
-        (pl.col('cell_y') / tile_size).cast(pl.Int32).alias('tile_y'),
-    ).sort('tile_y', 'tile_x')
+    seg_group['genes'].attrs['shape'] = gex.shape
 
-    return metadata
+    write_csr(genes_group, csr=gex, gene_names=gene_names, compressor=COMPRESSOR, chunks='auto')
 
 
 def process_cell_data(
@@ -184,8 +220,7 @@ def process_cell_data(
 
     # 2: extract cell vertices
     # mask = smp.load_segmentation(expanded=True)
-    log.info('Extracting cell vertices from segmentation')
-    vertices = extract_vertices_cached(segment_in.p, key=segment_in.main_key, shape=smp.shape)
+    vertices = extract_vertices_cached(segment_in.p, key=segment_in.main_key, shape=smp.shape, show_progress=True)
     cell_metadata = cell_metadata.join(vertices, on=c.CELL_ID_NAME)
     del vertices  # , mask
 
@@ -203,7 +238,7 @@ def write_csr(group, csr, gene_names, compressor=None, chunks=None):
     create_array(group, 'indptr', data=csr.indptr.astype('int64'), compressor=compressor, chunks=chunks)
 
     # TODO find maybe better spot for assigning this dtype
-    # create_array(group, 'gene_names', data=np.array(gene_names).astype('U12'), compressor=compressor, chunks='auto')
+    create_array(group, 'gene_names', data=np.array(gene_names).astype('U12'), compressor=compressor, chunks='auto')
 
 
 def get_sorted_clusterings(df, cluster_keys: list[str]):
@@ -300,63 +335,3 @@ def _sanitize_path_component(s, replacement='_'):
     for ch in invalid:
         s = s.replace(ch, replacement)
     return s.strip(' .')  # Windows disallows trailing space/dot
-
-
-def _add_segmentation_attrs(cell_group, seg_name):
-    seg_path = _sanitize_path_component(seg_name) + '_segmentation'
-
-    seg_sources = cell_group.attrs['segmentation_sources']
-    seg_order = cell_group.attrs['segmentation_order']
-
-    seg_sources.update({seg_name: seg_path})
-    seg_order.append(seg_name)
-
-    cell_group.attrs['segmentation_sources'] = seg_sources
-    cell_group.attrs['segmentation_order'] = list(set(seg_order))
-    return seg_path
-
-
-def map_categories(mask: np.ndarray, labels: np.ndarray, categories: np.ndarray, missing_val=-1):
-    flat_mask = mask.ravel()
-
-    idx = pd.Index(labels)
-    pos = idx.get_indexer(flat_mask)  # -1 where not found
-
-    out_flat = np.full(flat_mask.shape, missing_val, dtype=int)
-
-    valid = pos != -1
-    if valid.any():
-        out_flat[valid] = categories[pos[valid]]
-
-    return out_flat.reshape(mask.shape)
-
-
-def hex_to_rgb(hex_color, normalized=False):
-    hex_color = hex_color.lstrip('#')
-    rgb = tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
-
-    if normalized:
-        return tuple(v / 255 for v in rgb)
-    return rgb
-
-
-def map_clusters_to_mask(meta: pl.DataFrame, cluster_key: str, mask: np.ndarray):
-    cluster_cat = pd.Categorical(meta[cluster_key])
-
-    if 'unassigned' not in cluster_cat.categories:
-        cluster_cat = cluster_cat.add_categories('unassigned')
-
-    cats = list(cluster_cat.categories)
-    cats = ['unassigned'] + [c for c in cats if c != 'unassigned']
-    cluster_cat = cluster_cat.reorder_categories(cats)
-
-    cluster_codes = cluster_cat.codes  # integers 0..n-1
-    p_mask = map_categories(mask=mask, labels=meta['cell_id'].to_numpy(), categories=cluster_codes)
-
-    pal = [c.UNASSIGNED_COLOR] + c.SG_PALETTE
-    pal = np.array([hex_to_rgb(c, normalized=False) for c in pal])
-
-    rgb = pal[p_mask]
-    rgb[p_mask == -1] = [0, 0, 0]
-
-    return rgb
