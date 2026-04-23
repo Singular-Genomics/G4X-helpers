@@ -51,7 +51,7 @@ class QCSummary(BaseValidator):
     DEFAULT_TARGET_PATH = c.SUMMARY
 
 
-class SampleSheet(BaseValidator):
+class SampleSheet(TableValidator):
     DEFAULT_TARGET_PATH = c.SSHEET
 
     EXPECTED_KEYS_RUN_SECTION = [
@@ -78,20 +78,12 @@ class SampleSheet(BaseValidator):
         'Protein Custom',
     ]
 
-    def _try_parse_samplesheet(self):
-        try:
-            res = io.parse_samplesheet(self.target_path)
-        except Exception as _:
-            return None
-        return res
-
-    @validation_test
-    def is_parsable(self):
-        return bool(self._try_parse_samplesheet())
+    def parse(self):
+        return io.parse_samplesheet(self.target_path)
 
     @validation_test
     def correct_keys(self):
-        run_section, data_section = self._try_parse_samplesheet()
+        run_section, data_section = self.parse()
         if run_section is None or data_section is None:
             return False
 
