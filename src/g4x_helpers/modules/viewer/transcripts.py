@@ -180,7 +180,7 @@ def write_tx_zarr(
             idx = np.where((all_tile_ids == tile).all(axis=1))[0]
 
             coords = all_coords[idx].astype(np.int32)
-            gene_names = all_gene_names[idx].astype('U10')
+            gene_names = all_gene_names[idx].astype('U')
             cell_ids = all_cell_ids[idx].astype(np.int32)
 
             for key, arr in [('position', coords), ('gene_name', gene_names), ('cell_id', cell_ids)]:

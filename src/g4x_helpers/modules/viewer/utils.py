@@ -70,3 +70,10 @@ def create_array(group, name, data, compressor=None, chunks=None):
             kwargs['compressor'] = compressor
 
     return create(name, data=data, **kwargs)
+
+
+def calculate_chunks(arr, target_mb=4):
+    TARGET_BYTES = target_mb * 1024 * 1024  # 4 MiB
+    bytes_per_row = arr.dtype.itemsize if arr.ndim == 1 else arr.dtype.itemsize * arr.shape[1]
+    row_chunk = max(1, TARGET_BYTES // bytes_per_row)
+    return (row_chunk, *arr.shape[1:])
