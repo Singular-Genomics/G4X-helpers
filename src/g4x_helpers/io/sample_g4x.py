@@ -1,6 +1,7 @@
 import json
 
 import polars as pl
+from packaging.version import Version
 
 from .. import __version__
 from ..schema.definition import SampleG4X, SampleSheet
@@ -25,11 +26,14 @@ EXPECTED_KEYS_SS_RUN_SECTION = SampleSheet.EXPECTED_KEYS_RUN_SECTION
 
 def create_sample_g4x(sample_id: str, run_meta: dict, ssheet: str, out_path: str | None = None) -> dict:
 
+    v = Version(__version__)
+    out_version = f'{v.major}.{v.minor}'
+
     # create sample_g4x dictionary with default values
     DEFAULT_VALUE = '<not-provided>'
     sample_g4x = {k: DEFAULT_VALUE for k in SampleG4X.KEYS}
     sample_g4x['sample_id'] = sample_id
-    sample_g4x['output_version'] = __version__
+    sample_g4x['output_version'] = out_version
     sample_g4x['transcript_panel'] = None
     sample_g4x['protein_panel'] = None
 
