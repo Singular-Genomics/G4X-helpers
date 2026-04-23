@@ -90,6 +90,8 @@ def write_cells(
         'gene_indptr': (gex.indptr, 'int32'),
     }
 
+    # return meta_columns
+
     log.info('Writing cell metadata arrays')
     for key, (arr, dtype) in meta_columns.items():
         array = arr.to_numpy() if isinstance(arr, (pl.DataFrame, pl.Series)) else arr

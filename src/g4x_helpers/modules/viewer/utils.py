@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import inspect
-
 import zarr
 
 from ... import c
@@ -36,40 +34,27 @@ def populate_zarr_metadata(
         root_group['transcripts'].attrs['layer_config'] = tx_layer_config
 
 
-def _supports_param(func, name):
-    try:
-        return name in inspect.signature(func).parameters
-    except (TypeError, ValueError):
-        return False
-
-
-def _normalize_chunks(chunks):
-    if chunks == 'auto':
-        return None
-    return chunks
-
-
+# this function satisfies both zarr 2 and zarr 3 APIs, trying different combinations of parameters until one works
 def create_array(group, name, data, compressor=None, chunks=None):
-    kwargs = {}
-    chunks = _normalize_chunks(chunks)
+    create = getattr(group, 'create_array', None) or group.create_dataset
 
-    create = getattr(group, 'create_array', None)
-    if create is None:
-        create = group.create_dataset
+    attempts = [
+        {'chunks': chunks, 'compressor': compressor},
+        {'chunk_shape': chunks, 'compressors': [compressor] if compressor is not None else None},
+        {'chunks': chunks, 'compressors': [compressor] if compressor is not None else None},
+        {'chunk_shape': chunks, 'compressor': compressor},
+        {},
+    ]
 
-    if chunks is not None:
-        if _supports_param(create, 'chunks'):
-            kwargs['chunks'] = chunks
-        elif _supports_param(create, 'chunk_shape'):
-            kwargs['chunk_shape'] = chunks
+    last_error = None
+    for kwargs in attempts:
+        kwargs = {k: v for k, v in kwargs.items() if v is not None}
+        try:
+            return create(name, data=data, **kwargs)
+        except TypeError as e:
+            last_error = e
 
-    if compressor is not None:
-        if _supports_param(create, 'compressors'):
-            kwargs['compressors'] = [compressor]
-        elif _supports_param(create, 'compressor'):
-            kwargs['compressor'] = compressor
-
-    return create(name, data=data, **kwargs)
+    raise last_error
 
 
 def calculate_chunks(arr, target_mb=4):
