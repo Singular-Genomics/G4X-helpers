@@ -48,13 +48,13 @@ def run_correlation_analysis(
     mask_protein = _drop_zeros_mask(adata.obsm['protein'])
     adata = adata[mask_X & mask_protein].copy()
 
-    if downsample is not None:
-        adata = downsample_adata(adata, downsample=downsample, logger=logger)
-
     if adata.n_obs < n_obs_in:
         logger.warning(
             f'Filtered out {n_obs_in - adata.n_obs} ({(n_obs_in - adata.n_obs) / n_obs_in:.2%}) cells with no RNA or Protein data'
         )
+
+    if downsample is not None:
+        adata = downsample_adata(adata, downsample=downsample, logger=logger)
 
     pr_corr_df = protein_protein(adata, logger)
     _, rna_pr_corr_df = protein_rna(adata, logger)
