@@ -10,8 +10,31 @@ on:
       - 'test_package_*'
   workflow_dispatch:
 
+# jobs:
+#   docker-release:
+#     uses: ./.github/workflows/docker-build.yml
+#     secrets: inherit
+#     with:
+#       push: true
+#       ref_name: ${{ github.ref_name }}
+
 jobs:
+  check-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+      - id: check
+        run: |
+          if [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ "${GITHUB_REF_NAME}" =~ ^test_package_ ]]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
   docker-release:
+    needs: check-tag
+    if: needs.check-tag.outputs.should_run == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/docker-build.yml
     secrets: inherit
     with:
