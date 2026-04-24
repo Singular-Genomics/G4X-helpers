@@ -49,7 +49,7 @@ def write_cells(
         log.info('Using provided components to select data')
         metadata, gex, gene_names = components
 
-    clusterings = [c for c in metadata.columns if c.startswith('leiden_')]
+    clusterings = [c for c in metadata.columns if c.startswith('leiden')]
     clusterings_order = get_sorted_clusterings(metadata, clusterings)
 
     protein_columns = [col for col in metadata.columns if c.IMG_INTENSITY_HANDLE in col]
@@ -89,8 +89,6 @@ def write_cells(
         'gene_indices': (gex.indices, 'int32'),
         'gene_indptr': (gex.indptr, 'int32'),
     }
-
-    # return meta_columns
 
     log.info('Writing cell metadata arrays')
     for key, (arr, dtype) in meta_columns.items():
@@ -193,6 +191,10 @@ def process_cell_data(
 
     # cluster_cols = [c for c in clust_umap.columns if 'leiden_' in c]
     clust_umap = clustumap_in.load()
+
+    cell_metadata = cell_metadata.cast({c.CELL_ID_NAME: pl.UInt64})
+    clust_umap = clust_umap.cast({c.CELL_ID_NAME: pl.UInt64})
+
     cell_metadata = cell_metadata.join(clust_umap, on=c.CELL_ID_NAME, how='left')
     cell_metadata = cell_metadata.with_columns(pl.col('^leiden_.*$').fill_null(UNASSIGNED_CELL))
 
