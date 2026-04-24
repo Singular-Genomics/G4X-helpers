@@ -207,7 +207,7 @@ class G4Xoutput:
         )
 
     def load_protein_image(self, protein: str, dask: bool = False, use_cache: bool = False) -> np.ndarray:
-        img_path = self.src.ProteinDir.existing_files.get(protein)
+        img_path = self.src.ProteinDir.get_img(protein)
         if img_path is None:
             print(f'Protein image for {protein} not found.')
             return None

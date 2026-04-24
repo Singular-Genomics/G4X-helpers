@@ -105,21 +105,13 @@ class Manifest(TableValidator):
         return io.parse_input_manifest(self.target_path)
 
 
-class ProteinPanel(BaseValidator):
+class ProteinPanel(TableValidator):
     DEFAULT_TARGET_PATH = c.PR_PANEL
-
-    SCHEMA = ['target', 'panel_type']
-
-    @validation_test
-    def correct_schema(self):
-        lf = pl.scan_csv(self.target_path)
-        lf_names = lf.collect_schema().names()
-
-        return set(self.SCHEMA).issubset(lf_names)
+    SCHEMA = {'target': pl.String, 'panel_type': pl.String}
 
     @validation_test
     def folder_present(self):
-        folder = ProteinPanel(self.root)
+        folder = ProteinDir(root=self.root)
         return folder.path_exists()
 
 
@@ -306,33 +298,37 @@ class SingleCellFolder(BaseValidator):
 
 
 # region protein
-class ProteinDir(BaseValidator):
+class ProteinDir(FolderValidator):
     DEFAULT_TARGET_PATH = c.PR_DIR
-
     IMG_SUFFIXES = [c.PREFERRED_IMG_SUFFIX, c.ALT_IMG_SUFFIX]
+    EXPECTED_DIRS = {'thumbs'}
 
-    def __init__(self, root):
-        super().__init__(root=root)
-        self.panel = ProteinPanel(root=self.root)
-        proteins = pl.read_csv(self.panel.target_path)['target'].to_list()
+    @property
+    def proteins(self):
+        panel = ProteinPanel(root=self.root)
+        if panel.is_valid:
+            return panel.load()['target'].to_list()
+        else:
+            return []
 
-        self.existing_files = {}
-        for pr in proteins:
-            img = None
-            for suffix in self.IMG_SUFFIXES:
-                candidate = (self.target_path / pr).with_suffix(suffix)
-                if candidate.exists():
-                    img = candidate
-                    break
-            self.existing_files[pr] = img  # is not None
+    @property
+    def existing_images(self):
+        return [f for f in self.existing_files() if any(suffix in f.name for suffix in ProteinDir.IMG_SUFFIXES)]
 
     @validation_test
     def has_panel(self):
-        return self.panel.is_valid
+        panel = ProteinPanel(root=self.root)
+        return panel.is_valid
 
     @validation_test
     def images_match_panel(self):
-        return all(self.existing_files.values())
+        image_names = [f.name.split('.')[0] for f in self.existing_images]
+        return set(image_names).issubset(set(self.proteins))
+
+    def get_img(self, query: str):
+        search_pool = self.existing_images
+        fname = next(x for x in search_pool if query in x.name)
+        return self.p / fname
 
 
 # region hne
