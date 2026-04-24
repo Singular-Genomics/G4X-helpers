@@ -71,7 +71,7 @@ def process_sc_output(
 
     # 1. Filter AnnData object
     adata_init = adata.copy()
-    adata, cell_summary, gene_summary = filter_adata(adata=adata_init, filter_panel=filter_panel, logger=log)
+    adata, cell_summary, gene_summary = filter_adata(adata=adata, filter_panel=filter_panel, logger=log)
 
     if adata.n_obs == 0 or adata.n_vars == 0:
         log.warning('No cells or genes passed the filtering criteria.')

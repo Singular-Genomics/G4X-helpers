@@ -58,7 +58,13 @@ def create_viewer_zarr(
     write_he_img(smp, root_group, chunk_size=chunk_size, logger=log)
 
     write_transcripts(
-        smp, root_group, tx_table=tx_table, manifest=manifest, dgex=sc_dir / smp.out.Dgex.n, overwrite=True, logger=log
+        smp,
+        root_group,
+        tx_table=tx_table,
+        manifest=manifest,
+        dgex=sc_dir / smp.out.Dgex.n,
+        overwrite=overwrite,
+        logger=log,
     )
 
     return root_group

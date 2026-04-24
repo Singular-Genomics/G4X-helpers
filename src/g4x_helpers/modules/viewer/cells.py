@@ -169,6 +169,14 @@ def process_cell_data(
 
     gex = cell_x_gene.to_numpy().astype(np.uint16)
     gex = csr_matrix(gex)
+
+    # in case of protein only runs, this will be the case and we need to create empty arrays for the gex to avoid issues downstream
+    if len(gex.data) == 0:
+        log.warning('Gene expression matrix is empty, creating empty arrays for gex')
+        fill = len(gex.indptr)
+        gex.data = np.zeros(fill, dtype='uint16')
+        gex.indices = np.zeros(fill, dtype='int32')
+
     del cell_x_gene
 
     # process cell by protein (optional)
@@ -196,7 +204,7 @@ def process_cell_data(
     clust_umap = clust_umap.cast({c.CELL_ID_NAME: pl.UInt64})
 
     cell_metadata = cell_metadata.join(clust_umap, on=c.CELL_ID_NAME, how='left')
-    cell_metadata = cell_metadata.with_columns(pl.col('^leiden_.*$').fill_null(UNASSIGNED_CELL))
+    cell_metadata = cell_metadata.with_columns(pl.col('^leiden.*$').fill_null(UNASSIGNED_CELL))
 
     return cell_metadata, gex, gene_names
 

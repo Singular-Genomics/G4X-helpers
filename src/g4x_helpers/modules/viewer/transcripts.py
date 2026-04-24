@@ -88,6 +88,7 @@ def build_tx_pyramid(
     image_resolution: tuple[int, int], total_points: int, target_points_per_tile: int = 5000, min_tile_size: int = 256
 ) -> dict[int, dict[str, Any]]:
 
+    # TODO there is not really any reason to have this function separate from the tile spec function (same parameters)
     tile_specs = choose_square_tiling(
         image_resolution_hw=image_resolution,
         total_points=total_points,
@@ -114,6 +115,8 @@ def choose_square_tiling(
     image_resolution_hw: tuple[int, int], total_points: int, target_points_per_tile: int, min_tile_size=64
 ):
     tiles_needed = np.ceil(total_points / target_points_per_tile).astype(int)
+    if tiles_needed == 0:
+        return {'tile_size': int(max(image_resolution_hw)), 'nx': 1, 'ny': 1, 'grid_total': 1}
 
     H, W = image_resolution_hw  # (H, W)
     s = max(1, int(np.sqrt((W * H) / tiles_needed)))  # start guess
@@ -140,6 +143,11 @@ def choose_square_tiling(
 def construct_tile_dfs(df: pl.DataFrame, pyramid: dict[int, dict[str, Any]]) -> dict[int, dict[str, Any]]:
     for level, specs in pyramid.items():
         tile_size, _, sampling_fct = specs.values()
+
+        # TODO
+        # this ensures that the tiling can happen in rare cases where there are no transcripts (e.g. in a simulated dataset)
+        df = df.cast({'x_pixel_coordinate': pl.Float64, 'y_pixel_coordinate': pl.Float64})
+
         df_smp = (
             df.sample(fraction=sampling_fct, with_replacement=False)
             .with_columns(
