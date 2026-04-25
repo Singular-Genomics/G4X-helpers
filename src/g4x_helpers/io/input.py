@@ -13,6 +13,7 @@ import numpy as np
 import polars as pl
 import polars.selectors as cs
 import tifffile
+import zarr
 from matplotlib.pyplot import imread
 
 from .. import c
@@ -210,18 +211,36 @@ def import_table(file_path: str, lazy: bool = False, columns: tuple[str] | None 
 
 
 @optionally_cached(maxsize=8)
-def import_image(img_path: str) -> np.ndarray:
+def import_image(
+    img_path: str, extent: tuple[int, int, int, int] | None = None, n_threads: int | None = None
+) -> np.ndarray:
     img_path = Path(img_path)
     suffix = img_path.suffix.lower()
 
-    def _read_jp2(path):
-        return glymur.Jp2k(str(path))[:]
+    if extent is not None:
+        extent = np.array(extent, dtype=np.int32)
+
+    def _read_jp2(path, extent=extent, n_threads=n_threads):
+        n_threads = c.DEFAULT_THREADS if n_threads is None else n_threads
+        glymur.set_option('lib.num_threads', n_threads)
+
+        img_path = str(path)
+        if extent is not None:
+            x0, x1, y0, y1 = extent
+            return glymur.Jp2k(img_path)[y0:y1, x0:x1]
+        return glymur.Jp2k(img_path)[:]
+
+    def _read_tiff(path, extent=extent):
+        if extent is not None:
+            x0, x1, y0, y1 = extent
+            store = tifffile.imread(path, aszarr=True)
+            z = zarr.open(store, mode='r')
+            return z[y0:y1, x0:x1]
+
+        return tifffile.imread(path)
 
     def _read_standard_image(path):
         return imread(str(path))
-
-    def _read_tiff(path):
-        return tifffile.imread(path)
 
     readers = {
         '.jp2': _read_jp2,

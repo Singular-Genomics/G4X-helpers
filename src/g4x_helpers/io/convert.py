@@ -9,6 +9,7 @@ import tifffile as tiff
 from tqdm import tqdm
 
 from .. import constants as c
+from .input import import_image
 
 if TYPE_CHECKING:
     from geopandas.geodataframe import GeoDataFrame
@@ -95,12 +96,10 @@ def jp2_to_ometiff(
     create_thumb: bool = True,
     report_size: bool = True,
     n_threads: int = c.DEFAULT_THREADS,
-    # TODO N_threads parameter for glymur
+    extent: tuple[int, int, int, int] | None = None,
 ):
-    import glymur
-    import imageio.v3 as iio
 
-    glymur.set_option('lib.num_threads', n_threads)
+    import imageio.v3 as iio
 
     in_file = Path(in_file)
     out_file = Path(out_file)
@@ -116,7 +115,7 @@ def jp2_to_ometiff(
     if in_file.suffix != '.jp2':
         raise ValueError(f"Input file '{in_file}' is not a JP2 file.")
 
-    img = glymur.Jp2k(in_file)[:]
+    img = import_image(in_file, n_threads=n_threads, extent=extent)
 
     # --- auto detect ---
     if img_type == 'auto':
