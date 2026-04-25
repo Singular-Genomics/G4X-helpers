@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 from shapely.affinity import scale, translate
@@ -14,66 +14,83 @@ from . import c
 class Roi:
     xlims: Optional[Tuple[float, float]] = None
     ylims: Optional[Tuple[float, float]] = None
-    extent: Optional[List[float]] = None
-    center: Optional[Tuple[float, float]] = None
+    center_xy: Optional[Tuple[float, float]] = None
     edge_size: Optional[float] = None
     polygon: Optional[Polygon] = None
     name: str = 'unnamed_roi'
     px_size: float = c.PIXEL_SIZE_MICRONS  # microns per pixel
 
     def __post_init__(self):
-        # Case 1: build from center + edge_size
-        if (
-            self.center is not None
-            and self.edge_size is not None
-            and self.polygon is None
-            and not (self.xlims and self.ylims)
-            and not self.extent
-        ):
+
+        has_lims = has_center_and_edge = has_polygon = False
+
+        if self.xlims and self.ylims:
+            has_lims = True
+        elif self.center_xy and self.edge_size:
+            has_center_and_edge = True
+        elif self.polygon:
+            has_polygon = True
+
+        if sum([has_lims, has_center_and_edge, has_polygon]) > 1:
+            raise ValueError(
+                'Multiple sets of ROI parameters provided. Please provide only one of the following:\n'
+                '(1) xlims and ylims, (2) center_xy and edge_size, or (3) polygon.'
+            )
+
+        if has_center_and_edge:
             half = self.edge_size / 2
-            cx, cy = self.center
+            cx, cy = self.center_xy
             self.xlims = (cx - half, cx + half)
             self.ylims = (cy - half, cy + half)
-            self.polygon = self._make_polygon()
 
-        # Case 2: build from xlims/ylims or extent
-        if (self.xlims and self.ylims) or self.extent:
-            xl = self.xlims if self.xlims else tuple(self.extent[0:2])
-            yl = self.ylims if self.ylims else tuple(self.extent[2:4])
-            self.xlims, self.ylims = xl, yl
-            if self.polygon is None:
-                self.polygon = self._make_polygon()
-
-        # Case 3: build from provided polygon
-        elif self.polygon is not None and not (self.xlims and self.ylims):
+        elif has_polygon:
             minx, miny, maxx, maxy = self.polygon.bounds
             self.xlims = (minx, maxx)
             self.ylims = (miny, maxy)
 
-        # Finalize computed properties
-        self.width = self.xlims[1] - self.xlims[0]
-        self.height = self.ylims[1] - self.ylims[0]
-        self.width_um = self.width * self.px_size
-        self.height_um = self.height * self.px_size
-        self.center = ((self.xlims[0] + self.xlims[1]) / 2, (self.ylims[0] + self.ylims[1]) / 2)
-        self.extent_tuple = (self.xlims[0], self.xlims[1], self.ylims[0], self.ylims[1])
-        self.extent_array = np.array(self.extent_tuple, dtype=np.int32)
-        self.lims = (self.xlims, self.ylims)
-        self.order = 'xy'
+    @property
+    def width(self):
+        return self.xlims[1] - self.xlims[0]
 
-    def _make_polygon(self) -> Polygon:
+    @property
+    def height(self):
+        return self.ylims[1] - self.ylims[0]
+
+    @property
+    def width_um(self):
+        return self.width * self.px_size
+
+    @property
+    def height_um(self):
+        return self.height * self.px_size
+
+    @property
+    def center(self):
+        x, y = self.poly.centroid.coords.xy
+        return (x[0], y[0])
+
+    @property
+    def extent(self):
+        return (self.xlims[0], self.xlims[1], self.ylims[0], self.ylims[1])
+
+    @property
+    def extent_array(self):
+        return np.array(self.extent, dtype=np.int32)
+
+    @property
+    def poly(self) -> Polygon:
         x0, x1 = self.xlims
         y0, y1 = self.ylims
         return Polygon([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
 
     def affine(self, scale=1, xoff=0, yoff=0):
-        aff_roi = Roi(polygon=self.polygon, name=self.name)
+        aff_roi = Roi(polygon=self.poly, name=self.name)
         aff_roi = aff_roi.scale(factor=scale)
         aff_roi = aff_roi.translate(xoff=xoff, yoff=yoff)
         return aff_roi
 
     def scale(self, factor):
-        scaled_roi = scale(self.polygon, xfact=factor, yfact=factor, origin='center')
+        scaled_roi = scale(self.poly, xfact=factor, yfact=factor, origin='center')
         sc_roi = Roi(polygon=scaled_roi, name=None)
         return sc_roi
 
@@ -85,7 +102,7 @@ class Roi:
             xoff_frac = xoff
             yoff_frac = yoff
 
-        trans_roi = translate(self.polygon, xoff=xoff_frac, yoff=yoff_frac)
+        trans_roi = translate(self.poly, xoff=xoff_frac, yoff=yoff_frac)
         tr_roi = Roi(polygon=trans_roi, name=None)
         return tr_roi
 
