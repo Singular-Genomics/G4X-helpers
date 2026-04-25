@@ -304,10 +304,13 @@ class ProteinDir(FolderValidator):
     EXPECTED_DIRS = {'thumbs'}
 
     @property
+    def panel(self):
+        return ProteinPanel(root=self.root)
+
+    @property
     def proteins(self):
-        panel = ProteinPanel(root=self.root)
-        if panel.is_valid:
-            return panel.load()['target'].to_list()
+        if self.panel.is_valid:
+            return self.panel.load()['target'].to_list()
         else:
             return []
 
@@ -317,8 +320,7 @@ class ProteinDir(FolderValidator):
 
     @validation_test
     def has_panel(self):
-        panel = ProteinPanel(root=self.root)
-        return panel.is_valid
+        return self.panel.is_valid
 
     @validation_test
     def images_match_panel(self):
