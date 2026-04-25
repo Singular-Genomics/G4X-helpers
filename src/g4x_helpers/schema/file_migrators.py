@@ -2,87 +2,245 @@ import shutil
 
 import polars as pl
 
-from ..input import create_sample_g4x
-from .migrator import DataMigrator
+from .. import c, io
+from . import definition
 
 
-class SampleMetaMigrator(DataMigrator):
-    probes = {'legacy_version_1': 'run_meta.json'}
+class SampleG4X_Migrator(definition.SampleG4X):
+    DEFAULT_TARGET_PATH = 'run_meta.json'
 
-    def __init__(self, sample_dir, target_path):
-        super().__init__(sample_dir, target_path, probes=self.probes)
-
-    def _migrate_legacy_version_1(self):
-        _ = create_sample_g4x(self.smp_dir, save_file=True)
-
-
-class CytoplasmicImageMigrator(DataMigrator):
-    target_path = 'h_and_e/cytoplasmic.jp2'
-    probes = {'legacy_version_1': 'h_and_e/eosin.jp2'}
-
-    def __init__(self, sample_dir):
-        super().__init__(sample_dir, target_path=self.target_path, probes=self.probes)
-
-    def _migrate_legacy_version_1(self):
-
-        self.relocate(self.detected_path_full, self.target_path_full, how='move')
-
-
-class RawFeaturesMigrator(DataMigrator):
-    target_path = 'rna/raw_features.parquet'
-    probes = {
-        'legacy_version_2': 'rna/transcript_table.parquet',
-        'legacy_version_1': 'diagnostics/transcript_table.parquet',
-    }
-
-    desired_schema = [
-        'TXUID',
-        'sequence',
-        'confidence_score',
-        'y_pixel_coordinate',
-        'x_pixel_coordinate',
-        'z_level',
+    KEYS = [
+        'machine',
+        'run_id',
+        'platform',
+        'fc',
+        'lane',
+        'time_of_creation',
+        'transcript_panel',
+        'protein_panel',
+        'software',
+        'software_version',
     ]
 
-    def __init__(self, sample_dir):
-        super().__init__(sample_dir, target_path=self.target_path, probes=self.probes)
+    @property
+    def smp_sheet(self):
+        return definition.SampleSheet(root=self.root)
 
-    def _migrate_legacy_version_2(self):
+    @property
+    def legacy_smp_id(self):
+        option_a = 'metrics/transcript_core_metrics.csv'
+        option_b = 'metrics/core_metrics.csv'
 
-        lf = pl.scan_parquet(self.detected_path_full)
+        if (self.root / option_a).exists():
+            option = option_a
+        elif (self.root / option_b).exists():
+            option = option_b
+        else:
+            raise FileNotFoundError(f'Neither {option_a} nor {option_b} found in {self.root}')
 
-        # bring the columns in the desired order
-        lf = lf.select(self.desired_schema)
-        lf.sink_parquet(self.target_path_full)
+        smp_id = pl.read_csv(self.root / option)['sample_id'].item()
+        return smp_id
 
-    def _migrate_legacy_version_1(self):
-        schema_remap = {
+    @property
+    def is_migratable(self):
+        if self.is_valid and self.smp_sheet.is_valid and self.legacy_smp_id is not None:
+            return True
+        return False
+
+    def migrate(self, out_path: str):
+        out_path = io.pathval.validate_dir_path(out_path)
+        _ = io.create_sample_g4x(
+            sample_id=self.legacy_smp_id,
+            run_meta=self.load(),
+            ssheet=self.smp_sheet.p,
+            out_path=out_path / definition.SampleG4X.DEFAULT_TARGET_PATH,
+        )
+
+
+class HnE_Migrator(definition.FolderValidator):
+    DEFAULT_TARGET_PATH = c.HE_DIR
+
+    FILE_MAP = {
+        c.NUCLEAR_STAIN: ['nuclear.jp2'],
+        c.CYTOPLASMIC_STAIN: ['cytoplasmic.jp2', 'eosin.jp2'],
+        c.H_AND_E: ['h_and_e.jp2'],
+    }
+
+    @definition.validation_test
+    def imgs_complete(self):
+        existing_imgs = self.existing_imgs
+        missing_imgs = set(self.FILE_MAP) - set(existing_imgs)
+        if missing_imgs:
+            print(f'Missing images: {missing_imgs}')
+            return False
+        return True
+
+    @property
+    def existing_imgs(self):
+        existing_imgs = {}
+        for file_name, file_paths in self.FILE_MAP.items():
+            for f in file_paths:
+                query = self.p / f
+                if query.exists():
+                    existing_imgs[file_name] = query
+                    break
+        return existing_imgs
+
+    def migrate(self, out_path: str):
+        out_path = io.pathval.validate_dir_path(out_path)
+        out_dir = io.pathval.ensure_dir(out_path / self.DEFAULT_TARGET_PATH)
+
+        is_all_jp2 = all([f.suffix == '.jp2' for f in self.existing_imgs.values()])
+        if not is_all_jp2:
+            print('Not all images are in JP2 format. Conversion not possible.')
+            return
+
+        for img, in_file in self.existing_imgs.items():
+            img_type = 'rgb' if img == c.H_AND_E else 'grey'
+            io.convert.jp2_to_ometiff(
+                in_file=in_file,
+                out_file=f'{out_dir}/{img}.ome.tiff',
+                img_type=img_type,
+                create_thumb=True,
+                report_size=False,
+            )
+
+
+class Protein_Migrator(definition.ProteinDir):
+    EXPECTED_DIRS = {}
+
+    def migrate(self, out_path: str):
+        out_path = io.pathval.validate_dir_path(out_path)
+
+        out_dir = io.pathval.ensure_dir(out_path / self.DEFAULT_TARGET_PATH)
+
+        is_all_jp2 = all([f.suffix == '.jp2' for f in self.existing_images])
+        if not is_all_jp2:
+            print('Not all images are in JP2 format. Conversion not possible.')
+            return
+
+        for protein_img in self.existing_images:
+            io.convert.jp2_to_ometiff(
+                in_file=protein_img,
+                out_file=f'{out_dir}/{protein_img.stem}.ome.tiff',
+                img_type='grey',
+                create_thumb=True,
+                report_size=False,
+            )
+
+        shutil.copyfile(self.panel.p, out_path / self.panel.DEFAULT_TARGET_PATH)
+
+
+class RawFeatures_Migrator(definition.BaseValidator):
+    class RawFeatures_v1(definition.TableValidator):
+        DEFAULT_TARGET_PATH = 'diagnostics/transcript_table.parquet'
+
+        SCHEMA = {
+            'x_coord_shift': pl.Float64,
+            'y_coord_shift': pl.Float64,
+            'z': pl.Int64,
+            'demuxed': pl.Boolean,
+            'transcript_condensed': pl.String,
+            'meanQS': pl.Float64,
+            'cell_id': pl.UInt32,
+            'sequence_to_demux': pl.String,
+            'transcript': pl.String,
+            'TXUID': pl.String,
+        }
+
+        parquet_rename = {
             'sequence_to_demux': 'sequence',
             'meanQS': 'confidence_score',
             'x_coord_shift': 'y_pixel_coordinate',
             'y_coord_shift': 'x_pixel_coordinate',
             'z': 'z_level',
-            'transcript': 'probe_name',
-            'transcript_condensed': 'gene_name',
         }
 
-        lf = pl.scan_parquet(self.detected_path_full)
-        lf_schema = lf.collect_schema().names()
-        lf = lf.rename({col: schema_remap[col] for col in schema_remap if col in lf_schema})
+        def convert(self):
+            return self.load(lazy=True).rename(self.parquet_rename).select(definition.RawFeatures.SCHEMA.keys())
 
-        # bring the columns in the desired order
-        lf = lf.select(self.desired_schema)
-        lf.sink_parquet(self.target_path_full)
+    class RawFeatures_v2(definition.TableValidator):
+        DEFAULT_TARGET_PATH = 'rna/transcript_table.parquet'
+
+        SCHEMA = {
+            'y_pixel_coordinate': pl.Float64,
+            'x_pixel_coordinate': pl.Float64,
+            'z_level': pl.Int64,
+            'demuxed': pl.Boolean,
+            'probe_name': pl.String,
+            'gene_name': pl.String,
+            'confidence_score': pl.Float64,
+            'in_nucleus': pl.UInt16,
+            'cell_id': pl.UInt16,
+            'sequence': pl.String,
+            'TXUID': pl.String,
+        }
+
+        def convert(self):
+            return self.load(lazy=True).select(definition.RawFeatures.SCHEMA.keys())
+
+    def versions(self):
+        return {'v1': self.RawFeatures_v1(root=self.root), 'v2': self.RawFeatures_v2(root=self.root)}
+
+    @property
+    def valid_versions(self):
+        return list({k for k, v in self.versions().items() if v.is_valid})
+
+    @property
+    def is_migratable(self):
+        return len(self.valid_versions) > 0
+
+    def migrate(self, out_path: str):
+        out_path = io.pathval.validate_dir_path(out_path)
+
+        legacy_format = self.versions()[self.valid_versions[-1]]
+        df = legacy_format.convert()
+
+        file_out = io.pathval.ensure_parent_dir(out_path / definition.RawFeatures.DEFAULT_TARGET_PATH)
+        df.sink_parquet(file_out)
 
 
-class DiagnosticsMigrator(DataMigrator):
-    target_path = DataMigrator.ABSENT_SENTINEL
-    probes = {'legacy_version_1': 'diagnostics'}
+class Manifest_Migrator(definition.TableValidator):
+    DEFAULT_TARGET_PATH = 'transcript_panel.csv'
 
-    def __init__(self, sample_dir):
-        super().__init__(sample_dir, target_path=self.target_path, probes=self.probes)
+    SCHEMA = {
+        'probe_name': pl.String,
+        'gene_name': pl.String,
+        'probe_id': pl.String,
+        'panel_type': pl.String,
+    }
 
-    def _migrate_legacy_version_1(self):
+    schema_rename = {'probe_name': 'probe'}
 
-        legacy_path = self.smp_dir / self.probes['legacy_version_1']
-        shutil.rmtree(legacy_path)
+    def convert(self):
+        return self.load().rename(self.schema_rename)
+
+    def migrate(self, out_path: str):
+        out_path = io.pathval.validate_dir_path(out_path)
+        file_out = io.pathval.ensure_parent_dir(out_path / definition.Manifest.DEFAULT_TARGET_PATH)
+        self.convert().write_csv(file_out)
+
+
+class Segmentation_Migrator(definition.Segmentation):
+    DEFAULT_TARGET_PATH = 'segmentation/segmentation_mask.npz'
+
+    def migrate(self, out_path: str):
+        out_path = io.pathval.validate_dir_path(out_path)
+        file_out = io.pathval.ensure_parent_dir(out_path / definition.Segmentation.DEFAULT_TARGET_PATH)
+        shutil.copy(self.p, file_out)
+
+
+class SampleSheet_Migrator(definition.SampleSheet):
+    def migrate(self, out_path: str):
+        out_path = io.pathval.validate_dir_path(out_path)
+        file_out = io.pathval.ensure_parent_dir(out_path / definition.Segmentation.DEFAULT_TARGET_PATH)
+        shutil.copy(self.p, file_out)
+
+
+class BeadMask_Migrator(definition.BeadMask):
+    DEFAULT_TARGET_PATH = 'protein/bead_mask.npz'
+
+    def migrate(self, out_path: str):
+        out_path = io.pathval.validate_dir_path(out_path)
+        file_out = io.pathval.ensure_parent_dir(out_path / definition.BeadMask.DEFAULT_TARGET_PATH)
+        shutil.copy(self.p, file_out)
