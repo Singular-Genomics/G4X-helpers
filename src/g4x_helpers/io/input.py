@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from functools import lru_cache, wraps
 from inspect import signature
 from pathlib import Path
@@ -23,9 +22,6 @@ if TYPE_CHECKING:
     from pandas import DataFrame as pdDF
     from polars import DataFrame as plDF
     from polars import LazyFrame as plLF
-
-LOGGER = logging.getLogger(__name__)
-log_p_gap = 2 * ' ' + '> '
 
 
 def optionally_cached(*, maxsize=32, ignore_kwargs=()):
@@ -58,23 +54,6 @@ def optionally_cached(*, maxsize=32, ignore_kwargs=()):
         return wrapper
 
     return decorator
-
-
-# TODO this belongs to migration logic
-def _infer_smp_id(sample_dir):
-    sample_dir = Path(sample_dir)
-    summary_file = list(sample_dir.glob('summary*.html'))[0].stem
-    core_metrics = sample_dir / 'metrics' / 'transcript_core_metrics.csv'
-
-    smp_id_met = pl.read_csv(core_metrics)['sample_id'].item()
-    smp_id_sum = summary_file.split('_')[-1]
-
-    if smp_id_met == smp_id_sum:
-        smp_id = smp_id_met
-    else:
-        smp_id = None
-
-    return smp_id
 
 
 def parse_samplesheet(ss_path: str):
