@@ -122,6 +122,10 @@ class Segmentation(FileValidator):
     _main_key = 'nuclei_exp'
 
     @property
+    def available_keys(self):
+        return list(np.load(self.target_path).keys())
+
+    @property
     def main_key(self):
         return self._main_key
 
@@ -132,8 +136,7 @@ class Segmentation(FileValidator):
 
     @validation_test
     def correct_keys(self):
-        path = self.target_path
-        return set(np.load(path).keys()) == set(self.DEFAULT_KEYS)
+        return set(self.available_keys) == set(self.DEFAULT_KEYS)
 
     def _load_method(self, key: str | None = None):
         key = self.main_key if key is None else key

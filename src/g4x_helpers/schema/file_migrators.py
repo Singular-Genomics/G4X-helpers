@@ -1,5 +1,6 @@
 import shutil
 
+import numpy as np
 import polars as pl
 
 from .. import c, io
@@ -86,7 +87,7 @@ class HnE_Migrator(definition.FolderValidator):
                     break
         return existing_imgs
 
-    def migrate(self, out_path: str):
+    def migrate(self, out_path: str, roi=None):
         out_path = io.pathval.validate_dir_path(out_path)
         out_dir = io.pathval.ensure_dir(out_path / self.DEFAULT_TARGET_PATH)
 
@@ -103,13 +104,14 @@ class HnE_Migrator(definition.FolderValidator):
                 img_type=img_type,
                 create_thumb=True,
                 report_size=False,
+                extent=roi.extent_array if roi else None,
             )
 
 
 class Protein_Migrator(definition.ProteinDir):
     EXPECTED_DIRS = {}
 
-    def migrate(self, out_path: str):
+    def migrate(self, out_path: str, roi=None):
         out_path = io.pathval.validate_dir_path(out_path)
 
         out_dir = io.pathval.ensure_dir(out_path / self.DEFAULT_TARGET_PATH)
@@ -126,6 +128,7 @@ class Protein_Migrator(definition.ProteinDir):
                 img_type='grey',
                 create_thumb=True,
                 report_size=False,
+                extent=roi.extent_array if roi else None,
             )
 
         shutil.copyfile(self.panel.p, out_path / self.panel.DEFAULT_TARGET_PATH)
@@ -190,11 +193,20 @@ class RawFeatures_Migrator(definition.BaseValidator):
     def is_migratable(self):
         return len(self.valid_versions) > 0
 
-    def migrate(self, out_path: str):
+    def migrate(self, out_path: str, roi=None):
         out_path = io.pathval.validate_dir_path(out_path)
 
         legacy_format = self.versions()[self.valid_versions[-1]]
         df = legacy_format.convert()
+
+        if roi is not None:
+            df = df.filter(
+                pl.col('x_pixel_coordinate').is_between(*roi.xlims, closed='left'),
+                pl.col('y_pixel_coordinate').is_between(*roi.ylims, closed='left'),
+            ).with_columns(
+                pl.col('x_pixel_coordinate') - roi.xlims[0],
+                pl.col('y_pixel_coordinate') - roi.ylims[0],
+            )
 
         file_out = io.pathval.ensure_parent_dir(out_path / definition.RawFeatures.DEFAULT_TARGET_PATH)
         df.sink_parquet(file_out)
@@ -224,23 +236,85 @@ class Manifest_Migrator(definition.TableValidator):
 class Segmentation_Migrator(definition.Segmentation):
     DEFAULT_TARGET_PATH = 'segmentation/segmentation_mask.npz'
 
-    def migrate(self, out_path: str):
+    def migrate(self, out_path: str, roi=None):
         out_path = io.pathval.validate_dir_path(out_path)
         file_out = io.pathval.ensure_parent_dir(out_path / definition.Segmentation.DEFAULT_TARGET_PATH)
-        shutil.copy(self.p, file_out)
+
+        if roi is not None:
+            masks = crop_segmentations(self, roi)
+            np.savez(file_out, **masks)
+        else:
+            shutil.copy(self.p, file_out)
 
 
 class SampleSheet_Migrator(definition.SampleSheet):
     def migrate(self, out_path: str):
         out_path = io.pathval.validate_dir_path(out_path)
-        file_out = io.pathval.ensure_parent_dir(out_path / definition.Segmentation.DEFAULT_TARGET_PATH)
+        file_out = io.pathval.ensure_parent_dir(out_path / definition.SampleSheet.DEFAULT_TARGET_PATH)
         shutil.copy(self.p, file_out)
 
 
 class BeadMask_Migrator(definition.BeadMask):
     DEFAULT_TARGET_PATH = 'protein/bead_mask.npz'
 
-    def migrate(self, out_path: str):
+    def migrate(self, out_path: str, roi=None):
         out_path = io.pathval.validate_dir_path(out_path)
         file_out = io.pathval.ensure_parent_dir(out_path / definition.BeadMask.DEFAULT_TARGET_PATH)
-        shutil.copy(self.p, file_out)
+
+        if roi is not None:
+            masks = crop_bead_mask(self, roi)
+            np.savez(file_out, **masks)
+        else:
+            shutil.copy(self.p, file_out)
+
+
+def crop_bead_mask(bead_mask, roi):
+    cropped = {}
+    arr = bead_mask.load()
+    cropped[bead_mask.DEFAULT_KEY] = roi.crop_array(arr)
+    return cropped
+
+
+def crop_segmentations(segmentation, roi):
+    cleaned_masks = {}
+
+    main_seg = segmentation.load()
+    main_crop = roi.crop_array(main_seg)
+    main_crop_cleaned = remove_boundary_labels(main_crop)
+
+    keep_labels = np.unique(main_crop_cleaned)
+
+    cleaned_masks[segmentation.main_key] = main_crop_cleaned
+
+    for key in segmentation.available_keys:
+        if key == segmentation.main_key:
+            continue
+
+        sub_seg = segmentation.load(key=key)
+        sub_crop = roi.crop_array(sub_seg)
+        mask = ~np.isin(sub_crop, keep_labels)
+        sub_crop_cleaned = sub_crop.copy()
+        sub_crop_cleaned[mask] = 0
+        cleaned_masks[key] = sub_crop_cleaned
+
+    return cleaned_masks
+
+
+def remove_boundary_labels(labels, inplace=False):
+    arr = labels if inplace else labels.copy()
+
+    boundary_labels = np.unique(
+        np.concatenate(
+            [  # Collect all labels touching the boundary
+                arr[0, :],  # top row
+                arr[-1, :],  # bottom row
+                arr[:, 0],  # left column
+                arr[:, -1],  # right column
+            ]
+        )
+    )
+    # Create a mask for boundary labels and set them to 0
+    mask = np.isin(arr, boundary_labels)
+    arr[mask] = 0
+
+    return arr
