@@ -259,9 +259,13 @@ def _normalize_range(df, column, out_range=(0, 1)):
 
 
 def rank_normalized(df, column, new_column, out_range=(0, 1)):
+    # Handle case where there is only 1 item.
+    if df.height <= 1:
+        midpoint = (out_range[0] + out_range[1]) / 2
+        return df.with_columns(pl.lit(midpoint).alias(new_column))
+
     result = df.with_columns(((pl.col(column).rank(method='average') - 1) / (pl.len() - 1)).alias(new_column))
-    result = _normalize_range(result, new_column, out_range)
-    return result
+    return _normalize_range(result, new_column, out_range)
 
 
 def column_normalized(df, column, new_column, out_range=(0, 1)):
