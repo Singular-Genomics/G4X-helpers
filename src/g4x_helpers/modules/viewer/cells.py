@@ -1,5 +1,5 @@
 import logging
-from functools import lru_cache, partial
+from functools import partial
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -7,6 +7,7 @@ import pandas as pd
 import polars as pl
 import zarr
 from numcodecs import Blosc
+from shapely import to_ragged_array
 
 from ... import c, io
 from ...schema.definition import CellMetadata, CellxGene, CellxProt, ClusteringUmap, Segmentation
@@ -44,10 +45,11 @@ def write_cells(
 
     if components is None:
         log.info('No components provided, processing cell data from source')
-        metadata, gex, gene_names = process_cell_data(smp, logger=log)
+        components = process_cell_data(smp, logger=log)
     else:
         log.info('Using provided components to select data')
-        metadata, gex, gene_names = components
+
+    metadata, gex, gene_names, verts_xy, offsets = components
 
     clusterings = [c for c in metadata.columns if c.startswith('leiden')]
     clusterings_order = get_sorted_clusterings(metadata, clusterings)
@@ -100,22 +102,6 @@ def write_cells(
         create_array(seg_group, key, data=array, compressor=COMPRESSOR, chunks=chunks)
 
     log.info('Writing cell polygon arrays')
-    x_vert = metadata['vert_x'].to_numpy()
-    y_vert = metadata['vert_y'].to_numpy()
-
-    n_cells = len(x_vert)
-    lengths = np.array([p.shape[0] for p in x_vert], dtype=np.uint8)
-    offsets = np.empty(n_cells + 1, dtype=np.int64)
-    offsets[0] = 0
-    np.cumsum(lengths, out=offsets[1:])
-
-    x_long = np.concatenate(x_vert, axis=0)
-    y_long = np.concatenate(y_vert, axis=0)
-    verts_xy = np.stack([x_long, y_long], axis=1)
-
-    verts_xy = verts_xy.astype('float16')
-    offsets = offsets.astype('int64')
-
     for array, name in zip([offsets, verts_xy], ['polygon_offsets', 'polygon_vertices_xy']):
         chunks = calculate_chunks(array, target_mb=4)
         create_array(seg_group, name, data=array, compressor=COMPRESSOR, chunks=chunks)
@@ -191,13 +177,14 @@ def process_cell_data(
         del cell_x_protein
 
     # 2: extract cell vertices
-    # mask = smp.load_segmentation(expanded=True)
     log.info('Extracting cell vertices from segmentation')
-    vertices = extract_vertices_cached(segment_in.p, key=segment_in.main_key, shape=smp.shape)
-    cell_metadata = cell_metadata.join(vertices, on=c.CELL_ID_NAME)
-    del vertices  # , mask
+    gdf = extract_vertices(segment_in.load(), show_progress=False)
 
-    # cluster_cols = [c for c in clust_umap.columns if 'leiden_' in c]
+    assert all(cell_metadata[c.CELL_ID_NAME].to_pandas() == gdf[c.CELL_ID_NAME].array)
+
+    ragged = to_ragged_array(gdf.geometry_simplified, include_z=False, include_m=False)
+    verts_xy, offsets = ragged[1], ragged[2][0]
+
     clust_umap = clustumap_in.load()
 
     cell_metadata = cell_metadata.cast({c.CELL_ID_NAME: pl.UInt64})
@@ -206,16 +193,7 @@ def process_cell_data(
     cell_metadata = cell_metadata.join(clust_umap, on=c.CELL_ID_NAME, how='left')
     cell_metadata = cell_metadata.with_columns(pl.col('^leiden.*$').fill_null(UNASSIGNED_CELL))
 
-    return cell_metadata, gex, gene_names
-
-
-def write_csr(group, csr, gene_names, compressor=None, chunks=None):
-    create_array(group, 'data', data=csr.data.astype('int16'), compressor=compressor, chunks=chunks)
-    create_array(group, 'indices', data=csr.indices.astype('int32'), compressor=compressor, chunks=chunks)
-    create_array(group, 'indptr', data=csr.indptr.astype('int64'), compressor=compressor, chunks=chunks)
-
-    # TODO find maybe better spot for assigning this dtype
-    # create_array(group, 'gene_names', data=np.array(gene_names).astype('U12'), compressor=compressor, chunks='auto')
+    return cell_metadata, gex, gene_names, verts_xy, offsets
 
 
 def get_sorted_clusterings(df, cluster_keys: list[str]):
@@ -267,12 +245,6 @@ def generate_cluster_palette(ordered_unique_clusters: list, max_colors: int = 25
     return cluster_palette
 
 
-@lru_cache(maxsize=None)
-def extract_vertices_cached(mask, shape, key, show_progress: bool = False):
-    mask = io.import_segmentation(mask, expected_shape=shape, labels_key=key, use_cache=True)
-    return extract_vertices(mask, show_progress=show_progress)
-
-
 def extract_vertices(mask, show_progress: bool = False):
     gdf = io.convert.ndarray_to_gdf(mask, show_progress=show_progress)
 
@@ -283,28 +255,19 @@ def extract_vertices(mask, show_progress: bool = False):
         .drop_duplicates(subset=c.CELL_ID_NAME, keep='first')
         .drop(columns='_area')
         .reset_index(drop=True)
-    )
+    ).sort_values(c.CELL_ID_NAME)
 
     # Alternative way to keep largest polygon per label
     # idx = gdf.groupby(CELL_ID_NAME)["_area"].idxmax()
     # gdf = gdf.loc[idx].drop(columns="_area").reset_index(drop=True)
 
     # Simplify geometries
-    gdf['geometry_simplified'] = gdf.geometry.simplify(tolerance=1.5, preserve_topology=True)
-    gdf['geometry_simplified'] = gdf['geometry_simplified'].buffer(0)
+    gdf['geometry_simplified'] = gdf.geometry.buffer(4).buffer(-4)
+    gdf['geometry_simplified'] = gdf.geometry_simplified.simplify(tolerance=1, preserve_topology=True)
+    # gdf['geometry_simplified'] = gdf.geometry.simplify(tolerance=1.5, preserve_topology=True)
+    # gdf['geometry_simplified'] = gdf['geometry_simplified'].buffer(0)
 
-    # TODO this section has a lot of room for optimization
-    # for now it ensures that the vertices are in the same order as the metadata rows
-    res = {
-        'x': [poly.exterior.xy[0].tolist() for poly in gdf.geometry_simplified],
-        'y': [poly.exterior.xy[1].tolist() for poly in gdf.geometry_simplified],
-    }
-
-    gdf['vert_x'] = res['x']
-    gdf['vert_y'] = res['y']
-
-    vertices = pl.from_pandas(gdf[[c.CELL_ID_NAME, 'vert_x', 'vert_y']]).sort(c.CELL_ID_NAME)
-    return vertices
+    return gdf
 
 
 def _sanitize_path_component(s, replacement='_'):
