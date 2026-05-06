@@ -147,6 +147,25 @@ def write_he_img(smp, root_group, chunk_size: int = 256, logger: logging.Logger 
     write_channel_stack(img_group, [c1, c2, c3], chunk_size=chunk_size)
 
 
+def write_rgb_img(image, img_group, logger: logging.Logger | None = None):
+    log = LOGGER or logger
+    log.debug('Preparing RGB image')
+
+    if image.ndim == 3 and image.shape[-1] == 3:
+        image = da.moveaxis(image, -1, 0)
+    elif image.ndim == 3 and image.shape[0] == 3:
+        pass
+    else:
+        raise ValueError(f'Unexpected RGB image shape: {image.shape}')
+
+    c1 = ImageChannel(image[0], label='R', omero_attrs={'color': 'FF0000', 'active': True})
+    c2 = ImageChannel(image[1], label='G', omero_attrs={'color': '00FF00', 'active': True})
+    c3 = ImageChannel(image[2], label='B', omero_attrs={'color': '0000FF', 'active': True})
+
+    log.info('Writing RGB image')
+    write_channel_stack(img_group, [c1, c2, c3])
+
+
 def write_channel_stack(
     img_group, channels: list[ImageChannel], chunk_size: int = 256, levels: int = 4, clevel: int = 5
 ):
