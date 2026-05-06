@@ -247,9 +247,7 @@ def hex_to_rgb(hex_color):
 def hsv_to_hex(h, s, v):
     # wrap hue into [0,1]
     h = h % 1.0
-
     r, g, b = colorsys.hsv_to_rgb(h, s, v)
-
     return '#{:02x}{:02x}{:02x}'.format(int(r * 255), int(g * 255), int(b * 255))
 
 
@@ -281,7 +279,7 @@ def column_normalized(df, column, new_column, out_range=(0, 1)):
 
 def assign_colors(df, hue=180, hue_spread=0.1, sat_range=(0, 1), val_range=(0, 1)):
 
-    hue_n = hue / 360
+    hue_n = (hue / 360) % 1.0
     hue_range = (hue_n - hue_spread / 2, hue_n + hue_spread / 2)
 
     subset = df.sort('gene_id').with_row_index(name='rank')
@@ -290,14 +288,10 @@ def assign_colors(df, hue=180, hue_spread=0.1, sat_range=(0, 1), val_range=(0, 1
     subset = column_normalized(subset, 'score', 'sat', out_range=sat_range)
     subset = rank_normalized(subset, 'pct_nz_group', 'val', out_range=val_range)
 
-    # subset = subset.with_columns(
-    #     pl.struct(['hue', 'sat', 'val']).map_elements(lambda x: hsv_to_hex(x['hue'], x['sat'], x['val'])).alias('hex')
-    # )
-
     return subset
 
 
-def assign_colors_to_clusters(df_fil):
+def assign_colors_to_clusters(df_fil, hue_shift=145):
     clusters = df_fil['cluster_id'].unique().sort().to_list()
     duplications = df_fil.group_by('gene_id').agg(pl.len()).sort('len', descending=True)
 
@@ -315,10 +309,12 @@ def assign_colors_to_clusters(df_fil):
 
     final_subset = pl.DataFrame()
     for i, cluster in enumerate(clusters):
-        hue = i * step
+        hue = (i * step + hue_shift) % 360
+        # hue = i * step
         subset = assignments.filter(pl.col('cluster_id') == cluster)
         subset = assign_colors(subset, hue=hue, hue_spread=spread, sat_range=(0.25, 1.0), val_range=(0.25, 1.0))
         final_subset = final_subset.vstack(subset)
+
     return final_subset
 
 
