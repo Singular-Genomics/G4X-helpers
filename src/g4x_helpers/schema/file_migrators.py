@@ -212,6 +212,7 @@ class RawFeatures_Migrator(definition.BaseValidator):
         df.sink_parquet(file_out)
 
 
+# TODO collect all forms of manifests
 class Manifest_Migrator(definition.TableValidator):
     DEFAULT_TARGET_PATH = 'transcript_panel.csv'
 
