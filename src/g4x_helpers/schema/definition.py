@@ -72,10 +72,10 @@ class SampleSheet(TableValidator):
         'Sample Position',
         'Tissue Type',
         'Block',
-        'Transcript Panel',
-        'Protein Panel',
-        'Transcript Custom',
-        'Protein Custom',
+        # 'Transcript Panel',
+        # 'Protein Panel',
+        # 'Transcript Custom',
+        # 'Protein Custom',
     ]
 
     def parse(self):
