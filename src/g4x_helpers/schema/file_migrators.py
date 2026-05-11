@@ -25,7 +25,7 @@ class SampleG4X_Migrator(definition.SampleG4X):
 
     @property
     def smp_sheet(self):
-        return definition.SampleSheet(root=self.root)
+        return SampleSheet_Migrator(root=self.root)
 
     @property
     def legacy_smp_id(self):
@@ -42,20 +42,41 @@ class SampleG4X_Migrator(definition.SampleG4X):
         smp_id = pl.read_csv(self.root / option)['sample_id'].item()
         return smp_id
 
-    @property
-    def is_migratable(self):
-        if self.is_valid and self.smp_sheet.is_valid and self.legacy_smp_id is not None:
+    @definition.validation_test
+    def has_components(self):
+        if self.smp_sheet.is_valid and self.legacy_smp_id is not None:
             return True
         return False
 
     def migrate(self, out_path: str):
         out_path = io.pathval.validate_dir_path(out_path)
+        run_meta = self.load()
+
+        if run_meta['protein_panel'] == []:
+            run_meta['protein_panel'] = None
+
         _ = io.create_sample_g4x(
             sample_id=self.legacy_smp_id,
-            run_meta=self.load(),
+            run_meta=run_meta,
             ssheet=self.smp_sheet.p,
             out_path=out_path / definition.SampleG4X.DEFAULT_TARGET_PATH,
         )
+
+        self.smp_sheet.migrate(out_path)
+
+
+class SampleSheet_Migrator(definition.SampleSheet):
+    def migrate(self, out_path: str):
+        out_path = io.pathval.validate_dir_path(out_path)
+        file_out = io.pathval.ensure_parent_dir(out_path / definition.SampleSheet.DEFAULT_TARGET_PATH)
+        shutil.copy(self.p, file_out)
+
+
+class QCSummary_Migrator(definition.QCSummary):
+    def migrate(self, out_path: str):
+        out_path = io.pathval.validate_dir_path(out_path)
+        file_out = io.pathval.ensure_parent_dir(out_path / self.n)
+        shutil.copy(self.p, file_out)
 
 
 class HnE_Migrator(definition.FolderValidator):
@@ -69,8 +90,7 @@ class HnE_Migrator(definition.FolderValidator):
 
     @definition.validation_test
     def imgs_complete(self):
-        existing_imgs = self.existing_imgs
-        missing_imgs = set(self.FILE_MAP) - set(existing_imgs)
+        missing_imgs = set(self.FILE_MAP) - set(self.existing_imgs)
         if missing_imgs:
             print(f'Missing images: {missing_imgs}')
             return False
@@ -183,18 +203,27 @@ class RawFeatures_Migrator(definition.BaseValidator):
             return self.load(lazy=True).select(definition.RawFeatures.SCHEMA.keys())
 
     def versions(self):
-        return {'v1': self.RawFeatures_v1(root=self.root), 'v2': self.RawFeatures_v2(root=self.root)}
+        return {
+            'current': definition.RawFeatures(root=self.root),
+            'v1': self.RawFeatures_v1(root=self.root),
+            'v2': self.RawFeatures_v2(root=self.root),
+        }
 
     @property
     def valid_versions(self):
         return list({k for k, v in self.versions().items() if v.is_valid})
 
-    @property
+    @definition.validation_test
     def is_migratable(self):
         return len(self.valid_versions) > 0
 
     def migrate(self, out_path: str, roi=None):
         out_path = io.pathval.validate_dir_path(out_path)
+        file_out = io.pathval.ensure_parent_dir(out_path / definition.RawFeatures.DEFAULT_TARGET_PATH)
+
+        if 'current' in self.valid_versions:
+            shutil.copy(self.versions()['current'].p, file_out)
+            return
 
         legacy_format = self.versions()[self.valid_versions[-1]]
         df = legacy_format.convert()
@@ -208,7 +237,68 @@ class RawFeatures_Migrator(definition.BaseValidator):
                 pl.col('y_pixel_coordinate') - roi.ylims[0],
             )
 
+        df.sink_parquet(file_out)
+
+
+class TxTable_Migrator(definition.BaseValidator):
+    class TxTable_v1(definition.TableValidator):
+        DEFAULT_TARGET_PATH = 'rna/transcript_table.csv.gz'
+
+        SCHEMA = {
+            'y_pixel_coordinate': pl.Float64,
+            'x_pixel_coordinate': pl.Float64,
+            'z_level': pl.Int64,
+            'gene_name': pl.Boolean,
+            'confidence_score': pl.String,
+            'cell_id': pl.UInt32,
+        }
+
+        col_rename = {
+            'x_pixel_coordinate': 'y_pixel_coordinate',
+            'y_pixel_coordinate': 'x_pixel_coordinate',
+            'gene_name': c.GENE_ID_NAME,
+        }
+
+        def convert(self):
+            lf = self.load(lazy=True).rename(self.col_rename)
+            lf = lf.drop('cell_id').with_columns(pl.col(c.GENE_ID_NAME).alias('probe_name'))
+            lf = lf.with_row_index(name='TXUID')
+            return lf.select(definition.TxTable.SCHEMA.keys())
+
+    def versions(self):
+        return {
+            'current': definition.TxTable(root=self.root),
+            'v1': self.TxTable_v1(root=self.root),
+        }
+
+    @property
+    def valid_versions(self):
+        return list({k for k, v in self.versions().items() if v.is_valid})
+
+    @definition.validation_test
+    def is_migratable(self):
+        return len(self.valid_versions) > 0
+
+    def migrate(self, out_path: str, roi=None):
+        out_path = io.pathval.validate_dir_path(out_path)
         file_out = io.pathval.ensure_parent_dir(out_path / definition.RawFeatures.DEFAULT_TARGET_PATH)
+
+        if 'current' in self.valid_versions:
+            shutil.copy(self.versions()['current'].p, file_out)
+            return
+
+        legacy_format = self.versions()[self.valid_versions[-1]]
+        df = legacy_format.convert()
+
+        if roi is not None:
+            df = df.filter(
+                pl.col('x_pixel_coordinate').is_between(*roi.xlims, closed='left'),
+                pl.col('y_pixel_coordinate').is_between(*roi.ylims, closed='left'),
+            ).with_columns(
+                pl.col('x_pixel_coordinate') - roi.xlims[0],
+                pl.col('y_pixel_coordinate') - roi.ylims[0],
+            )
+
         df.sink_parquet(file_out)
 
 
@@ -246,13 +336,6 @@ class Segmentation_Migrator(definition.Segmentation):
             np.savez(file_out, **masks)
         else:
             shutil.copy(self.p, file_out)
-
-
-class SampleSheet_Migrator(definition.SampleSheet):
-    def migrate(self, out_path: str):
-        out_path = io.pathval.validate_dir_path(out_path)
-        file_out = io.pathval.ensure_parent_dir(out_path / definition.SampleSheet.DEFAULT_TARGET_PATH)
-        shutil.copy(self.p, file_out)
 
 
 class BeadMask_Migrator(definition.BeadMask):
