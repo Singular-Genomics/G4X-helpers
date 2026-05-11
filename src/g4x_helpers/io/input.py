@@ -60,6 +60,13 @@ def optionally_cached(*, maxsize=32, ignore_kwargs=()):
 def parse_samplesheet(ss_path: str):
     ss_df = pl.read_csv(ss_path, has_header=False, row_index_name='index')
 
+    err_pfx = 'Could not parse samplesheet. '
+    if len(ss_df.columns) < 3:
+        raise ValueError(f'{err_pfx} Too few columns detected')
+
+    if '[Data]' not in ss_df['column_1']:
+        raise ValueError(f"{err_pfx} Missing '[Data]' section-header.")
+
     data_index = ss_df.filter(pl.col('column_1') == '[Data]')['index'][0]
 
     run_info_section = (
@@ -70,8 +77,8 @@ def parse_samplesheet(ss_path: str):
     )
 
     data_section = pl.read_csv(ss_path, skip_rows=data_index + 1)
-    data_section = data_section.rename({k: k.replace('Addon', 'Custom') for k in data_section.columns if 'Addon' in k})
-    data_section = data_section.drop(cs.contains('_duplicated'))
+    data_section = data_section.drop(*([''] if '' in data_section.columns else []), cs.contains('_duplicated'))
+    data_section = data_section.rename({c: c.replace('-', ' ') for c in data_section.columns})
 
     return run_info_section, data_section
 
