@@ -44,29 +44,26 @@ def create_sample_g4x(sample_id: str, run_meta: dict, ssheet: str, out_path: str
     for key in missing_keys:
         print(f"Warning: Expected key '{key}' is missing from run_meta.")
 
-    run_meta_sanitized = {k: v for k, v in run_meta.items() if k in EXPECTED_KEYS_RUN_META and v is not None}
-
-    drop_panels_ssheet = False
-    if 'transcript_panel' in run_meta_sanitized or 'protein_panel' in run_meta_sanitized:
-        drop_panels_ssheet = True
-
+    run_meta_sanitized = {k: v for k, v in run_meta.items() if k in EXPECTED_KEYS_RUN_META and v not in (None, [])}
+    
     ### extract samplesheet information into a dictionary
     sample_sheet_info = _extract_sample_sheet_info(sample_id, ssheet)
     sample_sheet_info = _format_keys(sample_sheet_info)
     sample_sheet_info = {k: v for k, v in sample_sheet_info.items() if v is not None}
 
     ### create a single value for custom panels
-    sample_sheet_info = _handle_ssheet_panel_names(sample_sheet_info)
+    # sample_sheet_info = _handle_ssheet_panel_names(sample_sheet_info)
 
-    if drop_panels_ssheet:
-        # if the panels were already provided in run_meta, drop them from the sample_sheet_info to avoid conflicts
-        sample_sheet_info.pop('transcript_panel', None)
-        sample_sheet_info.pop('protein_panel', None)
+    # if drop_panels_ssheet:
+    # if 'transcript_panel' in run_meta_sanitized or 'protein_panel' in run_meta_sanitized:
+    #     # if the panels were already provided in run_meta, drop them from the sample_sheet_info to avoid conflicts
+    #     sample_sheet_info.pop('transcript_panel', None)
+    #     sample_sheet_info.pop('protein_panel', None)
 
     ### merge the sanitized run_meta and sample_sheet_info into the sample_g4x dictionary
     sample_g4x = _merge_existing_keys(run_meta_sanitized, sample_g4x)
     sample_g4x = _merge_existing_keys(sample_sheet_info, sample_g4x)
-
+    
     sample_g4x = _format_custom_panels(sample_g4x)
 
     if out_path is not None:
