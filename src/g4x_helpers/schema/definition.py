@@ -179,8 +179,8 @@ class TxTable(TableValidator):
         'y_pixel_coordinate': pl.Float64,
         'x_pixel_coordinate': pl.Float64,
         'z_level': pl.Float64,
-        'probe_name': pl.String,
         'gene_id': pl.String,
+        # 'probe_name': pl.String,
     }
 
 
