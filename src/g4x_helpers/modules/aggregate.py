@@ -334,7 +334,9 @@ def add_nuclei_properties(smp, cell_metadata, show_progress=True):
     mask_props_nuc = extract_cell_props(mask=segmentation_mask, mask_name='nuclei', show_progress=show_progress)
     mask_props_nuc = mask_props_nuc.rename({c.CELL_AREA_NAME: c.NUC_AREA_NAME})
 
-    cell_metadata = cell_metadata.drop([c.CELL_COORD_X, c.CELL_COORD_Y]).join(mask_props_nuc, on=c.CELL_ID_NAME)
+    cell_metadata = cell_metadata.drop([c.CELL_COORD_X, c.CELL_COORD_Y]).join(
+        mask_props_nuc, on=c.CELL_ID_NAME, how='left'
+    )
 
     col_order = [
         c.CELL_ID_NAME,
@@ -349,7 +351,7 @@ def add_nuclei_properties(smp, cell_metadata, show_progress=True):
         c.NUC_STAIN_INTENSITY,
         c.CYT_STAIN_INTENSITY,
     ]
-    return cell_metadata.select(col_order)
+    return cell_metadata.select(col_order).sort('cell_id')
 
 
 def intersect_tx_with_cells(
