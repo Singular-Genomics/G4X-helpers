@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import shutil
 
@@ -9,11 +10,14 @@ from .. import c, io
 from . import definition as sd
 from .validator import BaseValidator, FileValidator, FolderValidator
 
+LOGGER = logging.getLogger(__name__)
+
 
 class DataMigrator(BaseValidator):
     IS_OPTIONAL = False
     VERSION_VALIDATORS = {}
     VERSION_CLASS_PATTERN = re.compile(r'.*_V\d+$')
+    COPY_CURRENT = True
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -21,7 +25,7 @@ class DataMigrator(BaseValidator):
         auto_validators = {}
         for name, obj in cls.__dict__.items():
             if isinstance(obj, type) and issubclass(obj, BaseValidator) and cls.VERSION_CLASS_PATTERN.match(name):
-                key = name[0].lower() + name[1:]
+                key = name[0] + name[1:]
 
                 auto_validators[key] = obj
 
@@ -32,13 +36,6 @@ class DataMigrator(BaseValidator):
             **explicit_validators,
         }
 
-    def versions(self):
-        versions = {'current': self._current_validator()}
-        versions.update(
-            {name: validator_cls(root=self.root) for name, validator_cls in type(self).VERSION_VALIDATORS.items()}
-        )
-        return versions
-
     def _current_validator(self):
         for cls in type(self).__mro__:
             if cls is DataMigrator:
@@ -47,7 +44,18 @@ class DataMigrator(BaseValidator):
             if issubclass(cls, BaseValidator):
                 return cls(root=self.root)
 
-        raise TypeError(f'Could not infer "current" validator for {type(self).__name__}')
+        raise TypeError(f'Could not infer "current" validator for {self._name}')
+
+    def versions(self):
+        versions = {'current': self._current_validator()}
+        versions.update(
+            {name: validator_cls(root=self.root) for name, validator_cls in type(self).VERSION_VALIDATORS.items()}
+        )
+        return versions
+
+    @property
+    def _name(self):
+        return type(self).__name__.removesuffix('_Migrator')
 
     @property
     def target_validator(self):
@@ -60,22 +68,37 @@ class DataMigrator(BaseValidator):
     @property
     def mig_version(self):
         if len(self.valid_versions) == 0:
-            raise ValueError(f'No valid versions found for {type(self).__name__} in {self.root}')
+            if self.IS_OPTIONAL:
+                return 'missing_optional'
+            else:
+                raise ValueError(f'No valid versions found for {self._name} in {self.root}')
         if 'current' in self.valid_versions:
             mig_version = 'current'
         else:
-            mig_version = self.valid_versions[-1]
-        return self.versions()[mig_version]
+            sorted_legacy_versions = sorted(self.valid_versions, key=lambda x: int(x.split('_V')[-1]))
+            mig_version = sorted_legacy_versions[-1]
+        return mig_version
+
+    @property
+    def migrator(self):
+        return self.versions()[self.mig_version]
 
     @property
     def is_migratable(self):
+        return self.migration_status[0]
+
+    @property
+    def migration_status(self):
         if self.IS_OPTIONAL:
-            return True, ''
+            return True, f'{self._name} is optional, migration not required.'
 
         has_legacy = len(self.valid_versions) > 0
-        err = 'No valid legacy versions are available.' if not has_legacy else ''
+        if not has_legacy:
+            msg = f'{self._name} has no valid versions detected.'
+        else:
+            msg = f'{self._name} has migratable versions: {self.valid_versions}.'
 
-        return has_legacy, err
+        return has_legacy, msg
 
     @property
     def is_file(self):
@@ -86,49 +109,47 @@ class DataMigrator(BaseValidator):
         return isinstance(self, FolderValidator)
 
     def copy_if_current(self, out_path):
-        if 'current' in self.valid_versions:
-            print(f"Version 'current' is valid for {self.__class__.__name__}, copying file without migration.")
-            if self.is_file:
-                shutil.copy(self.p, out_path / self.DEFAULT_TARGET_PATH)
-            elif self.is_folder:
-                shutil.copytree(self.p, out_path / self.DEFAULT_TARGET_PATH)
-            else:
-                raise TypeError(f'Cannot copy {type(self).__name__} because it is neither a file nor a folder.')
-
-    def validate_migration(self, out_path):
-        target = self.target_validator(root=out_path)
-        if target.is_valid:
-            print(f'Migration successful for {type(self).__name__}!')
+        if self.is_file:
+            file_out = io.pathval.ensure_parent_dir(out_path / self.DEFAULT_TARGET_PATH)
+            shutil.copy(self.migrator.p, file_out)
+        elif self.is_folder:
+            shutil.copytree(self.migrator.p, out_path / self.DEFAULT_TARGET_PATH)
         else:
-            raise ImportError(f'Migrated {type(self).__name__} did not pass validation! {target.validation()}.')
+            raise TypeError(f'Cannot copy {self._name} because it is neither a file nor a folder.')
 
-    def migrate(self, out_path, check_current: bool = True, *args, **kwargs):
+    def migrate(self, out_path, logger: logging.Logger | None = None, *args, **kwargs):
+        log = logger or LOGGER
+        kwargs['logger'] = log
+        log.info(f'Initializing migration of {self._name} from "{self.mig_version}" to current schema version.')
+
         if not self.valid_versions and self.IS_OPTIONAL:
-            print(f'No valid versions of {type(self).__name__} found. Skipping migration of optional data.')
+            log.warning(f'No valid versions of {self._name} found. Skipping migration of optional data.')
             return
 
-        test, msg = self.is_migratable
-        if not test:
-            raise ValueError(f'{type(self).__name__} is not migratable. {msg}')
+        if not self.is_migratable:
+            raise ValueError(f'{self._name} is not migratable. {self.migration_status[1]}')
 
         out_path = io.pathval.validate_dir_path(out_path)
 
-        if check_current:
+        if self.COPY_CURRENT and 'current' in self.valid_versions:
+            log.debug(f'{self._name} has correct schema, copying file without migration.')
             self.copy_if_current(out_path)
 
         migrate_method = getattr(self, '_migrate_method', False)
         if not migrate_method:
-            raise NotImplementedError(f'{type(self).__name__} does not have a _migrate_method defined.')
+            raise NotImplementedError(f'{self._name} does not have a _migrate_method defined.')
         else:
             try:
                 result = migrate_method(out_path, *args, **kwargs)
-                self.validate_migration(out_path)
+                target = self.target_validator(root=out_path)
+                if target.is_valid:
+                    log.debug(f'✓ Migration successful for {self._name}!')
+                else:
+                    raise ImportError(f'Migrated {self._name} did not pass validation! {target.validation()}.')
                 return result
 
             except Exception as e:
-                raise ImportError(
-                    f'Error migrating {type(self).__name__} from {self.target_rel}!\nreason: {e}'
-                ) from None
+                raise ImportError(f'Error migrating {self._name} from {self.target}!\nreason: {e}') from None
 
 
 class SampleG4X_Migrator(DataMigrator, sd.SampleG4X):
@@ -172,22 +193,21 @@ class SampleG4X_Migrator(DataMigrator, sd.SampleG4X):
         return smp_id
 
     @property  # this overrides the default behaviour
-    def is_migratable(self):
-
+    def migration_status(self):
         if not self.smp_sheet.is_valid:
-            return False, 'SampleSheet is not valid.'
+            return False, f'{self._name} SampleSheet is not valid.'
 
         if self.legacy_smp_id is None:
-            return False, 'Could not determine legacy sample_id.'
+            return False, f'{self._name} Could not determine legacy sample_id.'
 
         if not len(self.valid_versions) > 0:
-            return False, 'No valid legacy versions are available.'
+            return False, f'{self._name} No valid legacy versions are available.'
 
-        return True, ''
+        return True, f'{self._name} is migratable.'
 
     def _migrate_method(self, out_path, **kwargs):
 
-        with open(self.mig_version.p, 'r') as f:
+        with open(self.migrator.p, 'r') as f:
             run_meta = json.load(f)
 
         if run_meta['protein_panel'] == []:
@@ -216,6 +236,8 @@ class SampleSheet_Migrator(DataMigrator, sd.SampleSheet):
 
 
 class Segmentation_Migrator(DataMigrator, sd.Segmentation):
+    COPY_CURRENT = False
+
     class Segmentation_V1(sd.Segmentation):
         DEFAULT_TARGET_PATH = 'segmentation/segmentation_mask.npz'
 
@@ -241,7 +263,7 @@ class Segmentation_Migrator(DataMigrator, sd.Segmentation):
 
         cleaned_masks = {}
 
-        segmentation = self.mig_version
+        segmentation = self.migrator
         main_seg = segmentation.load()
         main_crop = roi.crop_array(main_seg)
         main_crop_cleaned = remove_boundary_labels(main_crop)
@@ -263,38 +285,39 @@ class Segmentation_Migrator(DataMigrator, sd.Segmentation):
 
         return cleaned_masks
 
-    def _migrate_method(self, out_path: str, roi=None):
+    def _migrate_method(self, out_path: str, roi=None, **kwargs):
         file_out = io.pathval.ensure_parent_dir(out_path / self.DEFAULT_TARGET_PATH)
 
         if roi is not None:
             masks = self.crop_segmentations(roi)
             np.savez(file_out, **masks)
         else:
-            shutil.copy(self.mig_version.p, file_out)
+            shutil.copy(self.migrator.p, file_out)
 
 
 class BeadMask_Migrator(DataMigrator, sd.BeadMask):
     IS_OPTIONAL = True
+    COPY_CURRENT = False
 
     class BeadMask_V1(sd.BeadMask):
         DEFAULT_TARGET_PATH = 'protein/bead_mask.npz'
 
     def crop_bead_mask(self, roi):
-        bead_mask = self.mig_version
+        bead_mask = self.migrator
 
         cropped = {}
         arr = bead_mask.load()
         cropped[bead_mask.DEFAULT_KEY] = roi.crop_array(arr)
         return cropped
 
-    def _migrate_method(self, out_path: str, roi=None):
+    def _migrate_method(self, out_path: str, roi=None, **kwargs):
         file_out = io.pathval.ensure_parent_dir(out_path / self.DEFAULT_TARGET_PATH)
 
         if roi is not None:
             masks = self.crop_bead_mask(roi)
             np.savez(file_out, **masks)
         else:
-            shutil.copy(self.mig_version.p, file_out)
+            shutil.copy(self.migrator.p, file_out)
 
 
 class Manifest_Migrator(DataMigrator, sd.Manifest):
@@ -377,12 +400,14 @@ class Manifest_Migrator(DataMigrator, sd.Manifest):
 
     def _migrate_method(self, out_path: str, **kwargs):
         file_out = io.pathval.ensure_parent_dir(out_path / self.DEFAULT_TARGET_PATH)
-        df = self.mig_version.convert()
+        df = self.migrator.convert()
         df = self.populate_missing_columns(df)
         df.write_csv(file_out)
 
 
 class RawFeatures_Migrator(DataMigrator, sd.RawFeatures):
+    COPY_CURRENT = False
+
     class DummyFallback_V0(sd.RawFeatures):
         DEFAULT_TARGET_PATH = 'rna/transcript_table.csv.gz'
 
@@ -442,12 +467,13 @@ class RawFeatures_Migrator(DataMigrator, sd.RawFeatures):
         def convert(self):
             return self.load(lazy=True)
 
-    def _migrate_method(self, out_path: str, roi=None):
+    def _migrate_method(self, out_path: str, roi=None, **kwargs):
+        log = kwargs.get('logger', LOGGER)
         file_out = io.pathval.ensure_parent_dir(out_path / self.DEFAULT_TARGET_PATH)
 
-        if self.valid_versions == ['dummyFallback_V0']:
-            print(
-                'Only fallback version available. Creating dummy output file to pass validators, but demuxing will be unavailable for this sample.'
+        if self.valid_versions == ['DummyFallback_V0']:
+            log.warning(
+                'Only fallback version available. Creating dummy output file to pass validators. Demuxing will be unavailable for this sample.'
             )
             data = {k: '<unknown>' for k in self.SCHEMA.keys()}
             df = pl.LazyFrame(data)
@@ -456,21 +482,17 @@ class RawFeatures_Migrator(DataMigrator, sd.RawFeatures):
             if 'current' in self.valid_versions:
                 df = self.load(lazy=True)
             else:
-                df = self.mig_version.convert()
+                df = self.migrator.convert()
 
             if roi is not None:
-                df = df.filter(
-                    pl.col('x_pixel_coordinate').is_between(*roi.xlims, closed='left'),
-                    pl.col('y_pixel_coordinate').is_between(*roi.ylims, closed='left'),
-                ).with_columns(
-                    pl.col('x_pixel_coordinate') - roi.xlims[0],
-                    pl.col('y_pixel_coordinate') - roi.ylims[0],
-                )
+                df = crop_tx_features(df, roi)
 
         df.sink_parquet(file_out)
 
 
 class TxTable_Migrator(DataMigrator, sd.TxTable):
+    COPY_CURRENT = False
+
     class TxTable_V1(sd.TxTable):
         SCHEMA = {
             'y_pixel_coordinate': pl.Float64,
@@ -506,34 +528,30 @@ class TxTable_Migrator(DataMigrator, sd.TxTable):
 
             coord_order = schema[0:2]
             if coord_order == self.flipped_coord_order:
-                print(f'Flipping xy-coordinates for {self.__class__.__name__}')
+                # print(f'Flipping xy-coordinates for {self._name}')
                 self.col_rename.update(self.flip_coords)
 
             lf = lf.rename(self.col_rename)
 
             return lf
 
-    def _migrate_method(self, out_path: str, roi=None):
+    def _migrate_method(self, out_path: str, roi=None, **kwargs):
         file_out = io.pathval.ensure_parent_dir(out_path / self.DEFAULT_TARGET_PATH)
 
         if 'current' in self.valid_versions:
             df = self.load(lazy=True)
         else:
-            df = self.mig_version.convert()
+            df = self.migrator.convert()
 
         if roi is not None:
-            df = df.filter(
-                pl.col('x_pixel_coordinate').is_between(*roi.xlims, closed='left'),
-                pl.col('y_pixel_coordinate').is_between(*roi.ylims, closed='left'),
-            ).with_columns(
-                pl.col('x_pixel_coordinate') - roi.xlims[0],
-                pl.col('y_pixel_coordinate') - roi.ylims[0],
-            )
+            df = crop_tx_features(df, roi)
 
         df.sink_csv(file_out, compression='gzip')
 
 
 class HnE_Migrator(DataMigrator, sd.HnEDir):
+    COPY_CURRENT = False
+
     class HnEDir_V1(sd.FileValidator):
         DEFAULT_TARGET_PATH = 'h_and_e'
 
@@ -558,21 +576,21 @@ class HnE_Migrator(DataMigrator, sd.HnEDir):
         def imgs_complete(self):
             missing_imgs = set(self.FILE_MAP) - set(self.existing_imgs)
             if missing_imgs:
-                print(f'Missing images: {missing_imgs}')
                 return False
             return True
 
-    def _migrate_method(self, out_path: str, roi=None):
+    def _migrate_method(self, out_path: str, roi=None, **kwargs):
+        log = kwargs.get('logger', LOGGER)
+
         out_dir = io.pathval.ensure_dir(out_path / self.DEFAULT_TARGET_PATH)
 
-        migrator = self.mig_version
-
-        is_all_jp2 = all([f.suffix == '.jp2' for f in migrator.existing_imgs.values()])
+        is_all_jp2 = all([f.suffix == '.jp2' for f in self.migrator.existing_imgs.values()])
         if not is_all_jp2:
-            print('Not all images are in JP2 format. Conversion not possible.')
+            log.warning('Not all images are in JP2 format. Conversion not possible.')
             return
 
-        for img, in_file in migrator.existing_imgs.items():
+        for img, in_file in self.migrator.existing_imgs.items():
+            log.debug(f'Converting {img} to OME-TIFF format.')
             img_type = 'rgb' if img == c.H_AND_E else 'grey'
             io.convert.jp2_to_ometiff(
                 in_file=in_file,
@@ -585,6 +603,8 @@ class HnE_Migrator(DataMigrator, sd.HnEDir):
 
 
 class Protein_Migrator(DataMigrator, sd.ProteinDir):
+    COPY_CURRENT = False
+
     class ProteinDir_V0(sd.ProteinDir):
         # this class handles the rare edge case where the protein panel is missing
         # but the individual protein images are present.
@@ -609,17 +629,26 @@ class Protein_Migrator(DataMigrator, sd.ProteinDir):
     class ProteinDir_V1(sd.ProteinDir):
         EXPECTED_DIRS = {}
 
-    def _migrate_method(self, out_path: str, roi=None):
+    def _migrate_method(self, out_path: str, n_images: int = None, roi=None, **kwargs):
+        log = kwargs.get('logger', LOGGER)
+
         out_dir = io.pathval.ensure_dir(out_path / self.DEFAULT_TARGET_PATH)
 
-        migrator = self.mig_version
-
-        is_all_jp2 = all([f.suffix == '.jp2' for f in migrator.existing_images])
+        is_all_jp2 = all([f.suffix == '.jp2' for f in self.migrator.existing_images])
         if not is_all_jp2:
-            print('Not all images are in JP2 format. Conversion not possible.')
+            log.warning('Not all images are in JP2 format. Conversion not possible.')
             return
 
-        for protein_img in migrator.existing_images:
+        if n_images is not None:
+            keep_list = self.migrator.existing_images[0:n_images]
+        else:
+            keep_list = self.migrator.existing_images
+        keep_signals = [img.stem for img in keep_list]
+        total = len(keep_list)
+
+        # for protein_img in migrator.existing_images:
+        for protein_img in keep_list:
+            log.debug(f'Converting {protein_img.name} ({keep_signals.index(protein_img.stem) + 1}/{total})')
             io.convert.jp2_to_ometiff(
                 in_file=protein_img,
                 out_file=f'{out_dir}/{protein_img.stem}.ome.tiff',
@@ -629,8 +658,23 @@ class Protein_Migrator(DataMigrator, sd.ProteinDir):
                 extent=roi.extent_array if roi else None,
             )
 
-        if self.valid_versions == ['proteinDir_V0']:
-            panel_df = migrator.create_protein_panel()
-            panel_df.write_csv(out_path / migrator.panel.DEFAULT_TARGET_PATH)
+        if self.valid_versions == ['ProteinDir_V0']:
+            panel_df = self.migrator.create_protein_panel()
+            # panel_df.write_csv(out_path / migrator.panel.DEFAULT_TARGET_PATH)
         else:
-            shutil.copyfile(migrator.panel.p, out_path / migrator.panel.DEFAULT_TARGET_PATH)
+            panel_df = self.migrator.panel.load()
+            # shutil.copyfile(migrator.panel.p, out_path / migrator.panel.DEFAULT_TARGET_PATH)
+
+        panel_df = panel_df.filter(pl.col('target').is_in(keep_signals))
+        panel_df.write_csv(out_path / self.migrator.panel.DEFAULT_TARGET_PATH)
+
+
+def crop_tx_features(df: pl.LazyFrame, roi):
+    df = df.filter(
+        pl.col('x_pixel_coordinate').is_between(*roi.xlims, closed='left'),
+        pl.col('y_pixel_coordinate').is_between(*roi.ylims, closed='left'),
+    ).with_columns(
+        pl.col('x_pixel_coordinate') - roi.xlims[0],
+        pl.col('y_pixel_coordinate') - roi.ylims[0],
+    )
+    return df
