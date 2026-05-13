@@ -28,11 +28,12 @@ def configure_g4x_logging(
         logger.handlers.clear()
 
     level = level.upper() if isinstance(level, str) else level
-    # if format is None:
-    stream_format = '%(g4x_name)s - %(message)s'
+    
+    # stream_format = '%(g4x_name)s - %(message)s'
+    stream_format = '%(asctime)s %(levelshort)1s: %(message)s'
     file_format = '%(asctime)s %(levelname)7s | %(g4x_name)s - %(message)s'
 
-    stream_formatter = G4XFormatter(stream_format)
+    stream_formatter = G4XFormatter(stream_format, datefmt='%H:%M:%S')
     file_formatter = G4XFormatter(file_format, datefmt='%H:%M:%S')
 
     if stream_log:
@@ -60,7 +61,16 @@ def configure_g4x_logging(
 
 
 class G4XFormatter(logging.Formatter):
+    LEVEL_MAP = {
+        'DEBUG': 'D',
+        'INFO': 'I',
+        'WARNING': 'W',
+        'ERROR': 'E',
+        'CRITICAL': 'C',
+    }
+
     def format(self, record):
+        record.levelshort = f'[{self.LEVEL_MAP.get(record.levelname, "?")}]'
         # record.g4x_name = f'g4x.{record.name.split(".")[-1]}'
         record.g4x_name = f'{record.name}'  # .split(".")[-1]}'
         return super().format(record)
