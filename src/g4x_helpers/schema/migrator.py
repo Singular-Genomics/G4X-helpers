@@ -8,7 +8,7 @@ import polars as pl
 
 from .. import c, io
 from . import definition as sd
-from .validator import BaseValidator, FileValidator, FolderValidator
+from .validator import BaseValidator, DirectoryValidator, FileValidator
 
 LOGGER = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ class DataMigrator(BaseValidator):
                 continue
 
             if issubclass(cls, BaseValidator):
-                return cls(root=self.root)
+                return cls(root=self.root, format=self.format)
 
         raise TypeError(f'Could not infer "current" validator for {self._name}')
 
@@ -106,7 +106,7 @@ class DataMigrator(BaseValidator):
 
     @property
     def is_folder(self):
-        return isinstance(self, FolderValidator)
+        return isinstance(self, DirectoryValidator)
 
     def copy_if_current(self, out_path):
         if self.is_file:
@@ -120,7 +120,7 @@ class DataMigrator(BaseValidator):
     def migrate(self, out_path, logger: logging.Logger | None = None, *args, **kwargs):
         log = logger or LOGGER
         kwargs['logger'] = log
-        log.info(f'Initializing migration of {self._name} from "{self.mig_version}" to current schema version.')
+        log.info(f'Initializing migration of {self._name}')
 
         if not self.valid_versions and self.IS_OPTIONAL:
             log.warning(f'No valid versions of {self._name} found. Skipping migration of optional data.')
@@ -134,6 +134,9 @@ class DataMigrator(BaseValidator):
         if self.COPY_CURRENT and 'current' in self.valid_versions:
             log.debug(f'{self._name} has correct schema, copying file without migration.')
             self.copy_if_current(out_path)
+            return
+
+        log.debug(f'Detected legacy version: "{self.mig_version}"')
 
         migrate_method = getattr(self, '_migrate_method', False)
         if not migrate_method:
@@ -141,7 +144,7 @@ class DataMigrator(BaseValidator):
         else:
             try:
                 result = migrate_method(out_path, *args, **kwargs)
-                target = self.target_validator(root=out_path)
+                target = self.target_validator(root=out_path, format=self.format)
                 if target.is_valid:
                     log.debug(f'✓ Migration successful for {self._name}!')
                 else:
@@ -149,7 +152,7 @@ class DataMigrator(BaseValidator):
                 return result
 
             except Exception as e:
-                raise ImportError(f'Error migrating {self._name} from {self.target}!\nreason: {e}') from None
+                raise ImportError(f'Error migrating {self._name} from {self.target_path}!\nreason: {e}') from None
 
 
 class SampleG4X_Migrator(DataMigrator, sd.SampleG4X):
@@ -213,7 +216,7 @@ class SampleG4X_Migrator(DataMigrator, sd.SampleG4X):
         if run_meta['protein_panel'] == []:
             run_meta['protein_panel'] = None
 
-        _ = io.create_sample_g4x(
+        return io.create_sample_g4x(
             sample_id=self.legacy_smp_id,
             run_meta=run_meta,
             ssheet=self.smp_sheet.p,
@@ -223,9 +226,10 @@ class SampleG4X_Migrator(DataMigrator, sd.SampleG4X):
 
 class QCSummary_Migrator(DataMigrator, sd.QCSummary):
     IS_OPTIONAL = True
+    COPY_CURRENT = False
 
     def _migrate_method(self, out_path, **kwargs):
-        file_out = io.pathval.ensure_parent_dir(out_path / self.DEFAULT_TARGET_PATH)
+        file_out = io.pathval.ensure_parent_dir(out_path / self.p.name)
         shutil.copy(self.p, file_out)
 
 
@@ -241,55 +245,11 @@ class Segmentation_Migrator(DataMigrator, sd.Segmentation):
     class Segmentation_V1(sd.Segmentation):
         DEFAULT_TARGET_PATH = 'segmentation/segmentation_mask.npz'
 
-    def crop_segmentations(self, roi):
-        def remove_boundary_labels(labels, inplace=False):
-            arr = labels if inplace else labels.copy()
-
-            boundary_labels = np.unique(
-                np.concatenate(
-                    [  # Collect all labels touching the boundary
-                        arr[0, :],  # top row
-                        arr[-1, :],  # bottom row
-                        arr[:, 0],  # left column
-                        arr[:, -1],  # right column
-                    ]
-                )
-            )
-            # Create a mask for boundary labels and set them to 0
-            mask = np.isin(arr, boundary_labels)
-            arr[mask] = 0
-
-            return arr
-
-        cleaned_masks = {}
-
-        segmentation = self.migrator
-        main_seg = segmentation.load()
-        main_crop = roi.crop_array(main_seg)
-        main_crop_cleaned = remove_boundary_labels(main_crop)
-
-        keep_labels = np.unique(main_crop_cleaned)
-
-        cleaned_masks[segmentation.main_key] = main_crop_cleaned
-
-        for key in segmentation.available_keys:
-            if key == segmentation.main_key:
-                continue
-
-            sub_seg = segmentation.load(key=key)
-            sub_crop = roi.crop_array(sub_seg)
-            mask = ~np.isin(sub_crop, keep_labels)
-            sub_crop_cleaned = sub_crop.copy()
-            sub_crop_cleaned[mask] = 0
-            cleaned_masks[key] = sub_crop_cleaned
-
-        return cleaned_masks
-
     def _migrate_method(self, out_path: str, roi=None, **kwargs):
         file_out = io.pathval.ensure_parent_dir(out_path / self.DEFAULT_TARGET_PATH)
 
         if roi is not None:
-            masks = self.crop_segmentations(roi)
+            masks = crop_segmentations(self.migrator, roi)
             np.savez(file_out, **masks)
         else:
             shutil.copy(self.migrator.p, file_out)
@@ -302,19 +262,11 @@ class BeadMask_Migrator(DataMigrator, sd.BeadMask):
     class BeadMask_V1(sd.BeadMask):
         DEFAULT_TARGET_PATH = 'protein/bead_mask.npz'
 
-    def crop_bead_mask(self, roi):
-        bead_mask = self.migrator
-
-        cropped = {}
-        arr = bead_mask.load()
-        cropped[bead_mask.DEFAULT_KEY] = roi.crop_array(arr)
-        return cropped
-
     def _migrate_method(self, out_path: str, roi=None, **kwargs):
         file_out = io.pathval.ensure_parent_dir(out_path / self.DEFAULT_TARGET_PATH)
 
         if roi is not None:
-            masks = self.crop_bead_mask(roi)
+            masks = crop_bead_mask(self.migrator, roi)
             np.savez(file_out, **masks)
         else:
             shutil.copy(self.migrator.p, file_out)
@@ -420,6 +372,19 @@ class RawFeatures_Migrator(DataMigrator, sd.RawFeatures):
             'cell_id': pl.String,
         }
 
+        def convert(self):
+            return pl.LazyFrame(
+                {
+                    'TXUID': ['<unknown>'],
+                    'sequence': ['<unknown>'],
+                    'confidence_score': [None],
+                    'y_pixel_coordinate': [None],
+                    'x_pixel_coordinate': [None],
+                    'z_level': [None],
+                },
+                schema=sd.RawFeatures.SCHEMA,
+            )
+
     class RawFeatures_V1(sd.RawFeatures):
         DEFAULT_TARGET_PATH = 'diagnostics/transcript_table.parquet'
 
@@ -436,7 +401,7 @@ class RawFeatures_Migrator(DataMigrator, sd.RawFeatures):
             'TXUID': pl.String,
         }
 
-        parquet_rename = {
+        rename_and_flip = {
             'sequence_to_demux': 'sequence',
             'meanQS': 'confidence_score',
             'x_coord_shift': 'y_pixel_coordinate',
@@ -445,7 +410,7 @@ class RawFeatures_Migrator(DataMigrator, sd.RawFeatures):
         }
 
         def convert(self):
-            return self.load(lazy=True).rename(self.parquet_rename)
+            return self.load(lazy=True).rename(self.rename_and_flip)
 
     class RawFeatures_V2(sd.RawFeatures):
         DEFAULT_TARGET_PATH = 'rna/transcript_table.parquet'
@@ -471,23 +436,20 @@ class RawFeatures_Migrator(DataMigrator, sd.RawFeatures):
         log = kwargs.get('logger', LOGGER)
         file_out = io.pathval.ensure_parent_dir(out_path / self.DEFAULT_TARGET_PATH)
 
+        if 'current' in self.valid_versions:
+            df = self.load(lazy=True)
+        else:
+            df = self.migrator.convert()
+
         if self.valid_versions == ['DummyFallback_V0']:
             log.warning(
                 'Only fallback version available. Creating dummy output file to pass validators. Demuxing will be unavailable for this sample.'
             )
-            data = {k: '<unknown>' for k in self.SCHEMA.keys()}
-            df = pl.LazyFrame(data)
 
-        else:
-            if 'current' in self.valid_versions:
-                df = self.load(lazy=True)
-            else:
-                df = self.migrator.convert()
+        elif roi is not None:
+            df = crop_tx_features(df, roi)
 
-            if roi is not None:
-                df = crop_tx_features(df, roi)
-
-        df.sink_parquet(file_out)
+        df.select(self.SCHEMA.keys()).sink_parquet(file_out)
 
 
 class TxTable_Migrator(DataMigrator, sd.TxTable):
@@ -546,14 +508,15 @@ class TxTable_Migrator(DataMigrator, sd.TxTable):
         if roi is not None:
             df = crop_tx_features(df, roi)
 
-        df.sink_csv(file_out, compression='gzip')
+        df.select(self.SCHEMA.keys()).sink_csv(file_out, compression='gzip')
 
 
-class HnE_Migrator(DataMigrator, sd.HnEDir):
+class HnEDir_Migrator(DataMigrator, sd.HnEDir):
     COPY_CURRENT = False
 
-    class HnEDir_V1(sd.FileValidator):
+    class HnEDir_V1(sd.HnEDir):
         DEFAULT_TARGET_PATH = 'h_and_e'
+        EXPECTED_DIRS = {}
 
         FILE_MAP = {
             c.NUCLEAR_STAIN: ['nuclear.jp2'],
@@ -561,51 +524,20 @@ class HnE_Migrator(DataMigrator, sd.HnEDir):
             c.H_AND_E: ['h_and_e.jp2'],
         }
 
-        @property
-        def existing_imgs(self):
-            existing_imgs = {}
-            for file_name, file_paths in self.FILE_MAP.items():
-                for f in file_paths:
-                    query = self.p / f
-                    if query.exists():
-                        existing_imgs[file_name] = query
-                        break
-            return existing_imgs
-
-        @sd.validation_test
-        def imgs_complete(self):
-            missing_imgs = set(self.FILE_MAP) - set(self.existing_imgs)
-            if missing_imgs:
-                return False
-            return True
-
     def _migrate_method(self, out_path: str, roi=None, **kwargs):
         log = kwargs.get('logger', LOGGER)
-
         out_dir = io.pathval.ensure_dir(out_path / self.DEFAULT_TARGET_PATH)
 
-        is_all_jp2 = all([f.suffix == '.jp2' for f in self.migrator.existing_imgs.values()])
-        if not is_all_jp2:
-            log.warning('Not all images are in JP2 format. Conversion not possible.')
-            return
-
-        for img, in_file in self.migrator.existing_imgs.items():
+        for img in self.migrator.mapped_files.keys():
             log.debug(f'Converting {img} to OME-TIFF format.')
             img_type = 'rgb' if img == c.H_AND_E else 'grey'
-            io.convert.jp2_to_ometiff(
-                in_file=in_file,
-                out_file=f'{out_dir}/{img}.ome.tiff',
-                img_type=img_type,
-                create_thumb=True,
-                report_size=False,
-                extent=roi.extent_array if roi else None,
-            )
+            migrate_image(self.migrator, img, out_dir, img_type=img_type, roi=roi)
 
 
 class Protein_Migrator(DataMigrator, sd.ProteinDir):
     COPY_CURRENT = False
 
-    class ProteinDir_V0(sd.ProteinDir):
+    class ProteinDir_V1(sd.ProteinDir):
         # this class handles the rare edge case where the protein panel is missing
         # but the individual protein images are present.
         # In this case, we can create a dummy panel and migrate the images as usual.
@@ -620,53 +552,53 @@ class Protein_Migrator(DataMigrator, sd.ProteinDir):
         def images_match_panel(self):
             return True
 
-        def create_protein_panel(self: str) -> pl.DataFrame:
-            img_list = self.existing_images
-            proteins = sorted([img.stem for img in img_list])
+        def infer_panel(self) -> pl.DataFrame:
+            proteins = sorted([img for img in self.mapped_files.keys()])
             df = pl.DataFrame({'target': proteins}).with_columns(pl.lit('standard').alias('panel_type'))
             return df
 
-    class ProteinDir_V1(sd.ProteinDir):
+    class ProteinDir_V2(sd.ProteinDir):
         EXPECTED_DIRS = {}
 
     def _migrate_method(self, out_path: str, n_images: int = None, roi=None, **kwargs):
         log = kwargs.get('logger', LOGGER)
-
         out_dir = io.pathval.ensure_dir(out_path / self.DEFAULT_TARGET_PATH)
 
-        is_all_jp2 = all([f.suffix == '.jp2' for f in self.migrator.existing_images])
-        if not is_all_jp2:
-            log.warning('Not all images are in JP2 format. Conversion not possible.')
-            return
+        migrator = self.migrator
 
-        if n_images is not None:
-            keep_list = self.migrator.existing_images[0:n_images]
-        else:
-            keep_list = self.migrator.existing_images
-        keep_signals = [img.stem for img in keep_list]
+        img_list = list(migrator.mapped_files)
+        keep_list = img_list if n_images is None else img_list[0:n_images]
+        keep_signals = [img for img in keep_list]
         total = len(keep_list)
 
-        # for protein_img in migrator.existing_images:
         for protein_img in keep_list:
-            log.debug(f'Converting {protein_img.name} ({keep_signals.index(protein_img.stem) + 1}/{total})')
-            io.convert.jp2_to_ometiff(
-                in_file=protein_img,
-                out_file=f'{out_dir}/{protein_img.stem}.ome.tiff',
-                img_type='grey',
-                create_thumb=True,
-                report_size=False,
-                extent=roi.extent_array if roi else None,
-            )
+            log.debug(f'Converting {protein_img} ({keep_signals.index(protein_img) + 1}/{total})')
+            migrate_image(migrator, protein_img, out_dir, img_type='grey', roi=roi)
 
-        if self.valid_versions == ['ProteinDir_V0']:
-            panel_df = self.migrator.create_protein_panel()
-            # panel_df.write_csv(out_path / migrator.panel.DEFAULT_TARGET_PATH)
+        if self.valid_versions == ['ProteinDir_V1']:
+            panel_df = migrator.infer_panel()
         else:
-            panel_df = self.migrator.panel.load()
-            # shutil.copyfile(migrator.panel.p, out_path / migrator.panel.DEFAULT_TARGET_PATH)
+            panel_df = migrator.panel.load()
 
         panel_df = panel_df.filter(pl.col('target').is_in(keep_signals))
         panel_df.write_csv(out_path / self.migrator.panel.DEFAULT_TARGET_PATH)
+
+
+class Metrics_Migrator(DataMigrator, DirectoryValidator):
+    DEFAULT_TARGET_PATH = 'metrics'
+    IS_OPTIONAL = True
+    COPY_CURRENT = True
+
+
+def migrate_image(migrator, img_name, out_dir, img_type='auto', roi=None):
+    io.convert.jp2_to_ometiff(
+        in_file=migrator.mapped_files[img_name],
+        out_file=f'{out_dir}/{img_name}.ome.tiff',
+        img_type=img_type,
+        create_thumb=True,
+        report_size=False,
+        extent=roi.extent_array if roi else None,
+    )
 
 
 def crop_tx_features(df: pl.LazyFrame, roi):
@@ -678,3 +610,66 @@ def crop_tx_features(df: pl.LazyFrame, roi):
         pl.col('y_pixel_coordinate') - roi.ylims[0],
     )
     return df
+
+
+def crop_bead_mask(bead_mask, roi):
+
+    cropped = {}
+    arr = bead_mask.load()
+    cropped[bead_mask.DEFAULT_KEY] = roi.crop_array(arr)
+    return cropped
+
+
+def crop_segmentations(segmentation, roi):
+    def remove_boundary_labels(labels, inplace=False):
+        arr = labels if inplace else labels.copy()
+
+        boundary_labels = np.unique(
+            np.concatenate(
+                [  # Collect all labels touching the boundary
+                    arr[0, :],  # top row
+                    arr[-1, :],  # bottom row
+                    arr[:, 0],  # left column
+                    arr[:, -1],  # right column
+                ]
+            )
+        )
+        # Create a mask for boundary labels and set them to 0
+        mask = np.isin(arr, boundary_labels)
+        arr[mask] = 0
+
+        return arr
+
+    cleaned_masks = {}
+
+    if segmentation.main_key == 'nuclei_exp':
+        segmentation.main_key = 'nuclei'
+
+    main_seg = segmentation.load()
+    main_crop = roi.crop_array(main_seg)
+    main_crop_cleaned = remove_boundary_labels(main_crop)
+
+    keep_labels = np.unique(main_crop_cleaned)
+    if len(keep_labels) == 1 and keep_labels[0] == 0:
+        raise ValueError('No valid segmentation labels remain after cropping.')
+
+    cleaned_masks[segmentation.main_key] = main_crop_cleaned
+
+    for key in segmentation.available_keys:
+        if key == segmentation.main_key:
+            continue
+
+        sub_seg = segmentation.load(key=key)
+        sub_crop = roi.crop_array(sub_seg)
+        mask = ~np.isin(sub_crop, keep_labels)
+        sub_crop_cleaned = sub_crop.copy()
+        sub_crop_cleaned[mask] = 0
+
+        sub_labels = np.unique(sub_crop_cleaned)
+        if not np.isin(keep_labels, sub_labels).all():
+            raise ValueError(
+                f'Sub-segmentation "{key}" contains labels not present in main segmentation after cropping.'
+            )
+        cleaned_masks[key] = sub_crop_cleaned
+
+    return cleaned_masks
