@@ -45,18 +45,18 @@ def get_image_shape(img_path):
         raise ValueError(f'Unsupported image format: {img_path.suffix}')
 
 
-def kv_line_gap(key, value, gap=2):
+def kv_line_gap(key, value, separator=' - ', gap=2):
     value = '<undefined>' if not value else value
     line = f'{key:<{gap}}'
-    line += ' - '
+    line += separator
     line += f'{value}'
 
     return line
 
 
-def pretty_dict_str(d):
+def pretty_dict_str(d, separator=' - '):
     max_len = max([len(k) for k in d.keys()])
     msg = ''
     for k, v in d.items():
-        msg += kv_line_gap(k, v, gap=max_len) + '\n'
+        msg += kv_line_gap(k, v, separator=separator, gap=max_len) + '\n'
     return msg
