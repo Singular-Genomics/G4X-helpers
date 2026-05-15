@@ -17,7 +17,7 @@ def _base_command(func):
 
     @functools.wraps(func)
     def wrapper(
-        smp: 'G4Xoutput',
+        smp_dir: str,
         *,
         out_dir: str | None = None,
         n_threads: int = c.DEFAULT_THREADS,
@@ -29,7 +29,7 @@ def _base_command(func):
         func_name = func.__name__
 
         if out_dir is None:
-            out_dir = smp.data_dir
+            out_dir = smp_dir
         else:
             out_dir = io.pathval.validate_dir_path(out_dir)
             func_out = out_dir / func_name
@@ -44,7 +44,7 @@ def _base_command(func):
         if logger is None:
             # TODO enable append time when testing is complete
             func_log = logut.configure_g4x_logging(
-                level=verbose * 10, file_log=True, out_dir=log_dir, append_time=False, file_mode='w'
+                level='INFO', file_log=True, out_dir=log_dir, append_time=False, file_mode='w'
             )
         else:
             func_log = logger
@@ -54,7 +54,7 @@ def _base_command(func):
         compute_eng += ' (auto-detected)' if compute_backend == 'auto' else ''
 
         d = {
-            'sample_dir': f'{smp.data_dir}',
+            'sample_dir': f'{smp_dir}',
             'out_dir': f'{out_dir}',
             'verbosity': f'{verbose}',
             'n_threads': f'{n_threads}',
@@ -67,11 +67,11 @@ def _base_command(func):
         logut.log_msg_wrapped(header=header, msg=msg, prefix='  ', logger=func_log)
 
         result = func(
-            smp=smp,
+            smp_dir=smp_dir,
             out_dir=out_dir,
             n_threads=n_threads,
             compute_backend=backend.kind,
-            # logger=func_log,
+            logger=func_log,
             **kwargs,
         )
 
@@ -155,21 +155,16 @@ def redemux(
 
 @_base_command
 def migrate(
-    g4x_obj: 'G4Xoutput',
-    restore: bool = False,
-    n_threads: int = c.DEFAULT_THREADS,
+    smp_dir: str,
+    out_dir: str,
+    roi_coords: tuple | None = None,
     *,
     logger: logging.Logger,
     **kwargs,
 ) -> None:
-    from .schemas import migration
+    from .modules import migrate
 
-    if restore:
-        migration.restore_backup(data_dir=g4x_obj.data_dir, sample_id=g4x_obj.sample_id, logger=logger)
-    else:
-        migration.migrate_g4x_data(
-            data_dir=g4x_obj.data_dir, sample_id=g4x_obj.sample_id, n_threads=n_threads, logger=logger
-        )
+    migrate.migrate_sample(sample_dir=smp_dir, out_dir=out_dir, roi_coords=roi_coords, logger=logger)
 
 
 @_base_command
