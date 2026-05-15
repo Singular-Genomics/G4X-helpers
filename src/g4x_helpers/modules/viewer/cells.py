@@ -44,10 +44,10 @@ def write_cells(
     seg_group = cell_group.create_group(seg_path, overwrite=overwrite)
 
     if components is None:
-        log.info('No components provided, processing cell data from source')
+        log.debug('No components provided, processing cell data from source')
         components = process_cell_data(smp, logger=log)
     else:
-        log.info('Using provided components to select data')
+        log.debug('Using provided components to select data')
 
     metadata, gex, gene_names, verts_xy, offsets = components
 
