@@ -25,6 +25,7 @@ class G4Xoutput:
 
     """
 
+    # TODO rename data_dir
     def __init__(self, data_dir: str, use_cache: bool = False, validate: bool = True):
         self.data_dir = Path(data_dir)
         self.src = schema.FileTree(self.data_dir)
@@ -33,12 +34,6 @@ class G4Xoutput:
 
         if validate:
             self.src.validation_report(format='minimal', raw_only=True, report_pass=False, raise_exception=True)
-
-        with open(self.src.SampleG4X.p, 'r') as f:
-            self.smp_meta = json.load(f)
-
-        nuc_img = self.src.HnEDir.get_img(c.NUCLEAR_STAIN)
-        self.shape = ut.get_image_shape(nuc_img)
 
         self.set_meta_attrs()
         self.cache = {}
@@ -105,6 +100,17 @@ class G4Xoutput:
 
         for k in static_attrs:
             setattr(self, k, self.smp_meta.get(k, 'unknown'))
+
+    @property
+    def smp_meta(self):
+        with open(self.src.SampleG4X.p, 'r') as f:
+            smp_meta = json.load(f)
+        return smp_meta
+
+    @property
+    def shape(self):
+        nuc_img = self.src.HnEDir.get_img(c.NUCLEAR_STAIN)
+        return ut.get_image_shape(nuc_img)
 
     def set_genes(self, genes: list[str] | None = None):
         self.genes = []

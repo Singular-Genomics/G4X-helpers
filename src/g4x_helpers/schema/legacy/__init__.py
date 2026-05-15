@@ -1,4 +1,4 @@
-from . import migrate, migrators
+from . import migrators
 from .datamigrator import DataMigrator
 
-__all__ = ['DataMigrator', 'migrate', 'migrators']
+__all__ = ['DataMigrator', 'migrators']

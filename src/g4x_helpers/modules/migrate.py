@@ -1,57 +1,62 @@
 import logging
 
-from ... import io, modules
-from ... import utils as g4xut
-from ...g4x_output import G4Xoutput
-from ...roi import Roi
+from .. import io, schema
 from .. import logging_utils as logut
 from .. import utils as ut
-from . import migrators as mig
+from ..g4x_output import G4Xoutput
+from ..roi import Roi
+from ..schema.legacy import migrators as mig
+from . import aggregate, single_cell, viewer
 
 LOGGER = logging.getLogger(__name__)
 
 
 def migrate_sample(
-    sample_dir: str, out_dir: str, roi_coords: tuple | None = None, logger: logging.Logger | None = None
+    sample_dir: str,
+    out_dir: str,
+    roi_coords: tuple | None = None,
+    n_protein_images: int = 4,
+    logger: logging.Logger | None = None,
 ) -> None:
     log = logger or LOGGER
     sample_dir = io.pathval.validate_dir_path(sample_dir)
 
-    is_empty = out_dir.is_dir() and not any(out_dir.iterdir())
-    if not is_empty:
-        raise Exception('Migration output directory must be empty!')
+    # is_empty = out_dir.is_dir() and not any(out_dir.iterdir())
+    # if not is_empty:
+    #     raise Exception('Migration output directory must be empty!')
 
-    logger = logut.configure_g4x_logging(level='INFO', file_log=True, out_dir=out_dir, logger=log)
-    logut.log_with_path('Starting migration for:', sample_dir, logger=logger, level='INFO')
+    logut.log_with_path('Starting migration for:', sample_dir, logger=log, level='INFO')
 
     roi = None
     if roi_coords is not None:
         roi = Roi(xlims=(roi_coords[0], roi_coords[2]), ylims=(roi_coords[1], roi_coords[3]))
         roi_sz_um = roi.width_um, roi.height_um
         x0, x1, y0, y1 = roi.extent
-        logger.info(f'Roi provided with xlims={x0, x1}, ylims={y0, y1}, size in um: {roi_sz_um}')
+        log.info(f'Roi provided with xlims={x0, x1}, ylims={y0, y1}, size in um: {roi_sz_um}')
 
     basic_migrators, roi_migrators = gather_migrators(sample_dir)
 
     if not all(m.is_migratable for m in basic_migrators + roi_migrators):
-        logger.error('Not all migrators are migratable. Aborting migration.')
+        log.error('Not all migrators are migratable. Aborting migration.')
         status(sample_dir)
 
     for m in basic_migrators:
         m.migrate(out_dir)
 
     for m in roi_migrators:
-        m.migrate(out_dir, roi=roi, n_images=4)
+        m.migrate(out_dir, roi=roi, n_images=n_protein_images)
 
-    logger.info('All migrators completed migration. Starting post-processing...')
+    log.info('All migrators completed migration. Starting post-processing...')
 
     smp = G4Xoutput(data_dir=out_dir)
-    modules.aggregate.aggregate_cell_data(smp, overwrite=True)
-    modules.single_cell.process_sc_output(smp, overwrite=True)
-    modules.viewer.create_viewer_zarr(smp, overwrite=True)
-    modules.viewer.cells.write_cells(smp, seg_name='g4x-default', overwrite=True)
+    aggregate.aggregate_cell_data(smp, overwrite=True)
+    single_cell.process_sc_output(smp, overwrite=True)
+    viewer.create_viewer_zarr(smp, overwrite=True)
+    viewer.cells.write_cells(smp, seg_name='g4x-default', overwrite=True)
 
-    logut.log_msg_wrapped(header='Migration completed. Migrated data is available at\n', msg=smp, level='INFO')
+    logut.log_msg_wrapped(
+        header='Migration completed. Migrated data is available at\n', msg=smp, level='INFO', logger=log
+    )
 
 
 def gather_migrators(sample_dir):
@@ -76,7 +81,7 @@ def gather_migrators(sample_dir):
         mig.TxTable_Migrator(root=sample_dir),
     ]
 
-    assay_type = ut.detect_assay_type(smp_meta)
+    assay_type = schema.ut.detect_assay_type(smp_meta)
     if assay_type != 'tx_only':
         roi_migrators.append(mig.Protein_Migrator(root=sample_dir))
 
@@ -93,4 +98,4 @@ def status(sample_dir):
         status = 'is migratable' if m.is_migratable else 'can not be migrated'
         res[f'{icon} {m._name}'] = status
 
-    print(g4xut.pretty_dict_str(res, separator=' '))
+    print(ut.pretty_dict_str(res, separator=' '))
