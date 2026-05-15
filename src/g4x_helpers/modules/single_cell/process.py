@@ -111,7 +111,7 @@ def process_sc_output(
         except Exception as e:
             log.warning(f'Failed to optimize clusters for {k}: {e}')
 
-    if not success_clusterings:
+    if success_clusterings == []:
         log.warning('No successful clusterings to run differential gene expression analysis.')
         write_dummys(adata=adata, failure_code='clustering_failed')
         return
@@ -208,7 +208,7 @@ def write_dummy_clustering_outputs(
     smp,
     *,
     adata,
-    success_clusterings: list[str] = [],
+    # success_clusterings: list[str] = [],
     failure_code: str = 'failed',
     logger: logging.Logger | None = None,
 ) -> None:
@@ -225,7 +225,8 @@ def write_dummy_clustering_outputs(
 
     # get the adata.obs
     obs_df = pl.from_pandas(adata.obs, include_index=True).cast({c.CELL_ID_NAME: pl.UInt64})
-    dummy_clust = obs_df.select([c.CELL_ID_NAME] + success_clusterings)
+    clusters = [col for col in obs_df.columns if col.startswith('leiden_')]
+    dummy_clust = obs_df.select([c.CELL_ID_NAME] + clusters)
 
     dummy_clust = dummy_clust.with_columns(
         UMAP1=umap[:, 0],
@@ -233,15 +234,15 @@ def write_dummy_clustering_outputs(
     )
 
     # add a default clustering if none were successful
-    if not success_clusterings:
+    if clusters == []:
         log.debug('No successful clusterings found, adding default label "unassigned" for all cells')
         dummy_clust = dummy_clust.with_columns(leiden=pl.lit('unassigned'))
-        success_clusterings.append('leiden')
+        clusters.append('leiden')
 
     dummy_clust = dummy_clust.with_columns(failure_code=pl.lit(failure_code))
 
     # select the relevant columns for the output
-    col_select = [c.CELL_ID_NAME] + success_clusterings + ['UMAP1', 'UMAP2', 'failure_code']
+    col_select = [c.CELL_ID_NAME] + clusters + ['UMAP1', 'UMAP2', 'failure_code']
     dummy_clust = dummy_clust.select(col_select)
 
     # 2: Dgex table <- this is the last step in the pipeline. so when the previous steps fail, we still need to create a placeholder
