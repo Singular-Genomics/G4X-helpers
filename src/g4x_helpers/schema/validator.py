@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .. import io
+from .. import c, io
 
 
 def validation_test(func):
@@ -30,11 +30,10 @@ class BaseValidator:
         self.root = Path(root) if root is not None else None
         self.resolve = resolve
 
-        if format is None:
-            format = {'sample_id': 'g4x_sample'}
-
+        
+        self.format = {'sample_id': 'g4x_sample'} if format is None else format
         tpath_str = str(target_path) if target_path is not None else str(type(self).DEFAULT_TARGET_PATH)
-        tpath_str = tpath_str.format(**format)
+        tpath_str = tpath_str.format(**self.format)
 
         self._target_path = Path(tpath_str)
         self.validate_absence = validate_absence
@@ -209,3 +208,80 @@ class FolderValidator(BaseValidator):
 
     def existing_directory_names(self):
         return [p.name for p in self.existing_directories()]
+
+
+class DirectoryValidator(BaseValidator):
+    EXPECTED_FILES = {}
+    EXPECTED_DIRS = {}
+    FILE_MAP = {}
+
+    def __init__(self, root=None, target_path=None, **kwargs):
+        super().__init__(root=root, target_path=target_path, **kwargs)
+
+    def existing_files(self):
+        return [p for p in self.p.iterdir() if p.is_file()]
+
+    def existing_directories(self):
+        return [p for p in self.p.iterdir() if p.is_dir()]
+
+    def existing_file_names(self):
+        return [p.name for p in self.existing_files()]
+
+    def existing_directory_names(self):
+        return [p.name for p in self.existing_directories()]
+
+    @property
+    def requested_files(self):
+        mapped_expected = {f: [f] for f in self.EXPECTED_FILES}
+        return self.FILE_MAP | mapped_expected
+
+    @property
+    def mapped_files(self):
+        existing_files = {}
+        for file_name, file_paths in self.requested_files.items():
+            for f in file_paths:
+                query = self.p / f
+                if query.exists():
+                    existing_files[file_name] = query
+                    break
+        return existing_files
+
+    @validation_test
+    def is_directory(self):
+        return self.target_type == 'directory'
+
+    @validation_test
+    def dirs_present(self):
+        for d in self.EXPECTED_DIRS:
+            if d not in self.existing_directory_names():
+                return False
+        return True
+
+    @validation_test
+    def files_present(self):
+        return set(self.mapped_files.keys()).issuperset(set(self.requested_files.keys()))
+
+
+class ImgDirectoryValidator(DirectoryValidator):
+    VALID_IMG_TYPES = [c.PREFERRED_IMG_SUFFIX, c.ALT_IMG_SUFFIX]
+
+    @property
+    def img_type(self):
+        ome_files = sum([f.endswith(c.PREFERRED_IMG_SUFFIX) for f in self.existing_file_names()])
+        jp2_files = sum([f.endswith(c.ALT_IMG_SUFFIX) for f in self.existing_file_names()])
+
+        img_type = 'unknown'
+        if ome_files > 0 and jp2_files > 0:
+            img_type = 'mixed'
+        elif ome_files > 0 and jp2_files == 0:
+            img_type = '.ome.tiff'
+        elif jp2_files > 0 and ome_files == 0:
+            img_type = '.jp2'
+        return img_type
+
+    @validation_test
+    def img_type_valid(self):
+        return self.img_type in self.VALID_IMG_TYPES
+
+    def get_img(self, query: str):
+        return self.mapped_files[query]

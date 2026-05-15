@@ -5,7 +5,13 @@ import numpy as np
 import polars as pl
 
 from .. import c, io
-from .validator import BaseValidator, FileValidator, FolderValidator, TableValidator, validation_test
+from .validator import (
+    BaseValidator,
+    FileValidator,
+    ImgDirectoryValidator,
+    TableValidator,
+    validation_test,
+)
 
 
 # region root
@@ -47,7 +53,7 @@ class SampleG4X(FileValidator):
         return smp_meta
 
 
-class QCSummary(BaseValidator):
+class QCSummary(FileValidator):
     DEFAULT_TARGET_PATH = c.SUMMARY
 
 
@@ -103,16 +109,6 @@ class Manifest(TableValidator):
 
     def parse(self):
         return io.parse_input_manifest(self.target_path)
-
-
-class ProteinPanel(TableValidator):
-    DEFAULT_TARGET_PATH = c.PR_PANEL
-    SCHEMA = {'target': pl.String, 'panel_type': pl.String}
-
-    @validation_test
-    def folder_present(self):
-        folder = ProteinDir(root=self.root)
-        return folder.path_exists()
 
 
 # region masks
@@ -301,10 +297,29 @@ class SingleCellFolder(BaseValidator):
 
 
 # region protein
-class ProteinDir(FolderValidator):
+class ProteinPanel(TableValidator):
+    DEFAULT_TARGET_PATH = c.PR_PANEL
+    SCHEMA = {'target': pl.String, 'panel_type': pl.String}
+
+    @validation_test
+    def folder_present(self):
+        folder = ProteinDir(root=self.root)
+        return folder.path_exists()
+
+    @property
+    def proteins(self):
+        return self.load()['target'].to_list()
+
+
+class ProteinDir(ImgDirectoryValidator):
     DEFAULT_TARGET_PATH = c.PR_DIR
-    IMG_SUFFIXES = [c.PREFERRED_IMG_SUFFIX, c.ALT_IMG_SUFFIX]
+    VALID_IMG_TYPES = [c.PREFERRED_IMG_SUFFIX, c.ALT_IMG_SUFFIX]
     EXPECTED_DIRS = {'thumbs'}
+
+    @property
+    def FILE_MAP(self):
+        suffix = self.img_type
+        return {f.name.removesuffix(suffix): [f.name] for f in self.existing_files() if f.name.endswith(suffix)}
 
     @property
     def panel(self):
@@ -313,13 +328,9 @@ class ProteinDir(FolderValidator):
     @property
     def proteins(self):
         if self.panel.is_valid:
-            return self.panel.load()['target'].to_list()
+            return self.panel.proteins
         else:
             return []
-
-    @property
-    def existing_images(self):
-        return [f for f in self.existing_files() if any(suffix in f.name for suffix in ProteinDir.IMG_SUFFIXES)]
 
     @validation_test
     def has_panel(self):
@@ -327,36 +338,47 @@ class ProteinDir(FolderValidator):
 
     @validation_test
     def images_match_panel(self):
-        image_names = [f.name.split('.')[0] for f in self.existing_images]
-        return set(image_names).issubset(set(self.proteins))
-
-    def get_img(self, query: str):
-        search_pool = self.existing_images
-        fname = next(x for x in search_pool if query in x.name)
-        return self.p / fname
+        return set(self.mapped_files.keys()).issuperset(set(self.proteins))
 
 
 # region hne
-class HnEDir(FolderValidator):
+class HnEDir(ImgDirectoryValidator):
     DEFAULT_TARGET_PATH = c.HE_DIR
-    EXPECTED_FILES = {
-        f'{c.CYTOPLASMIC_STAIN}.ome.tiff',
-        f'{c.H_AND_E}.ome.tiff',
-        f'{c.NUCLEAR_STAIN}.ome.tiff',
-    }
 
-    ALT_FILES = {
-        f'{c.CYTOPLASMIC_STAIN}.jp2',
-        f'{c.H_AND_E}.jp2',
-        f'{c.NUCLEAR_STAIN}.jp2',
+    FILE_MAP = {
+        c.CYTOPLASMIC_STAIN: [f'{c.CYTOPLASMIC_STAIN}.ome.tiff', f'{c.CYTOPLASMIC_STAIN}.jp2'],
+        c.H_AND_E: [f'{c.H_AND_E}.ome.tiff', f'{c.H_AND_E}.jp2'],
+        c.NUCLEAR_STAIN: [f'{c.NUCLEAR_STAIN}.ome.tiff', f'{c.NUCLEAR_STAIN}.jp2'],
     }
 
     EXPECTED_DIRS = {'thumbs'}
 
-    def get_img(self, query: str):
-        search_pool = self.ALT_FILES if self.alt_present else self.EXPECTED_FILES
-        fname = next(x for x in search_pool if query in x)
-        return self.p / fname
+
+# region viewer
+class ViewerZarr(BaseValidator):
+    DEFAULT_TARGET_PATH = c.FILE_VIEWER_ZARR
+
+
+# class HnEDir(FolderValidator):
+#     DEFAULT_TARGET_PATH = c.HE_DIR
+#     EXPECTED_FILES = {
+#         f'{c.CYTOPLASMIC_STAIN}.ome.tiff',
+#         f'{c.H_AND_E}.ome.tiff',
+#         f'{c.NUCLEAR_STAIN}.ome.tiff',
+#     }
+
+#     ALT_FILES = {
+#         f'{c.CYTOPLASMIC_STAIN}.jp2',
+#         f'{c.H_AND_E}.jp2',
+#         f'{c.NUCLEAR_STAIN}.jp2',
+#     }
+
+#     EXPECTED_DIRS = {'thumbs'}
+
+#     def get_img(self, query: str):
+#         search_pool = self.ALT_FILES if self.alt_present else self.EXPECTED_FILES
+#         fname = next(x for x in search_pool if query in x)
+#         return self.p / fname
 
 
 # class HnEDir(BaseValidator):
@@ -390,7 +412,36 @@ class HnEDir(FolderValidator):
 #             existing_files[img_name] = img_path.exists()
 #         return all(existing_files.values())
 
+# class ProteinDir(FolderValidator):
+#     DEFAULT_TARGET_PATH = c.PR_DIR
+#     IMG_SUFFIXES = [c.PREFERRED_IMG_SUFFIX, c.ALT_IMG_SUFFIX]
+#     EXPECTED_DIRS = {'thumbs'}
 
-# region viewer
-class ViewerZarr(BaseValidator):
-    DEFAULT_TARGET_PATH = c.FILE_VIEWER_ZARR
+#     @property
+#     def panel(self):
+#         return ProteinPanel(root=self.root)
+
+#     @property
+#     def proteins(self):
+#         if self.panel.is_valid:
+#             return self.panel.load()['target'].to_list()
+#         else:
+#             return []
+
+#     @property
+#     def existing_images(self):
+#         return [f for f in self.existing_files() if any(suffix in f.name for suffix in ProteinDir.IMG_SUFFIXES)]
+
+#     @validation_test
+#     def has_panel(self):
+#         return self.panel.is_valid
+
+#     @validation_test
+#     def images_match_panel(self):
+#         image_names = [f.name.split('.')[0] for f in self.existing_images]
+#         return set(image_names).issubset(set(self.proteins))
+
+#     def get_img(self, query: str):
+#         search_pool = self.existing_images
+#         fname = next(x for x in search_pool if query in x.name)
+#         return self.p / fname
