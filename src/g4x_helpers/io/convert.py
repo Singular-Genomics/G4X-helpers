@@ -88,7 +88,7 @@ def ndarray_to_gdf(
 
     return gdf
 
-
+# TODO rename this function to something more general, e.g. convert_image_format
 def jp2_to_ometiff(
     in_file: str | Path,
     out_file: str | Path,
@@ -112,8 +112,8 @@ def jp2_to_ometiff(
 
     if not in_file.exists():
         raise FileNotFoundError(f"Input file '{in_file}' does not exist.")
-    if in_file.suffix != '.jp2':
-        raise ValueError(f"Input file '{in_file}' is not a JP2 file.")
+    # if in_file.suffix != '.jp2':
+    #     raise ValueError(f"Input file '{in_file}' is not a JP2 file.")
 
     img = import_image(in_file, n_threads=n_threads, extent=extent)
 
