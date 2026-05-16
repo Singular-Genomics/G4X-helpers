@@ -343,9 +343,10 @@ class TxTable_Migrator(DataMigrator, sd.TxTable):
 
         drop_cols = ['cell_id', 'in_nucleus']
 
-        def convert(self):
+        def convert(self, logger: logging.Logger = LOGGER):
             lf = self.load(lazy=True)
             schema = lf.collect_schema().names()
+            col_rename = self.col_rename.copy()
 
             if 'TXUID' not in schema:
                 lf = lf.with_row_index(name='TXUID')
@@ -356,20 +357,21 @@ class TxTable_Migrator(DataMigrator, sd.TxTable):
 
             coord_order = schema[0:2]
             if coord_order == self.flipped_coord_order:
-                # print(f'Flipping xy-coordinates for {self._name}')
-                self.col_rename.update(self.flip_coords)
+                logger.debug(f'Flipping xy-coordinates for {self._name}')
+                col_rename.update(self.flip_coords)
 
-            lf = lf.rename(self.col_rename)
+            lf = lf.rename(col_rename)
 
             return lf
 
     def _migrate_method(self, out_path: str, roi=None, **kwargs):
+        log = kwargs.get('logger', LOGGER)
         file_out = io.pathval.ensure_parent_dir(out_path / self.DEFAULT_TARGET_PATH)
 
         if 'current' in self.valid_versions:
             df = self.load(lazy=True)
         else:
-            df = self.migrator.convert()
+            df = self.migrator.convert(logger=log)
 
         if roi is not None:
             df = utils.crop_tx_features(df, roi)
