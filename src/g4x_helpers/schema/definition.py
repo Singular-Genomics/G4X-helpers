@@ -78,10 +78,6 @@ class SampleSheet(TableValidator):
         'Sample Position',
         'Tissue Type',
         'Block',
-        # 'Transcript Panel',
-        # 'Protein Panel',
-        # 'Transcript Custom',
-        # 'Protein Custom',
     ]
 
     def parse(self):
@@ -215,10 +211,10 @@ class CellMetadata(TableValidator):
         'seg_source': pl.String,
         c.CELL_COORD_X: pl.String,
         c.CELL_COORD_Y: pl.String,
-        # c.NUC_AREA_NAME: pl.String,
         c.CELL_AREA_NAME: pl.String,
         c.NUC_STAIN_INTENSITY: pl.String,
         c.CYT_STAIN_INTENSITY: pl.String,
+        # c.NUC_AREA_NAME: pl.String, # don't want to require this since it will be missing for custom segmentations
     }
 
 
@@ -269,6 +265,7 @@ class Dgex(TableValidator):
 class SingleCellFolder(BaseValidator):
     DEFAULT_TARGET_PATH = c.SINGLE_CELL_DIR
 
+    # TODO create a factory method to generate these validators
     SUB_VALIDATORS = [
         CellMetadata(root='.'),
         CellxGene(root='.'),

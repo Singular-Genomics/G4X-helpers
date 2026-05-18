@@ -309,7 +309,7 @@ class RawFeatures_Migrator(DataMigrator, sd.RawFeatures):
 
         if self.valid_versions == ['DummyFallback_V0']:
             log.warning(
-                'Only fallback version available. Creating dummy output file to pass validators. Demuxing will be unavailable for this sample.'
+                'Only fallback version available. Creating dummy file to pass validators. Demuxing will be unavailable for this sample.'
             )
 
         elif roi is not None:
@@ -330,11 +330,18 @@ class TxTable_Migrator(DataMigrator, sd.TxTable):
             'confidence_score': pl.String,
         }
 
-        flipped_coord_order = ['x_pixel_coordinate', 'y_pixel_coordinate']
-
         col_rename = {
             'gene_name': c.GENE_ID_NAME,
         }
+
+        requires_flip = [
+            'x_pixel_coordinate',
+            'y_pixel_coordinate',
+            'z_level',
+            'gene_name',
+            'confidence_score',
+            'cell_id',
+        ]
 
         flip_coords = {
             'x_pixel_coordinate': 'y_pixel_coordinate',
@@ -355,9 +362,8 @@ class TxTable_Migrator(DataMigrator, sd.TxTable):
                 if col in schema:
                     lf = lf.drop(col)
 
-            coord_order = schema[0:2]
-            if coord_order == self.flipped_coord_order:
-                logger.debug(f'Flipping xy-coordinates for {self._name}')
+            if schema == self.requires_flip:
+                logger.debug(f'Flipping xy-coordinates for {type(self).__name__}')
                 col_rename.update(self.flip_coords)
 
             lf = lf.rename(col_rename)
