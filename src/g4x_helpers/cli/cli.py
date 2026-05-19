@@ -58,31 +58,13 @@ def cli(ctx, threads, verbose, version):
         ctx.obj['version'] = __version__
 
 
-def g4x_data_opt():
-    return click.argument(
-        'g4x-data',
-        type=click.Path(exists=True, file_okay=False),
-        help='Directory containing G4X-data for a single sample',
-        # panel='data i/o',
-    )
-
-
-def in_place_opt(cmd_name: str = ''):
-    return click.option(
-        '-ip',
-        '--in-place',
-        is_flag=True,
-        help=f'Edit G4X-data in-place if this flag is set.\n\nOtherwise creates a "g4x_helpers/{cmd_name}" folder.',
-    )
-
-
 ############################################################
 # region resegment
 name = 'resegment'
 
 
 @cli.command(name=name, help=hm.RESEG_HELP)
-@g4x_data_opt()
+@cli_setup.g4x_data_opt()
 @click.option(
     '--cell-labels',
     required=True,
@@ -96,7 +78,8 @@ name = 'resegment'
     default=None,
     help='Key/column in npz/geojson where labels should be taken from (optional, but required for .npz with multiple arrays)',
 )
-@in_place_opt(name)
+@cli_setup.in_place_opt(name)
+@cli_setup.no_downstream_opt()
 @click.pass_context
 def resegment(ctx, g4x_data, cell_labels, labels_key, in_place):
     func_name = inspect.currentframe().f_code.co_name
@@ -119,13 +102,24 @@ def resegment(ctx, g4x_data, cell_labels, labels_key, in_place):
         cli_setup._fail_message(func_name, e)
 
 
+# region viewer
+@cli.group(
+    context_settings=dict(help_option_names=['-h', '--help']),
+    invoke_without_command=True,
+    add_help_option=True,
+    help='viewer',
+)
+@click.pass_context
+def viewer(ctx):
+    pass
+
 ############################################################
 # region redemux
 name = 'redemux'
 
 
-@cli.command(name=name, help=hm.REDMX_HELP)
-@g4x_data_opt()
+@viewer.command(name=name, help=hm.REDMX_HELP)
+@cli_setup.g4x_data_opt()
 @click.option(
     '--manifest',
     required=True,
@@ -139,7 +133,8 @@ name = 'redemux'
     type=int,
     help='Number of transcripts to process per batch.',
 )
-@in_place_opt(name)
+@cli_setup.in_place_opt(name)
+@cli_setup.no_downstream_opt(name)
 @click.pass_context
 def redemux(ctx, g4x_data, manifest, batch_size, in_place):
     func_name = inspect.currentframe().f_code.co_name
@@ -161,123 +156,123 @@ def redemux(ctx, g4x_data, manifest, batch_size, in_place):
 
 
 ############################################################
-# region update_bin
-name = 'update_bin'
+# region create_zarr
+# name = 'create_zarr'
 
 
-@cli.command(name=name, help=hm.UDBIN_HELP)
-@g4x_data_opt()
-@click.option(
-    '--metadata',
-    required=True,
-    type=click.Path(exists=True, dir_okay=False),
-    help='Path to metadata table with clustering and/or embedding information. Must contain cell-IDs that match those in the bin file.',
-)
-@click.option(
-    '--cellid-key',
-    default='cell_id',
-    type=str,
-    help='Column name in metadata containing cell-IDs.\n\n If not provided, looks for column named "cell_id"',
-)
-@click.option(
-    '--cluster-key',
-    default=None,
-    type=str,
-    help='Column name in metadata containing cluster IDs.\n\n If not provided, skips updating cluster IDs.',
-)
-@click.option(
-    '--cluster-color-key',
-    default=None,
-    type=str,
-    help='Column name in metadata containing cluster colors.\n\n (format: hex) Only active if cluster_key is updated.\n\n If not provided, assigns colors automatically.',
-)
-@click.option(
-    '--emb-key',
-    default=None,
-    type=str,
-    help='Column name in metadata containing 2D-embedding coordinates.\n\n Parser will look for {emb_key}_1 and {emb_key}_2.\n\n If not provided, skips updating embedding.',
-)
-@in_place_opt(name)
-@click.pass_context
-def update_bin(ctx, g4x_data, metadata, cellid_key, cluster_key, cluster_color_key, emb_key, in_place):
-    func_name = inspect.currentframe().f_code.co_name
-    g4x_obj, out_dir = cli_setup.initialize_sample(data_dir=g4x_data, in_place=in_place, n_threads=ctx.obj['threads'])
-    try:
-        with cli_setup._spinner(f'Initializing {func_name} process...'):
-            from ..main_features import update_bin as main_update_bin
+# @cli.command(name=name, help=hm.UDBIN_HELP)
+# cli_setup. @g4x_data_opt()
+# @click.option(
+#     '--metadata',
+#     required=True,
+#     type=click.Path(exists=True, dir_okay=False),
+#     help='Path to metadata table with clustering and/or embedding information. Must contain cell-IDs that match those in the bin file.',
+# )
+# @click.option(
+#     '--cellid-key',
+#     default='cell_id',
+#     type=str,
+#     help='Column name in metadata containing cell-IDs.\n\n If not provided, looks for column named "cell_id"',
+# )
+# @click.option(
+#     '--cluster-key',
+#     default=None,
+#     type=str,
+#     help='Column name in metadata containing cluster IDs.\n\n If not provided, skips updating cluster IDs.',
+# )
+# @click.option(
+#     '--cluster-color-key',
+#     default=None,
+#     type=str,
+#     help='Column name in metadata containing cluster colors.\n\n (format: hex) Only active if cluster_key is updated.\n\n If not provided, assigns colors automatically.',
+# )
+# @click.option(
+#     '--emb-key',
+#     default=None,
+#     type=str,
+#     help='Column name in metadata containing 2D-embedding coordinates.\n\n Parser will look for {emb_key}_1 and {emb_key}_2.\n\n If not provided, skips updating embedding.',
+# )
+# cli_setup. @in_place_opt(name)
+# @click.pass_context
+# def update_bin(ctx, g4x_data, metadata, cellid_key, cluster_key, cluster_color_key, emb_key, in_place):
+#     func_name = inspect.currentframe().f_code.co_name
+#     g4x_obj, out_dir = cli_setup.initialize_sample(data_dir=g4x_data, in_place=in_place, n_threads=ctx.obj['threads'])
+#     try:
+#         with cli_setup._spinner(f'Initializing {func_name} process...'):
+#             from ..main_features import update_bin as main_update_bin
 
-        main_update_bin(
-            g4x_obj=g4x_obj,
-            bin_file=g4x_obj.data_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_segmentation.bin',
-            bin_out=out_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_segmentation.bin',
-            out_dir=out_dir,
-            metadata=metadata,
-            cellid_key=cellid_key,
-            cluster_key=cluster_key,
-            cluster_color_key=cluster_color_key,
-            emb_key=emb_key,
-            verbose=ctx.obj['verbose'],
-        )
-    except Exception as e:
-        cli_setup._fail_message(func_name, e)
+#         main_update_bin(
+#             g4x_obj=g4x_obj,
+#             bin_file=g4x_obj.data_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_segmentation.bin',
+#             bin_out=out_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_segmentation.bin',
+#             out_dir=out_dir,
+#             metadata=metadata,
+#             cellid_key=cellid_key,
+#             cluster_key=cluster_key,
+#             cluster_color_key=cluster_color_key,
+#             emb_key=emb_key,
+#             verbose=ctx.obj['verbose'],
+#         )
+#     except Exception as e:
+#         cli_setup._fail_message(func_name, e)
 
 
 ############################################################
 # region new_bin
-name = 'new_bin'
+# name = 'new_bin'
 
 
-@cli.command(name=name, help=hm.NWBIN_HELP)
-@g4x_data_opt()
-@in_place_opt(name)
-@click.pass_context
-def new_bin(ctx, g4x_data, in_place):
-    func_name = inspect.currentframe().f_code.co_name
-    g4x_obj, out_dir = cli_setup.initialize_sample(data_dir=g4x_data, in_place=in_place, n_threads=ctx.obj['threads'])
-    try:
-        with cli_setup._spinner(f'Initializing {func_name} process...'):
-            from ..main_features import new_bin as main_new_bin
+# @cli.command(name=name, help=hm.NWBIN_HELP)
+# cli_setup. @g4x_data_opt()
+# cli_setup. @in_place_opt(name)
+# @click.pass_context
+# def new_bin(ctx, g4x_data, in_place):
+#     func_name = inspect.currentframe().f_code.co_name
+#     g4x_obj, out_dir = cli_setup.initialize_sample(data_dir=g4x_data, in_place=in_place, n_threads=ctx.obj['threads'])
+#     try:
+#         with cli_setup._spinner(f'Initializing {func_name} process...'):
+#             from ..main_features import new_bin as main_new_bin
 
-        main_new_bin(
-            g4x_obj=g4x_obj,
-            out_dir=out_dir,
-            n_threads=ctx.obj['threads'],
-            verbose=ctx.obj['verbose'],
-        )
-    except Exception as e:
-        cli_setup._fail_message(func_name, e)
-
-
-############################################################
-# region tar_viewer
-name = 'tar_viewer'
+#         main_new_bin(
+#             g4x_obj=g4x_obj,
+#             out_dir=out_dir,
+#             n_threads=ctx.obj['threads'],
+#             verbose=ctx.obj['verbose'],
+#         )
+#     except Exception as e:
+#         cli_setup._fail_message(func_name, e)
 
 
-@cli.command(name=name, help=hm.TARVW_HELP)
-@g4x_data_opt()
-@in_place_opt(name)
-@click.pass_context
-def tar_viewer(ctx, g4x_data, in_place):
-    func_name = inspect.currentframe().f_code.co_name
+# ############################################################
+# # region tar_viewer
+# name = 'tar_viewer'
 
-    g4x_obj, out_dir = cli_setup.initialize_sample(data_dir=g4x_data, in_place=in_place, n_threads=ctx.obj['threads'])
-    try:
-        with cli_setup._spinner(f'Initializing {func_name} process...'):
-            from ..main_features import tar_viewer as main_tar_viewer
 
-        main_tar_viewer(
-            g4x_obj=g4x_obj,
-            out_dir=out_dir,
-            verbose=ctx.obj['verbose'],
-        )
-    except Exception as e:
-        cli_setup._fail_message(func_name, e)
+# @cli.command(name=name, help=hm.TARVW_HELP)
+# cli_setup. @g4x_data_opt()
+# cli_setup. @in_place_opt(name)
+# @click.pass_context
+# def tar_viewer(ctx, g4x_data, in_place):
+#     func_name = inspect.currentframe().f_code.co_name
+
+#     g4x_obj, out_dir = cli_setup.initialize_sample(data_dir=g4x_data, in_place=in_place, n_threads=ctx.obj['threads'])
+#     try:
+#         with cli_setup._spinner(f'Initializing {func_name} process...'):
+#             from ..main_features import tar_viewer as main_tar_viewer
+
+#         main_tar_viewer(
+#             g4x_obj=g4x_obj,
+#             out_dir=out_dir,
+#             verbose=ctx.obj['verbose'],
+#         )
+#     except Exception as e:
+#         cli_setup._fail_message(func_name, e)
 
 
 ############################################################
 # region migrate
 @cli.command(name='migrate', help=hm.MIGRT_HELP)
-@g4x_data_opt()
+@cli_setup.g4x_data_opt()
 @click.option(
     '--restore',
     is_flag=True,
@@ -306,7 +301,7 @@ def migrate(ctx, g4x_data, restore):
 ############################################################
 # region validate
 @cli.command(name='validate', help=hm.VLDTE_HELP)
-@g4x_data_opt()
+@cli_setup.g4x_data_opt()
 @click.pass_context
 def validate(ctx, g4x_data):
     func_name = inspect.currentframe().f_code.co_name

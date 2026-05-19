@@ -105,3 +105,36 @@ def print_k_v(item, value, gap=2):
     click.secho(f'{item:<{gap}}', dim=True, nl=False)
     click.secho('- ', dim=True, nl=False)
     click.secho(f'{value}', fg='blue', bold=True)
+
+
+def g4x_data_opt():
+    return click.argument(
+        'g4x-data',
+        type=click.Path(exists=True, file_okay=False),
+        help='Directory containing G4X-data for a single sample',
+        # panel='data i/o',
+    )
+
+
+help_map = {
+    'redemux': 'After demuxing completes, do not create single-cell outputs or initialize viewer files',
+    'resegment': 'After re-segmentation, do not create single-cell outputs or initialize viewer files',
+    'sc_process': 'After single-cell outputs are generated, do not initialize viewer files',
+}
+
+
+def no_downstream_opt(cmd_name: str = ''):
+    return click.option(
+        '--no-downstream',
+        is_flag=True,
+        help=f'{help_map.get(cmd_name, "")}',
+    )
+
+
+def in_place_opt(cmd_name: str = ''):
+    return click.option(
+        '-ip',
+        '--in-place',
+        is_flag=True,
+        help=f'Edit G4X-data in-place if this flag is set.\n\nOtherwise creates a "g4x_helpers/{cmd_name}" folder.',
+    )

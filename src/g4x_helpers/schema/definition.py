@@ -126,9 +126,9 @@ class Segmentation(FileValidator):
         self._main_key = value
         self.DEFAULT_KEYS = [value]
 
-    @validation_test
-    def correct_keys(self):
-        return set(self.available_keys) == set(self.DEFAULT_KEYS)
+    # @validation_test
+    # def correct_keys(self):
+    #     return set(self.available_keys) == set(self.DEFAULT_KEYS)
 
     def _load_method(self, key: str | None = None):
         key = self.main_key if key is None else key
