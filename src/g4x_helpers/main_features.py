@@ -1,13 +1,12 @@
 import functools
 import logging
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from . import __version__, c, io
 from . import logging_utils as logut
 from . import utils as ut
-
-if TYPE_CHECKING:
-    from .g4x_output import G4Xoutput
+from .g4x_output import G4Xoutput
+from .schema.file_tree import ValidationError
 
 LOGGER = logging.getLogger(__name__)
 
@@ -20,19 +19,19 @@ def _base_command(func):
         smp_dir: str,
         *,
         out_dir: str | None = None,
-        n_threads: int = c.DEFAULT_THREADS,
         verbose: int = 1,
+        no_downstream: bool = False,
         compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
         logger: logging.Logger | None = None,
         **kwargs,
     ):
-        func_name = func.__name__
+        smp_dir = io.pathval.validate_dir_path(smp_dir)
 
         if out_dir is None:
             out_dir = smp_dir
         else:
             out_dir = io.pathval.validate_dir_path(out_dir)
-            func_out = out_dir / func_name
+            func_out = out_dir / func.__name__
             if not func_out.exists():
                 func_out.mkdir(parents=True, exist_ok=True)
             out_dir = func_out
@@ -43,11 +42,9 @@ def _base_command(func):
 
         if logger is None:
             # TODO enable append time when testing is complete
-            func_log = logut.configure_g4x_logging(
+            logger = logut.configure_g4x_logging(
                 level='INFO', file_log=True, out_dir=log_dir, append_time=False, file_mode='w'
             )
-        else:
-            func_log = logger
 
         backend = io.get_backend(compute_backend)
         compute_eng = f'{backend.kind}'
@@ -56,38 +53,41 @@ def _base_command(func):
         d = {
             'sample_dir': f'{smp_dir}',
             'out_dir': f'{out_dir}',
+            'downstream': f'{not no_downstream}',
             'verbosity': f'{verbose}',
-            'n_threads': f'{n_threads}',
             'compute_eng': compute_eng,
             'g4x-helpers': f'v{__version__}',
         }
 
-        header = f'Initializing G4X-helpers [{func_name}]\n'
+        header = f'Initializing G4X-helpers [{func.__name__}]\n'
         msg = ut.pretty_dict_str(d)
-        logut.log_msg_wrapped(header=header, msg=msg, prefix='  ', logger=func_log)
+        logut.log_msg_wrapped(header=header, msg=msg, prefix='  ', logger=logger)
 
-        result = func(
-            smp_dir=smp_dir,
-            out_dir=out_dir,
-            n_threads=n_threads,
-            compute_backend=backend.kind,
-            logger=func_log,
-            **kwargs,
-        )
+        try:
+            result = func(
+                smp_dir=smp_dir,
+                out_dir=out_dir,
+                no_downstream=no_downstream,
+                compute_backend=backend.kind,
+                logger=logger,
+                **kwargs,
+            )
+            logger.info(f'Completed: {func.__name__}')
+            return result
 
-        func_log.info(f'Completed: {func.__name__}')
-        return result
+        except Exception as e:
+            logger.error(f'{str(e)}')
+            raise e
 
     return wrapper
 
 
 @_base_command
-def resegment(
-    smp: 'G4Xoutput',
+def test_fearture(
+    smp_dir: str,
     out_dir: str,
-    segmentation_mask: str,
-    mask_key: str | None = None,
     overwrite: bool = True,
+    no_downstream: bool = False,
     show_progress: bool = False,
     compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
     **kwargs,
@@ -96,6 +96,27 @@ def resegment(
 
     log = kwargs.get('logger', LOGGER)
 
+    smp = G4Xoutput(smp_dir)
+    log.info(smp)
+
+
+@_base_command
+def aggregate(
+    smp_dir: str,
+    out_dir: str,
+    segmentation_mask: str,
+    mask_key: str | None = None,
+    overwrite: bool = True,
+    no_downstream: bool = False,
+    show_progress: bool = False,
+    compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
+    **kwargs,
+):
+    from .modules import aggregate, single_cell, viewer
+
+    log = kwargs.get('logger', LOGGER)
+
+    smp = G4Xoutput(smp_dir)
     aggregate.aggregate_cell_data(
         smp,
         segmentation_mask=segmentation_mask,
@@ -106,17 +127,19 @@ def resegment(
         show_progress=show_progress,
         logger=log,
     )
-    single_cell.process_sc_output(
-        smp, out_dir=out_dir, compute_backend=compute_backend, overwrite=overwrite, logger=log
-    )
 
-    viewer.create_viewer_zarr(smp, out_dir=out_dir, overwrite=overwrite, logger=log)
-    viewer.cells.write_cells(smp, seg_name='g4x-default', overwrite=overwrite, logger=log)
+    if not no_downstream:
+        single_cell.process_sc_output(
+            smp, out_dir=out_dir, compute_backend=compute_backend, overwrite=overwrite, logger=log
+        )
+
+        viewer.create_viewer_zarr(smp, out_dir=out_dir, overwrite=overwrite, logger=log)
+        viewer.cells.write_cells(smp, seg_name='g4x-default', overwrite=overwrite, logger=log)
 
 
 @_base_command
 def redemux(
-    smp: 'G4Xoutput',
+    smp_dir: str,
     out_dir: str,
     manifest: str,
     overwrite: bool = True,
@@ -127,6 +150,7 @@ def redemux(
     from .modules import aggregate, demux, single_cell, viewer
 
     log = kwargs.get('logger', LOGGER)
+    smp = G4Xoutput(smp_dir)
 
     demux.demux_raw_features(
         smp,
@@ -168,9 +192,10 @@ def migrate(
 
 
 @_base_command
-def validate(smp: 'G4Xoutput', **kwargs):
+def validate(smp_dir: str, **kwargs):
 
     log = kwargs.get('logger', LOGGER)
+    smp = G4Xoutput(smp_dir)
     report = smp.src.validation_report(raise_exception=False)
 
     if smp.src.is_valid_all:
