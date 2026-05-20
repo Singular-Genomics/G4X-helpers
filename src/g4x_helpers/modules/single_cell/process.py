@@ -71,6 +71,13 @@ def process_sc_output(
 
     # 1. Filter AnnData object
     adata_init = adata.copy()
+
+
+    log.warning('SKIPPING INTENTIONALLY.')
+    write_dummys(adata=adata_init, failure_code='SKIPPED_PROCESSING')
+    return
+
+
     adata, cell_summary, gene_summary = filter_adata(adata=adata, filter_panel=filter_panel, logger=log)
 
     if adata.n_obs == 0 or adata.n_vars == 0:
@@ -86,7 +93,9 @@ def process_sc_output(
 
     # 2. Pre-Processings (CPU/GPU) split path
     try:
-        adata = pre_process_adata(adata=adata, n_neighbors=n_neighbors, compute_backend=backend, logger=log)
+        adata = pre_process_adata(
+            adata=adata, n_neighbors=n_neighbors, compute_backend=backend, rnd_st=rnd_st, logger=log
+        )
     except Exception as e:
         log.warning(f'Preprocessing failed: {e}')
         write_dummys(adata=adata, failure_code='preprocessing_failed')
