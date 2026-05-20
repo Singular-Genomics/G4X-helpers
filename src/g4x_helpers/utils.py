@@ -60,3 +60,24 @@ def pretty_dict_str(d, separator=' - '):
     for k, v in d.items():
         msg += kv_line_gap(k, v, separator=separator, gap=max_len) + '\n'
     return msg
+
+
+def peak(smp):
+    import spaceplot as sp
+
+    axs = sp.montage_plot(3, panel_size=4.5, layout='compressed')
+
+    downsample = 4
+
+    img = smp.load_nuclear_image()[::downsample, ::downsample]
+    mask = smp.load_segmentation()[::downsample, ::downsample]
+
+    df = smp.load_transcript_table().sample(100_000, with_replacement=True)
+
+    axs[0].imshow(img, cmap='gray')
+    axs[1].scatter(df['x_pixel_coordinate'] / downsample, df['y_pixel_coordinate'] / downsample, s=0.1, alpha=0.5)
+    axs[1].invert_yaxis()
+    axs[2].imshow(mask)
+
+    axs.layout(ticks=False, margins=0)
+    sp.show()
