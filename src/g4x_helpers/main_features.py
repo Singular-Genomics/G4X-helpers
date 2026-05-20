@@ -101,6 +101,46 @@ def test_fearture(
 
 
 @_base_command
+def demux(
+    smp_dir: str,
+    out_dir: str,
+    manifest: str,
+    overwrite: bool = True,
+    show_progress: bool = False,
+    compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
+    **kwargs,
+):
+    from .modules import aggregate, demux, single_cell, viewer
+
+    log = kwargs.get('logger', LOGGER)
+    smp = G4Xoutput(smp_dir)
+
+    demux.demux_raw_features(
+        smp,
+        manifest=manifest,
+        out_dir=out_dir,
+        overwrite=overwrite,
+        show_progress=show_progress,
+        logger=log,
+    )
+
+    aggregate.aggregate_cell_data(
+        smp,
+        out_dir=out_dir,
+        overwrite=overwrite,
+        compute_backend=compute_backend,
+        show_progress=show_progress,
+        logger=log,
+    )
+    single_cell.process_sc_output(
+        smp, out_dir=out_dir, compute_backend=compute_backend, overwrite=overwrite, logger=log
+    )
+
+    viewer.create_viewer_zarr(smp, out_dir=out_dir, overwrite=overwrite, logger=log)
+    viewer.cells.write_cells(smp, seg_name='g4x-default', overwrite=overwrite, logger=log)
+
+
+@_base_command
 def aggregate(
     smp_dir: str,
     out_dir: str,
@@ -138,43 +178,29 @@ def aggregate(
 
 
 @_base_command
-def redemux(
+def sc_process(
     smp_dir: str,
     out_dir: str,
-    manifest: str,
+    segmentation_mask: str,
+    mask_key: str | None = None,
     overwrite: bool = True,
-    show_progress: bool = False,
+    no_downstream: bool = False,
     compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
     **kwargs,
 ):
-    from .modules import aggregate, demux, single_cell, viewer
+    from .modules import single_cell, viewer
 
     log = kwargs.get('logger', LOGGER)
+
     smp = G4Xoutput(smp_dir)
 
-    demux.demux_raw_features(
-        smp,
-        manifest=manifest,
-        out_dir=out_dir,
-        overwrite=overwrite,
-        show_progress=show_progress,
-        logger=log,
-    )
-
-    aggregate.aggregate_cell_data(
-        smp,
-        out_dir=out_dir,
-        overwrite=overwrite,
-        compute_backend=compute_backend,
-        show_progress=show_progress,
-        logger=log,
-    )
     single_cell.process_sc_output(
         smp, out_dir=out_dir, compute_backend=compute_backend, overwrite=overwrite, logger=log
     )
 
-    viewer.create_viewer_zarr(smp, out_dir=out_dir, overwrite=overwrite, logger=log)
-    viewer.cells.write_cells(smp, seg_name='g4x-default', overwrite=overwrite, logger=log)
+    if not no_downstream:
+        viewer.create_viewer_zarr(smp, out_dir=out_dir, overwrite=overwrite, logger=log)
+        viewer.cells.write_cells(smp, seg_name='g4x-default', overwrite=overwrite, logger=log)
 
 
 @_base_command
