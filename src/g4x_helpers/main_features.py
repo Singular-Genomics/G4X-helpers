@@ -20,7 +20,7 @@ def _base_command(func):
         *,
         out_dir: str | None = None,
         verbose: int = 1,
-        no_downstream: bool = False,
+        downstream: bool = True,
         compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
         logger: logging.Logger | None = None,
         **kwargs,
@@ -31,16 +31,16 @@ def _base_command(func):
             out_dir = smp_dir
         else:
             out_dir = io.pathval.validate_dir_path(out_dir)
-            func_out = out_dir / func.__name__
-            if not func_out.exists():
-                func_out.mkdir(parents=True, exist_ok=True)
-            out_dir = func_out
-
-        log_dir = out_dir / 'logs'
-        if not log_dir.exists():
-            log_dir.mkdir(parents=True, exist_ok=True)
+            # func_out = out_dir / func.__name__
+            # if not func_out.exists():
+            #     func_out.mkdir(parents=True, exist_ok=True)
+            # out_dir = func_out
 
         if logger is None:
+            log_dir = out_dir / 'logs'
+            if not log_dir.exists():
+                log_dir.mkdir(parents=True, exist_ok=True)
+
             # TODO enable append time when testing is complete
             logger = logut.configure_g4x_logging(
                 level='INFO', file_log=True, out_dir=log_dir, append_time=False, file_mode='w'
@@ -53,7 +53,7 @@ def _base_command(func):
         d = {
             'sample_dir': f'{smp_dir}',
             'out_dir': f'{out_dir}',
-            'downstream': f'{not no_downstream}',
+            'downstream': f'{downstream}',
             'verbosity': f'{verbose}',
             'compute_eng': compute_eng,
             'g4x-helpers': f'v{__version__}',
@@ -67,7 +67,7 @@ def _base_command(func):
             result = func(
                 smp_dir=smp_dir,
                 out_dir=out_dir,
-                no_downstream=no_downstream,
+                downstream=downstream,
                 compute_backend=backend.kind,
                 logger=logger,
                 **kwargs,
@@ -83,7 +83,7 @@ def _base_command(func):
 
 
 @_base_command
-def test_fearture(
+def test_feature(
     smp_dir: str,
     out_dir: str,
     overwrite: bool = True,
@@ -103,9 +103,11 @@ def test_fearture(
 @_base_command
 def demux(
     smp_dir: str,
-    out_dir: str,
     manifest: str,
+    *,
+    out_dir: str | None = None,
     overwrite: bool = True,
+    downstream: bool = True,
     show_progress: bool = False,
     compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
     **kwargs,
@@ -113,7 +115,7 @@ def demux(
     from .modules import aggregate, demux, single_cell, viewer
 
     log = kwargs.get('logger', LOGGER)
-    smp = G4Xoutput(smp_dir)
+    smp = G4Xoutput(smp_dir, alt_source=out_dir)
 
     demux.demux_raw_features(
         smp,
@@ -124,30 +126,32 @@ def demux(
         logger=log,
     )
 
-    aggregate.aggregate_cell_data(
-        smp,
-        out_dir=out_dir,
-        overwrite=overwrite,
-        compute_backend=compute_backend,
-        show_progress=show_progress,
-        logger=log,
-    )
-    single_cell.process_sc_output(
-        smp, out_dir=out_dir, compute_backend=compute_backend, overwrite=overwrite, logger=log
-    )
+    if downstream:
+        aggregate.aggregate_cell_data(
+            smp,
+            out_dir=out_dir,
+            overwrite=overwrite,
+            compute_backend=compute_backend,
+            show_progress=show_progress,
+            logger=log,
+        )
+        single_cell.process_sc_output(
+            smp, out_dir=out_dir, compute_backend=compute_backend, overwrite=overwrite, logger=log
+        )
 
-    viewer.create_viewer_zarr(smp, out_dir=out_dir, overwrite=overwrite, logger=log)
-    viewer.cells.write_cells(smp, seg_name='g4x-default', overwrite=overwrite, logger=log)
+        viewer.create_viewer_zarr(smp, out_dir=out_dir, overwrite=overwrite, logger=log)
+        viewer.cells.write_cells(smp, seg_name='g4x-default', overwrite=overwrite, logger=log)
 
 
 @_base_command
 def aggregate(
     smp_dir: str,
-    out_dir: str,
     segmentation_mask: str,
+    *,
     mask_key: str | None = None,
+    out_dir: str,
     overwrite: bool = True,
-    no_downstream: bool = False,
+    downstream: bool = True,
     show_progress: bool = False,
     compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
     **kwargs,
@@ -156,7 +160,7 @@ def aggregate(
 
     log = kwargs.get('logger', LOGGER)
 
-    smp = G4Xoutput(smp_dir)
+    smp = G4Xoutput(smp_dir, alt_source=out_dir)
     aggregate.aggregate_cell_data(
         smp,
         segmentation_mask=segmentation_mask,
@@ -168,7 +172,7 @@ def aggregate(
         logger=log,
     )
 
-    if not no_downstream:
+    if downstream:
         single_cell.process_sc_output(
             smp, out_dir=out_dir, compute_backend=compute_backend, overwrite=overwrite, logger=log
         )
@@ -178,43 +182,20 @@ def aggregate(
 
 
 @_base_command
-def sc_process(
-    smp_dir: str,
-    out_dir: str,
-    segmentation_mask: str,
-    mask_key: str | None = None,
-    overwrite: bool = True,
-    no_downstream: bool = False,
-    compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
-    **kwargs,
-):
-    from .modules import single_cell, viewer
-
-    log = kwargs.get('logger', LOGGER)
-
-    smp = G4Xoutput(smp_dir)
-
-    single_cell.process_sc_output(
-        smp, out_dir=out_dir, compute_backend=compute_backend, overwrite=overwrite, logger=log
-    )
-
-    if not no_downstream:
-        viewer.create_viewer_zarr(smp, out_dir=out_dir, overwrite=overwrite, logger=log)
-        viewer.cells.write_cells(smp, seg_name='g4x-default', overwrite=overwrite, logger=log)
-
-
-@_base_command
 def migrate(
     smp_dir: str,
     out_dir: str,
-    roi_coords: tuple | None = None,
     *,
+    roi_coords: tuple | None = None,
+    downstream: bool = True,
     logger: logging.Logger,
     **kwargs,
 ) -> None:
     from .modules import migrate
 
-    migrate.migrate_sample(sample_dir=smp_dir, out_dir=out_dir, roi_coords=roi_coords, logger=logger)
+    migrate.migrate_sample(
+        sample_dir=smp_dir, out_dir=out_dir, roi_coords=roi_coords, downstream=downstream, logger=logger
+    )
 
 
 @_base_command

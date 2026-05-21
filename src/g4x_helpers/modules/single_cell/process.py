@@ -37,6 +37,7 @@ def process_sc_output(
     *,
     overwrite: bool = False,
     filter_panel: 'FilterPanel' = _get_default_filter_panel(),
+    init_only: bool = False,
     n_neighbors: int = 15,
     cluster_attempts: int = 10,
     rnd_st: int = 111,
@@ -72,11 +73,12 @@ def process_sc_output(
     # 1. Filter AnnData object
     adata_init = adata.copy()
 
-
-    log.warning('SKIPPING INTENTIONALLY.')
-    write_dummys(adata=adata_init, failure_code='SKIPPED_PROCESSING')
-    return
-
+    if init_only:
+        log.warning(
+            'init_only = True. Finishing after adata initialization. No filtering or downstream analyses will be performed.'
+        )
+        write_dummys(adata=adata_init, failure_code='SKIPPED_PROCESSING')
+        return
 
     adata, cell_summary, gene_summary = filter_adata(adata=adata, filter_panel=filter_panel, logger=log)
 

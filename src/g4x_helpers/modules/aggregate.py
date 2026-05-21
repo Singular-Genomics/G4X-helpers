@@ -131,6 +131,7 @@ def aggregate_cell_data(
     if segmentation_mask != PRESET_SOURCE:
         route_out(validator=Segmentation, overwrite=overwrite)
         log_with_path(f'Writing {smp.out.Segmentation.name} mask:', smp.out.Segmentation.p)
+        mask_key = 'custom' if mask_key is None else mask_key
         mask_data = {mask_key: mask}
         smp.out.Segmentation.main_key = mask_key
         np.savez(smp.out.Segmentation.p, **mask_data)

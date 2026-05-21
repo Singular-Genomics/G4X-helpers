@@ -39,14 +39,14 @@ def filter_adata(
     if filter_panel is None:
         filter_panel = _get_default_filter_panel()
 
-    obs_total, var_total = adata.n_obs, adata.n_vars
+    obs_total, var_total = adata.n_obs, sum(adata.var['probe_type'] == 'targeting')  # adata.n_vars
     cell_summary, gene_summary = filter_panel.filter(adata, apply=True)
 
     if adata.n_obs == 0 or adata.n_vars == 0:
         log.warning('No cells or genes remaining after filtering. Returning empty AnnData object.')
         return adata, cell_summary, gene_summary
 
-    for df, name, n_total in [(cell_summary, 'cells', obs_total), (gene_summary, 'genes', var_total)]:
+    for df, name, n_total in [(cell_summary, 'cells', obs_total), (gene_summary, 'targeting genes', var_total)]:
         n_retained = df.filter(pl.all_horizontal(pl.col('^.*_ok$'))).select('n_total').item()
         retained = n_retained / n_total
         log.info('Retained {:,} ({:.2%}) {} after filtering'.format(n_retained, retained, name))
