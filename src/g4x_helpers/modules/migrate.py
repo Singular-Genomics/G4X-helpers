@@ -16,14 +16,11 @@ def migrate_sample(
     out_dir: str,
     roi_coords: tuple | None = None,
     n_protein_images: int = 4,
+    downstream: bool = True,
     logger: logging.Logger | None = None,
 ) -> None:
     log = logger or LOGGER
     sample_dir = io.pathval.validate_dir_path(sample_dir)
-
-    # is_empty = out_dir.is_dir() and not any(out_dir.iterdir())
-    # if not is_empty:
-    #     raise Exception('Migration output directory must be empty!')
 
     logut.log_with_path('Starting migration for:', sample_dir, logger=log, level='INFO')
 
@@ -39,6 +36,7 @@ def migrate_sample(
     if not all(m.is_migratable for m in basic_migrators + roi_migrators):
         log.error('Not all migrators are migratable. Aborting migration.')
         status(sample_dir)
+        return
 
     for m in basic_migrators:
         m.migrate(out_dir)
@@ -48,11 +46,12 @@ def migrate_sample(
 
     log.info('All migrators completed migration. Starting post-processing...')
 
-    smp = G4Xoutput(data_dir=out_dir)
-    aggregate.aggregate_cell_data(smp, overwrite=True)
-    single_cell.process_sc_output(smp, overwrite=True)
-    viewer.create_viewer_zarr(smp, overwrite=True)
-    viewer.cells.write_cells(smp, seg_name='g4x-default', overwrite=True)
+    if downstream:
+        smp = G4Xoutput(data_dir=out_dir)
+        aggregate.aggregate_cell_data(smp, overwrite=True)
+        single_cell.process_sc_output(smp, overwrite=True)
+        viewer.create_viewer_zarr(smp, overwrite=True)
+        viewer.cells.write_cells(smp, seg_name='g4x-default', overwrite=True)
 
     logut.log_msg_wrapped(
         header='Migration completed. Migrated data is available at\n', msg=smp, level='INFO', logger=log
@@ -69,7 +68,7 @@ def gather_migrators(sample_dir):
         [
             mig.SampleSheet_Migrator(root=sample_dir),
             mig.Manifest_Migrator(root=sample_dir),
-            mig.QCSummary_Migrator(root=sample_dir, format={'sample_id': smp_meta['sample_id']}),
+            mig.QCSummary_Migrator(root=sample_dir),
             mig.Metrics_Migrator(root=sample_dir),
         ]
     )

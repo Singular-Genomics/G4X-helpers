@@ -23,19 +23,19 @@ class BaseValidator:
         target_path: str | None = None,
         root: str | None = None,
         resolve: bool = False,
-        format: dict | None = None,
+        # format: dict | None = None,
         validate_absence: bool = False,
     ):
         self.name = type(self).__name__
         self.root = Path(root) if root is not None else None
         self.resolve = resolve
 
-        
-        self.format = {'sample_id': 'g4x_sample'} if format is None else format
-        tpath_str = str(target_path) if target_path is not None else str(type(self).DEFAULT_TARGET_PATH)
-        tpath_str = tpath_str.format(**self.format)
+        # self.format = {'sample_id': 'g4x_sample'} if format is None else format
+        # tpath_str = str(target_path) if target_path is not None else str(type(self).DEFAULT_TARGET_PATH)
+        # tpath_str = tpath_str.format(**self.format)
+        target_path = Path(target_path) if target_path is not None else Path(type(self).DEFAULT_TARGET_PATH)
 
-        self._target_path = Path(tpath_str)
+        self._target_path = target_path
         self.validate_absence = validate_absence
 
     @classmethod
@@ -60,6 +60,16 @@ class BaseValidator:
             complete_path = self.root / self._target_path
         else:
             complete_path = self._target_path
+
+        if '*' in complete_path.name:
+            candidates = list(complete_path.parent.glob(complete_path.name))
+            if len(candidates) > 1:
+                raise ValueError(f'Multiple files found matching pattern {complete_path.name}: {candidates}')
+            elif len(candidates) == 0:
+                pass
+                # raise ValueError(f'No files found matching pattern {complete_path.name}')
+            else:
+                complete_path = candidates[0]
 
         if self.resolve:
             complete_path = complete_path.resolve(strict=False)
