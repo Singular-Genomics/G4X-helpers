@@ -16,6 +16,7 @@ from .validator import (
 
 # region root
 class SampleG4X(FileValidator):
+    PRIMARY = True
     DEFAULT_TARGET_PATH = c.SMP_META
 
     KEYS = [
@@ -47,6 +48,14 @@ class SampleG4X(FileValidator):
         smp_meta = self.load()
         return set(self.KEYS).issubset(set(smp_meta.keys()))
 
+    @validation_test
+    def is_loadable(self):
+        try:
+            self.load()
+            return True
+        except Exception:
+            return False
+
     def _load_method(self):
         with open(self.target_path, 'r') as f:
             smp_meta = json.load(f)
@@ -54,10 +63,12 @@ class SampleG4X(FileValidator):
 
 
 class QCSummary(FileValidator):
+    PRIMARY = False
     DEFAULT_TARGET_PATH = c.SUMMARY
 
 
 class SampleSheet(TableValidator):
+    PRIMARY = True
     DEFAULT_TARGET_PATH = c.SSHEET
 
     EXPECTED_KEYS_RUN_SECTION = [
@@ -99,6 +110,7 @@ class SampleSheet(TableValidator):
 
 
 class Manifest(TableValidator):
+    PRIMARY = True
     DEFAULT_TARGET_PATH = c.TX_PANEL
 
     SCHEMA = {'probe': pl.String}
@@ -109,6 +121,7 @@ class Manifest(TableValidator):
 
 # region masks
 class Segmentation(FileValidator):
+    PRIMARY = True
     DEFAULT_TARGET_PATH = c.SEG_MASK
     DEFAULT_KEYS = ['nuclei', 'nuclei_exp']
     _main_key = 'nuclei_exp'
@@ -136,6 +149,7 @@ class Segmentation(FileValidator):
 
 
 class BeadMask(FileValidator):
+    PRIMARY = False
     DEFAULT_TARGET_PATH = c.BEAD_MASK
     DEFAULT_KEY = 'bead_mask'
 
@@ -150,6 +164,7 @@ class BeadMask(FileValidator):
 
 # region rna
 class RawFeatures(TableValidator):
+    PRIMARY = True
     DEFAULT_TARGET_PATH = c.RAW_FEATURES
 
     SCHEMA = {
@@ -163,6 +178,7 @@ class RawFeatures(TableValidator):
 
 
 class TxTable(TableValidator):
+    PRIMARY = False
     DEFAULT_TARGET_PATH = c.FILE_TX_TABLE
 
     SCHEMA = {
@@ -178,6 +194,7 @@ class TxTable(TableValidator):
 
 # region single cell
 class AdataH5(BaseValidator):
+    PRIMARY = False
     DEFAULT_TARGET_PATH = c.FILE_FEAT_MTX
 
     @property
@@ -201,6 +218,7 @@ class AdataH5(BaseValidator):
 
 
 class CellMetadata(TableValidator):
+    PRIMARY = False
     DEFAULT_TARGET_PATH = c.FILE_CELL_METADATA
 
     SCHEMA = {
@@ -219,18 +237,21 @@ class CellMetadata(TableValidator):
 
 
 class CellxGene(TableValidator):
+    PRIMARY = False
     DEFAULT_TARGET_PATH = c.FILE_CELL_X_GENE
 
     SCHEMA = {c.CELL_ID_NAME: pl.String}
 
 
 class CellxProt(TableValidator):
+    PRIMARY = False
     DEFAULT_TARGET_PATH = c.FILE_CELL_X_PROTEIN
 
     SCHEMA = {c.CELL_ID_NAME: pl.String}
 
 
 class ClusteringUmap(TableValidator):
+    PRIMARY = False
     DEFAULT_TARGET_PATH = c.FILE_CLUSTERING_UMAP
 
     SCHEMA = {
@@ -241,6 +262,7 @@ class ClusteringUmap(TableValidator):
 
 
 class Dgex(TableValidator):
+    PRIMARY = False
     DEFAULT_TARGET_PATH = c.FILE_DGEX
 
     SCHEMA = {
@@ -263,6 +285,7 @@ class Dgex(TableValidator):
 
 
 class SingleCellFolder(BaseValidator):
+    PRIMARY = False
     DEFAULT_TARGET_PATH = c.SINGLE_CELL_DIR
 
     # TODO create a factory method to generate these validators
@@ -295,6 +318,7 @@ class SingleCellFolder(BaseValidator):
 
 # region protein
 class ProteinPanel(TableValidator):
+    PRIMARY = True
     DEFAULT_TARGET_PATH = c.PR_PANEL
     SCHEMA = {'target': pl.String, 'panel_type': pl.String}
 
@@ -309,6 +333,7 @@ class ProteinPanel(TableValidator):
 
 
 class ProteinDir(ImgDirectoryValidator):
+    PRIMARY = True
     DEFAULT_TARGET_PATH = c.PR_DIR
     VALID_IMG_TYPES = [c.PREFERRED_IMG_SUFFIX, c.ALT_IMG_SUFFIX]
     EXPECTED_DIRS = {'thumbs'}
@@ -340,6 +365,7 @@ class ProteinDir(ImgDirectoryValidator):
 
 # region hne
 class HnEDir(ImgDirectoryValidator):
+    PRIMARY = True
     DEFAULT_TARGET_PATH = c.HE_DIR
 
     FILE_MAP = {
@@ -353,6 +379,7 @@ class HnEDir(ImgDirectoryValidator):
 
 # region viewer
 class ViewerZarr(BaseValidator):
+    PRIMARY = False
     DEFAULT_TARGET_PATH = c.FILE_VIEWER_ZARR
 
 

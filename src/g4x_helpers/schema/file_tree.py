@@ -1,118 +1,84 @@
 import copy
-import json
 from pathlib import Path
 from typing import Literal
 
-from .definition import (
-    AdataH5,
-    BeadMask,
-    CellMetadata,
-    CellxGene,
-    CellxProt,
-    ClusteringUmap,
-    Dgex,
-    HnEDir,
-    Manifest,
-    ProteinDir,
-    ProteinPanel,
-    QCSummary,
-    RawFeatures,
-    SampleG4X,
-    SampleSheet,
-    Segmentation,
-    SingleCellFolder,
-    TxTable,
-    ViewerZarr,
+from . import definition as sd
+from . import utils as ut
+
+ASSAY_AGNOSTIC_VALIDATORS = (
+    sd.SampleSheet,
+    sd.QCSummary,
+    sd.HnEDir,
+    sd.Segmentation,
+    sd.BeadMask,
+    sd.SingleCellFolder,
+    sd.CellMetadata,
+    sd.AdataH5,
+    sd.ViewerZarr,
+)
+
+TX_VALIDATORS = (
+    sd.Manifest,
+    sd.RawFeatures,
+    sd.TxTable,
+    sd.CellxGene,
+    sd.ClusteringUmap,
+    sd.Dgex,
+)
+
+PR_VALIDATORS = (
+    sd.ProteinPanel,
+    sd.ProteinDir,
+    sd.CellxProt,
 )
 
 
 class FileTree:
-    def __init__(self, sample_dir):
+    def __init__(self, sample_dir: str, alt_source: str | None = None):
+
         self.smp_dir = Path(sample_dir)
+        self.alt_source = Path(alt_source) if alt_source else None
 
-        meta_validator = SampleG4X(root=self.smp_dir)
+        meta_validator = sd.SampleG4X(root=self.smp_dir)
+        if not meta_validator.is_valid:
+            raise ValueError('Sample metadata is not valid. Please check the validation errors.')
 
-        self.raw_validators = [meta_validator]
-        self.secondary_validators = []
+        assay_type = ut.detect_assay_type(meta_validator.load())
+        if assay_type == 'undefined':
+            raise ValueError('Could not detect assay type from sample metadata.')
 
-        self.tx_detected = False
-        self.pr_detected = False
+        self.assay_type = assay_type
+        self.tx_detected = True if assay_type in ['combined', 'tx_only'] else False
+        self.pr_detected = True if assay_type in ['combined', 'pr_only'] else False
 
-        if meta_validator.is_valid:
-            sample_id = meta_validator.load()['sample_id']
-            self.detect_assay_type(meta_validator.target_path)
+        validators = [meta_validator]
+        validators += self.fetch_validators(ASSAY_AGNOSTIC_VALIDATORS)
+        if self.tx_detected:
+            validators += self.fetch_validators(TX_VALIDATORS)
+        if self.pr_detected:
+            validators += self.fetch_validators(PR_VALIDATORS)
 
-            self.raw_validators.extend(
-                [
-                    SampleSheet(root=self.smp_dir),
-                    Segmentation(root=self.smp_dir),
-                    HnEDir(root=self.smp_dir),
-                ]
-            )
-
-            self.secondary_validators.extend(
-                [
-                    QCSummary(root=self.smp_dir, format={'sample_id': sample_id}),
-                    BeadMask(root=self.smp_dir),
-                    ViewerZarr(root=self.smp_dir),
-                    SingleCellFolder(root=self.smp_dir),
-                    CellMetadata(root=self.smp_dir),
-                    AdataH5(root=self.smp_dir),
-                    ClusteringUmap(root=self.smp_dir),
-                    Dgex(root=self.smp_dir),
-                ]
-            )
-
-            if self.tx_detected:
-                self.raw_validators.extend(
-                    [
-                        Manifest(root=self.smp_dir),
-                        RawFeatures(root=self.smp_dir),
-                    ]
-                )
-                self.secondary_validators.extend(
-                    [
-                        TxTable(root=self.smp_dir),
-                        CellxGene(root=self.smp_dir),
-                    ]
-                )
-
-            if self.pr_detected:
-                self.raw_validators.extend(
-                    [
-                        ProteinPanel(root=self.smp_dir),
-                        ProteinDir(root=self.smp_dir),
-                    ]
-                )
-                self.secondary_validators.extend(
-                    [
-                        CellxProt(root=self.smp_dir),
-                    ]
-                )
-
-        self.validators = self.raw_validators + self.secondary_validators
+        self.validators = validators
+        self.raw_validators = [v for v in self.validators if v.PRIMARY]
+        self.secondary_validators = [v for v in self.validators if not v.PRIMARY]
 
         for v in self.validators:
             setattr(self, v.name, v)
 
-    def detect_assay_type(self, meta_path):
-        with open(meta_path, 'r') as f:
-            smp_meta = json.load(f)
+    def fetch_validators(self, validators: tuple):
+        fetched = []
 
-        # TODO ensure these hooks are a good choice
-        # inspect tx and pr presence from valid metadata
-        self.tx_detected = smp_meta.get('transcript_panel', None) is not None
-        self.pr_detected = smp_meta.get('protein_panel', None) is not None
+        for validator_cls in validators:
+            if self.alt_source:
+                validator = validator_cls(root=self.alt_source)
 
-        self.assay_type = (
-            'combined'
-            if self.tx_detected and self.pr_detected
-            else 'tx_only'
-            if self.tx_detected
-            else 'pr_only'
-            if self.pr_detected
-            else 'undefined'
-        )
+                if validator.is_valid:
+                    fetched.append(validator)
+                    continue
+
+            fetched.append(validator_cls(root=self.smp_dir))
+
+        return fetched
 
     def copy(self):
         return copy.deepcopy(self)
