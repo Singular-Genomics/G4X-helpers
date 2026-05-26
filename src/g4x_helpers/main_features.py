@@ -2,11 +2,10 @@ import functools
 import logging
 from typing import Literal
 
-from . import __version__, c, io
+from . import __version__, io
 from . import logging_utils as logut
 from . import utils as ut
 from .g4x_output import G4Xoutput
-from .schema.file_tree import ValidationError
 
 LOGGER = logging.getLogger(__name__)
 
@@ -31,19 +30,14 @@ def _base_command(func):
             out_dir = smp_dir
         else:
             out_dir = io.pathval.validate_dir_path(out_dir)
-            # func_out = out_dir / func.__name__
-            # if not func_out.exists():
-            #     func_out.mkdir(parents=True, exist_ok=True)
-            # out_dir = func_out
 
         if logger is None:
             log_dir = out_dir / 'logs'
             if not log_dir.exists():
                 log_dir.mkdir(parents=True, exist_ok=True)
 
-            # TODO enable append time when testing is complete
             logger = logut.configure_g4x_logging(
-                level='INFO', file_log=True, out_dir=log_dir, append_time=False, file_mode='w'
+                level='INFO', file_log=True, out_dir=log_dir, append_time=True, file_mode='w'
             )
 
         backend = io.get_backend(compute_backend)
@@ -72,7 +66,7 @@ def _base_command(func):
                 logger=logger,
                 **kwargs,
             )
-            logger.info(f'Completed: {func.__name__}')
+            logger.info(f'Completed: [{func.__name__}]\n')
             return result
 
         except Exception as e:
@@ -80,24 +74,6 @@ def _base_command(func):
             raise e
 
     return wrapper
-
-
-@_base_command
-def test_feature(
-    smp_dir: str,
-    out_dir: str,
-    overwrite: bool = True,
-    no_downstream: bool = False,
-    show_progress: bool = False,
-    compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
-    **kwargs,
-):
-    from .modules import aggregate, single_cell, viewer
-
-    log = kwargs.get('logger', LOGGER)
-
-    smp = G4Xoutput(smp_dir)
-    log.info(smp)
 
 
 @_base_command
@@ -139,8 +115,14 @@ def demux(
             smp, out_dir=out_dir, compute_backend=compute_backend, overwrite=overwrite, logger=log
         )
 
-        viewer.create_viewer_zarr(smp, out_dir=out_dir, overwrite=overwrite, logger=log)
-        viewer.cells.write_cells(smp, seg_name='g4x-default', overwrite=overwrite, logger=log)
+        if smp.alt_source is not None:
+            viewer.init_viewer_zarr(smp, out_dir=out_dir, overwrite=overwrite, logger=log)
+            viewer.link_viewer_group(smp, out_dir, group_name='images', overwrite=overwrite)
+
+        viewer.write_transcripts(smp, overwrite=overwrite, logger=log)
+        viewer.write_cells(smp, seg_name='g4x-default', overwrite=overwrite, logger=log)
+
+    return smp
 
 
 @_base_command
@@ -177,8 +159,14 @@ def aggregate(
             smp, out_dir=out_dir, compute_backend=compute_backend, overwrite=overwrite, logger=log
         )
 
-        viewer.create_viewer_zarr(smp, out_dir=out_dir, overwrite=overwrite, logger=log)
-        viewer.cells.write_cells(smp, seg_name='g4x-default', overwrite=overwrite, logger=log)
+        if smp.alt_source is not None:
+            viewer.init_viewer_zarr(smp, out_dir=out_dir, overwrite=overwrite, logger=log)
+            viewer.link_viewer_group(smp, out_dir, group_name='images', overwrite=overwrite)
+
+        viewer.write_transcripts(smp, overwrite=overwrite, logger=log)
+        viewer.write_cells(smp, seg_name='g4x-default', overwrite=overwrite, logger=log)
+
+    return smp
 
 
 @_base_command
@@ -188,19 +176,19 @@ def migrate(
     *,
     roi_coords: tuple | None = None,
     downstream: bool = True,
-    logger: logging.Logger,
     **kwargs,
 ) -> None:
     from .modules import migrate
+    
+    log = kwargs.get('logger', LOGGER)
 
     migrate.migrate_sample(
-        sample_dir=smp_dir, out_dir=out_dir, roi_coords=roi_coords, downstream=downstream, logger=logger
+        sample_dir=smp_dir, out_dir=out_dir, roi_coords=roi_coords, downstream=downstream, logger=log
     )
 
 
 @_base_command
 def validate(smp_dir: str, **kwargs):
-
     log = kwargs.get('logger', LOGGER)
     smp = G4Xoutput(smp_dir)
     report = smp.src.validation_report(raise_exception=False)

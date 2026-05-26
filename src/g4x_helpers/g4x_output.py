@@ -28,6 +28,7 @@ class G4Xoutput:
     # TODO rename data_dir
     def __init__(self, data_dir: str, alt_source: str | None = None, use_cache: bool = False, validate: bool = True):
         self.data_dir = Path(data_dir)
+        self.alt_source = Path(alt_source) if alt_source is not None else None
         self.src = schema.FileTree(self.data_dir, alt_source=alt_source)
         self.out = self.src.copy()
         self.use_cache = use_cache
