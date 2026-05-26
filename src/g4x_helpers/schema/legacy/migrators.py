@@ -434,14 +434,16 @@ class Protein_Migrator(DataMigrator, sd.ProteinDir):
     class ProteinDir_V2(sd.ProteinDir):
         EXPECTED_DIRS = {}
 
-    def _migrate_method(self, out_path: str, n_images: int = None, roi=None, **kwargs):
+    def _migrate_method(self, out_path: str, protein_subset: list = None, roi=None, **kwargs):
         log = kwargs.get('logger', LOGGER)
         out_dir = io.pathval.ensure_dir(out_path / self.DEFAULT_TARGET_PATH)
 
         migrator = self.migrator
 
         img_list = list(migrator.mapped_files)
-        keep_list = img_list if n_images is None else img_list[0:n_images]
+
+        # TODO add some checks if this is going to get some actual usage
+        keep_list = img_list if protein_subset is None else [img for img in img_list if img in protein_subset]
         keep_signals = [img for img in keep_list]
         total = len(keep_list)
 

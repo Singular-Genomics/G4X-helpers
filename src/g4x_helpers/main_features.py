@@ -179,12 +179,8 @@ def migrate(
     **kwargs,
 ) -> None:
     from .modules import migrate
-    
-    log = kwargs.get('logger', LOGGER)
 
-    migrate.migrate_sample(
-        sample_dir=smp_dir, out_dir=out_dir, roi_coords=roi_coords, downstream=downstream, logger=log
-    )
+    migrate.migrate_sample(sample_dir=smp_dir, out_dir=out_dir, roi_coords=roi_coords, downstream=downstream, **kwargs)
 
 
 @_base_command

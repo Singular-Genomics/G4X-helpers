@@ -1,6 +1,6 @@
 import inspect
 
-from .. import __version__, constants
+from .. import __version__
 from . import cli_setup
 from . import help_messages as hm
 
@@ -13,15 +13,6 @@ click = cli_setup.click
     invoke_without_command=True,
     add_help_option=True,
     help=hm.CLI_HELP,
-)
-@click.option(
-    '-t',
-    '--threads',
-    required=False,
-    type=int,
-    default=constants.DEFAULT_THREADS,
-    show_default=True,
-    help='Number of threads to use for processing',
 )
 @click.option(
     '-v',
@@ -39,8 +30,8 @@ click = cli_setup.click
     help='Display g4x-helpers version',
 )
 @click.pass_context
-# @click.option('-v', '--verbose', default=2, count=True, help='Console logging level (0, 1, 2)')
-def cli(ctx, threads, verbose, version):
+# @click.option('-v', '--verbose', type=int, default=2, count=True, help='Console logging level (0, 1, 2)')
+def cli(ctx, verbose, version):
     if version:
         click.echo(f'g4x-helpers: {__version__}')
         ctx.exit()
@@ -53,7 +44,6 @@ def cli(ctx, threads, verbose, version):
     if ctx.invoked_subcommand:
         ctx.ensure_object(dict)
 
-        ctx.obj['threads'] = threads
         ctx.obj['verbose'] = verbose
         ctx.obj['version'] = __version__
 
@@ -113,6 +103,7 @@ def resegment(ctx, g4x_data, cell_labels, labels_key, in_place):
 def viewer(ctx):
     pass
 
+
 ############################################################
 # region redemux
 name = 'redemux'
@@ -154,6 +145,65 @@ def redemux(ctx, g4x_data, manifest, batch_size, in_place):
     except Exception as e:
         cli_setup._fail_message(func_name, e)
 
+
+############################################################
+# region migrate
+@cli.command(name='migrate', help=hm.MIGRT_HELP)
+@cli_setup.g4x_data_opt()
+@click.option(
+    '-o',
+    '--out-dir',
+    required=True,
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    default=None,
+    help='Output directory for migration results',
+)
+@click.option(
+    '--roi',
+    required=False,
+    nargs=4,
+    type=int,
+    default=None,
+    help='Region of interest for migration (x0, y0, x1, y1)',
+)
+@click.pass_context
+def migrate(ctx, g4x_data, out_dir, roi):
+    func_name = inspect.currentframe().f_code.co_name
+
+    try:
+        with cli_setup._spinner(f'Initializing {func_name} process...'):
+            from ..main_features import migrate as main_migrate
+
+        main_migrate(smp_dir=g4x_data, out_dir=out_dir, roi_coords=roi, verbose=ctx.obj['verbose'])
+    except Exception as e:
+        cli_setup._fail_message(func_name, e)
+
+
+############################################################
+# region validate
+@cli.command(name='validate', help=hm.VLDTE_HELP)
+@cli_setup.g4x_data_opt()
+@click.pass_context
+def validate(ctx, g4x_data):
+    func_name = inspect.currentframe().f_code.co_name
+
+    g4x_obj, _ = cli_setup.initialize_sample(data_dir=g4x_data, in_place=False, n_threads=ctx.obj['threads'])
+
+    try:
+        with cli_setup._spinner(f'Initializing {func_name} process...'):
+            from ..main_features import validate as main_validate
+
+        main_validate(
+            g4x_obj=g4x_obj,
+            n_threads=ctx.obj['threads'],
+            verbose=ctx.obj['verbose'],
+        )
+    except Exception as e:
+        cli_setup._fail_message(func_name, e)
+
+
+if __name__ == '__main__':
+    cli(prog_name='g4x-helpers')
 
 ############################################################
 # region create_zarr
@@ -267,59 +317,3 @@ def redemux(ctx, g4x_data, manifest, batch_size, in_place):
 #         )
 #     except Exception as e:
 #         cli_setup._fail_message(func_name, e)
-
-
-############################################################
-# region migrate
-@cli.command(name='migrate', help=hm.MIGRT_HELP)
-@cli_setup.g4x_data_opt()
-@click.option(
-    '--restore',
-    is_flag=True,
-    help='Restores an existing migration-backup.',
-)
-@click.pass_context
-def migrate(ctx, g4x_data, restore):
-    func_name = inspect.currentframe().f_code.co_name
-
-    g4x_obj, _ = cli_setup.initialize_sample(data_dir=g4x_data, in_place=False, n_threads=ctx.obj['threads'])
-
-    try:
-        with cli_setup._spinner(f'Initializing {func_name} process...'):
-            from ..main_features import migrate as main_migrate
-
-        main_migrate(
-            g4x_obj=g4x_obj,
-            restore=restore,
-            n_threads=ctx.obj['threads'],
-            verbose=ctx.obj['verbose'],
-        )
-    except Exception as e:
-        cli_setup._fail_message(func_name, e)
-
-
-############################################################
-# region validate
-@cli.command(name='validate', help=hm.VLDTE_HELP)
-@cli_setup.g4x_data_opt()
-@click.pass_context
-def validate(ctx, g4x_data):
-    func_name = inspect.currentframe().f_code.co_name
-
-    g4x_obj, _ = cli_setup.initialize_sample(data_dir=g4x_data, in_place=False, n_threads=ctx.obj['threads'])
-
-    try:
-        with cli_setup._spinner(f'Initializing {func_name} process...'):
-            from ..main_features import validate as main_validate
-
-        main_validate(
-            g4x_obj=g4x_obj,
-            n_threads=ctx.obj['threads'],
-            verbose=ctx.obj['verbose'],
-        )
-    except Exception as e:
-        cli_setup._fail_message(func_name, e)
-
-
-if __name__ == '__main__':
-    cli(prog_name='g4x-helpers')

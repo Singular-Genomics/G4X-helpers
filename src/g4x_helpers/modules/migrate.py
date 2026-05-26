@@ -1,4 +1,5 @@
 import logging
+from typing import Literal
 
 from .. import io, schema
 from .. import logging_utils as logut
@@ -15,12 +16,19 @@ def migrate_sample(
     sample_dir: str,
     out_dir: str,
     roi_coords: tuple | None = None,
-    n_protein_images: int = 4,
+    protein_subset: list | None = None,
     downstream: bool = True,
+    compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
     logger: logging.Logger | None = None,
 ) -> None:
     log = logger or LOGGER
     sample_dir = io.pathval.validate_dir_path(sample_dir)
+    out_dir = io.pathval.validate_dir_path(out_dir)
+
+    if (out_dir / 'sample.g4x').exists():
+        raise FileExistsError(
+            'Output directory already contains a sample.g4x file. Aborting migration to prevent overwriting existing data.'
+        )
 
     logut.log_with_path('Starting migration for:', sample_dir, logger=log, level='INFO')
 
@@ -42,16 +50,15 @@ def migrate_sample(
         m.migrate(out_dir)
 
     for m in roi_migrators:
-        m.migrate(out_dir, roi=roi, n_images=n_protein_images)
+        m.migrate(out_dir, roi=roi, protein_subset=protein_subset)
 
     log.info('All migrators completed migration. Starting post-processing...')
 
     if downstream:
         smp = G4Xoutput(data_dir=out_dir)
-        aggregate.aggregate_cell_data(smp, overwrite=True)
-        single_cell.process_sc_output(smp, overwrite=True)
-        viewer.create_viewer_zarr(smp, overwrite=True)
-        viewer.cells.write_cells(smp, seg_name='g4x-default', overwrite=True)
+        aggregate.aggregate_cell_data(smp, overwrite=True, compute_backend=compute_backend)
+        single_cell.process_sc_output(smp, overwrite=True, compute_backend=compute_backend)
+        viewer.create_default_viewer(smp)
 
     logut.log_msg_wrapped(
         header='Migration completed. Migrated data is available at\n', msg=smp, level='INFO', logger=log

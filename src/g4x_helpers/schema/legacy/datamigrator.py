@@ -37,7 +37,7 @@ class DataMigrator(BaseValidator):
                 continue
 
             if issubclass(cls, BaseValidator):
-                return cls(root=self.root, format=self.format)
+                return cls(root=self.root)
 
         raise TypeError(f'Could not infer "current" validator for {self._name}')
 
@@ -139,7 +139,7 @@ class DataMigrator(BaseValidator):
         else:
             try:
                 result = migrate_method(out_path, *args, **kwargs)
-                target = self.target_validator(root=out_path, format=self.format)
+                target = self.target_validator(root=out_path)
                 if target.is_valid:
                     log.debug(f'✓ Migration successful for {self._name}!')
                 else:
