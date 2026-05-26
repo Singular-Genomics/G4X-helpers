@@ -35,7 +35,7 @@ def process_sc_output(
     adata: 'AnnData' | None = None,
     out_dir: str = PRESET_SOURCE,
     *,
-    overwrite: bool = False,
+    overwrite: bool = True,
     filter_panel: 'FilterPanel' = _get_default_filter_panel(),
     init_only: bool = False,
     n_neighbors: int = 15,

@@ -30,7 +30,7 @@ def aggregate_cell_data(
     *,
     out_dir: str = PRESET_SOURCE,
     tx_table: str = PRESET_SOURCE,
-    overwrite: bool = False,
+    overwrite: bool = True,
     gene_list: list[str] = PRESET_SOURCE,
     protein_list: list[str] = PRESET_SOURCE,
     show_progress: bool | None = None,

@@ -29,7 +29,7 @@ def demux_raw_features(
     *,
     out_dir: str = PRESET_SOURCE,
     batch_size: int = c.DEFAULT_BATCH_SIZE,
-    overwrite: bool = False,
+    overwrite: bool = True,
     show_progress: bool | None = None,
     logger: logging.Logger | None = None,
 ) -> None:
