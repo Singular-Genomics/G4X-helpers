@@ -25,19 +25,16 @@ COMPRESSOR = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
 
 def write_cells(
     smp: 'G4Xoutput',
-    seg_name: str,
+    seg_name: str = 'g4x-default',
     components: tuple | None = None,
-    cell_group: zarr.Group | None = None,
-    overwrite: bool = False,
+    overwrite: bool = True,
     logger: logging.Logger | None = None,
 ):
     log = logger or LOGGER
+    log.info('Preparing cell data')
 
-    if cell_group is None:
-        log.debug('No cell group provided, opening default cell group')
-        cell_group = zarr.open_group(smp.out.ViewerZarr.p / 'cells', mode='a')
-    else:
-        log.debug('Using provided cell group input')
+    # mode = 'w' if overwrite else 'a'
+    cell_group = zarr.open_group(smp.out.ViewerZarr.p / 'cells', mode='r+')
 
     log.debug('Setting up cell data group')
     seg_path = _add_segmentation_attrs(cell_group, seg_name)

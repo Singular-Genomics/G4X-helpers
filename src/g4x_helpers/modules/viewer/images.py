@@ -5,6 +5,7 @@ import warnings
 
 import dask.array as da
 import numpy as np
+import zarr
 from numcodecs import Blosc
 from ome_zarr import scale as oz_scale
 from ome_zarr import writer as oz_writer
@@ -65,14 +66,23 @@ OMERO_DEFAULT = {
 }
 
 
-def write_muliplex_img(smp, root_group, chunk_size: int = 256, logger: logging.Logger | None = None):
-
+def write_muliplex_img(
+    smp,
+    protein_list: list[str] | None = None,
+    overwrite: bool = True,
+    chunk_size: int = 1024,
+    logger: logging.Logger | None = None,
+):
     log = logger or LOGGER
-
     log.debug('Preparing multiplex image')
 
-    channel_arrays = []
+    mode = 'w' if overwrite else 'a'
+    img_group = zarr.open_group(smp.out.ViewerZarr.p / 'images' / 'multiplex', mode=mode)
 
+    if protein_list is not None:
+        smp.set_proteins(protein_list)
+
+    channel_arrays = []
     # Prepare dask arrays for each channel
     if smp.src.pr_detected:
         for ch in smp.proteins:
@@ -119,14 +129,16 @@ def write_muliplex_img(smp, root_group, chunk_size: int = 256, logger: logging.L
         channels.append(ic)
 
     log.info('Writing multiplex image')
-    img_group = root_group['images']['multiplex']
     write_channel_stack(img_group, channels, chunk_size=chunk_size)
 
 
-def write_he_img(smp, root_group, chunk_size: int = 256, logger: logging.Logger | None = None):
+def write_he_img(smp, overwrite: bool = True, chunk_size: int = 1024, logger: logging.Logger | None = None):
 
     log = logger or LOGGER
     log.debug('Preparing fH&E image')
+
+    mode = 'w' if overwrite else 'a'
+    img_group = zarr.open_group(smp.out.ViewerZarr.p / 'images' / 'h_and_e', mode=mode)
 
     image = smp.load_he_image(dask=True, use_cache=False)
     # image = _add_rgb_astronaut_to_img(image)
@@ -143,7 +155,6 @@ def write_he_img(smp, root_group, chunk_size: int = 256, logger: logging.Logger 
     c3 = ImageChannel(image[2], label='B', omero_attrs={'color': '0000FF', 'active': True})
 
     log.info('Writing fH&E image')
-    img_group = root_group['images']['h_and_e']
     write_channel_stack(img_group, [c1, c2, c3], chunk_size=chunk_size)
 
 
@@ -265,40 +276,3 @@ def _add_rgb_astronaut_to_img(data):
     out[row0:row1, col0:col1, :] = da.from_array(np_img2, chunks=(h, w, 3))
 
     return out
-
-
-# def _load_image_dask(
-#     smp,
-#     img_type: str = Literal['protein', 'h_and_e', 'nuclear', 'cytoplasmic'],
-#     protein_name: str | None = None,
-#     dtype=np.uint16,
-#     use_cache: bool = False,
-# ):
-#     shape = smp.shape + (3,) if img_type == 'h_and_e' else smp.shape
-
-#     if img_type == 'protein':
-#         data = da.from_delayed(
-#             dask.delayed(smp.load_protein_image)(protein=protein_name, use_cache=use_cache),
-#             shape=shape,
-#             dtype=dtype,
-#         )
-#     elif img_type == 'h_and_e':
-#         data = da.from_delayed(
-#             dask.delayed(smp.load_he_image)(use_cache=use_cache),
-#             shape=shape,
-#             dtype=dtype,
-#         )
-#     elif img_type == 'nuclear':
-#         data = da.from_delayed(
-#             dask.delayed(smp.load_nuclear_image)(use_cache=use_cache),
-#             shape=shape,
-#             dtype=dtype,
-#         )
-#     elif img_type == 'cytoplasmic':
-#         data = da.from_delayed(
-#             dask.delayed(smp.load_cytoplasmic_image)(use_cache=use_cache),
-#             shape=shape,
-#             dtype=dtype,
-#         )
-
-#     return data

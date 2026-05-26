@@ -4,13 +4,14 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import polars as pl
+import zarr
 from numcodecs import Blosc
 
 from ... import c
 from ... import logging_utils as logut
 from ...schema.definition import Dgex, Manifest, TxTable
 from ..workflow import PRESET_SOURCE, collect_input
-from .utils import create_array, populate_zarr_metadata
+from .utils import create_array
 
 if TYPE_CHECKING:
     from zarr.hierarchy import Group as zGroup
@@ -22,16 +23,18 @@ LOGGER = logging.getLogger(__name__)
 
 def write_transcripts(
     smp: 'G4Xoutput',
-    root_group: 'zGroup',
+    *,
     tx_table: str = PRESET_SOURCE,
     manifest: str = PRESET_SOURCE,
     dgex: str = PRESET_SOURCE,
-    overwrite: bool = False,
+    overwrite: bool = True,
     logger: logging.Logger | None = None,
 ) -> None:
 
-    log = LOGGER or logger
+    log = logger or LOGGER
     log.info('Preparing transcript data')
+
+    tx_group = zarr.open_group(smp.out.ViewerZarr.p / 'transcripts', mode='r+')
 
     # 1: load inputs
     txtable_in = collect_input(smp, tx_table, validator=TxTable, logger=log)
@@ -67,6 +70,8 @@ def write_transcripts(
     pyramid = construct_tile_dfs(df, pyramid)
 
     # 6: populate attrs
+    log.info('Writing transcript data')
+
     layer_config = {
         'layers': len(pyramid) - 1,
         'tile_size': pyramid[len(pyramid) - 1]['tile_size'],
@@ -76,10 +81,10 @@ def write_transcripts(
     }
 
     gene_colors = {k: v['color'] for k, v in gene_metadata.items()}
-    populate_zarr_metadata(root_group, gene_colors=gene_colors, tx_layer_config=layer_config)
 
-    log.info('Writing transcript data')
-    tx_group = root_group['transcripts']
+    tx_group.attrs['gene_order'] = list(gene_colors.keys())
+    tx_group.attrs['gene_colors'] = gene_colors
+    tx_group.attrs['layer_config'] = layer_config
 
     write_tx_zarr(tx_group, pyramid, overwrite=overwrite)
 
