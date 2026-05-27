@@ -86,7 +86,7 @@ def write_transcripts(
     tx_group.attrs['gene_colors'] = gene_colors
     tx_group.attrs['layer_config'] = layer_config
 
-    write_tx_zarr(tx_group, pyramid, overwrite=overwrite)
+    write_tx_zarr(tx_group, pyramid, overwrite=overwrite, logger=log)
 
 
 def build_tx_pyramid(
@@ -171,7 +171,7 @@ def write_tx_zarr(
     overwrite: bool = False,
     logger: logging.Logger | None = None,
 ):
-    log = LOGGER or logger
+    log = logger or LOGGER
     compressor = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
 
     for level in pyramid:

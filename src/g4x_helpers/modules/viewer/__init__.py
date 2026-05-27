@@ -7,12 +7,12 @@ from .images import write_he_img, write_muliplex_img
 from .transcripts import write_transcripts
 
 
-def create_default_viewer(smp):
-    init_viewer_zarr(smp)
-    write_muliplex_img(smp)
-    write_he_img(smp)
-    write_transcripts(smp)
-    write_cells(smp)
+def create_default_viewer(smp, logger):
+    init_viewer_zarr(smp, logger=logger)
+    write_muliplex_img(smp, logger=logger)
+    write_he_img(smp, logger=logger)
+    write_transcripts(smp, logger=logger)
+    write_cells(smp, logger=logger)
 
 
 __all__ = [

@@ -47,18 +47,18 @@ def migrate_sample(
         return
 
     for m in basic_migrators:
-        m.migrate(out_dir)
+        m.migrate(out_dir, logger=log)
 
     for m in roi_migrators:
-        m.migrate(out_dir, roi=roi, protein_subset=protein_subset)
+        m.migrate(out_dir, roi=roi, protein_subset=protein_subset, logger=log)
 
     log.info('All migrators completed migration. Starting post-processing...')
 
     if downstream:
         smp = G4Xoutput(data_dir=out_dir)
-        aggregate.aggregate_cell_data(smp, overwrite=True, compute_backend=compute_backend)
-        single_cell.process_sc_output(smp, overwrite=True, compute_backend=compute_backend)
-        viewer.create_default_viewer(smp)
+        aggregate.aggregate_cell_data(smp, overwrite=True, compute_backend=compute_backend, logger=log)
+        single_cell.process_sc_output(smp, overwrite=True, compute_backend=compute_backend, logger=log)
+        viewer.create_default_viewer(smp, logger=log)
 
     logut.log_msg_wrapped(
         header='Migration completed. Migrated data is available at\n', msg=smp, level='INFO', logger=log
