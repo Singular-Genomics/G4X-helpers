@@ -1,6 +1,7 @@
 import inspect
 
 from .. import __version__
+from .. import constants as c
 from . import cli_setup
 from . import help_messages as hm
 
@@ -15,13 +16,20 @@ click = cli_setup.click
     help=hm.CLI_HELP,
 )
 @click.option(
+    '--backend',
+    type=click.Choice(['auto', 'cpu', 'gpu'], case_sensitive=False),
+    default='auto',
+    show_default=True,
+    help='Execution backend.',
+)
+@click.option(
     '-v',
     '--verbose',
-    required=False,
-    type=int,
+    type=click.Choice([0, 1, 2], case_sensitive=False),
     default=1,
+    required=False,
     show_default=True,
-    help='Console logging level (0, 1, 2)',
+    help='Console logging level',
 )
 @click.option(
     '--version',
@@ -31,7 +39,7 @@ click = cli_setup.click
 )
 @click.pass_context
 # @click.option('-v', '--verbose', type=int, default=2, count=True, help='Console logging level (0, 1, 2)')
-def cli(ctx, verbose, version):
+def cli(ctx, backend, verbose, version):
     if version:
         click.echo(f'g4x-helpers: {__version__}')
         ctx.exit()
@@ -44,8 +52,60 @@ def cli(ctx, verbose, version):
     if ctx.invoked_subcommand:
         ctx.ensure_object(dict)
 
+        ctx.obj['backend'] = backend
         ctx.obj['verbose'] = verbose
         ctx.obj['version'] = __version__
+
+
+############################################################
+# region redemux
+name = 'redemux'
+
+
+@cli.command(name=name, help=hm.REDMX_HELP)
+@cli_setup.g4x_data_opt()
+@click.option(
+    '--manifest',
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help='Path to manifest for demuxing.\n\n Must contain a "probe" column with the format "geneid-sequence-primer"',
+)
+@click.option(
+    '--batch-size',
+    default=c.DEFAULT_BATCH_SIZE,
+    show_default=True,
+    type=int,
+    help='Number of transcripts to process per batch.',
+)
+@cli_setup.branch_opt(name)
+@cli_setup.no_downstream_opt(name)
+@click.pass_context
+def redemux(ctx, g4x_data, manifest, batch_size, branch, no_downstream):
+    func_name = inspect.currentframe().f_code.co_name
+
+    try:
+        with cli_setup._spinner(f'Initializing {func_name} process...'):
+            from ..main_features import _create_branch
+            from ..main_features import redemux as main_redemux
+
+        if branch is not None:
+            if branch == 'main':
+                out_dir = g4x_data
+            else:
+                out_dir = _create_branch(g4x_data, branch)
+        else:
+            out_dir = None
+
+        main_redemux(
+            smp_dir=g4x_data,
+            out_dir=out_dir,
+            manifest=manifest,
+            batch_size=batch_size,
+            downstream=not no_downstream,
+            verbose=ctx.obj['verbose'],
+        )
+    except Exception as e:
+        cli_setup._fail_message(func_name, e)
 
 
 ############################################################
@@ -68,24 +128,31 @@ name = 'resegment'
     default=None,
     help='Key/column in npz/geojson where labels should be taken from (optional, but required for .npz with multiple arrays)',
 )
-@cli_setup.in_place_opt(name)
-@cli_setup.no_downstream_opt()
+@cli_setup.branch_opt(name)
+@cli_setup.no_downstream_opt(name)
 @click.pass_context
-def resegment(ctx, g4x_data, cell_labels, labels_key, in_place):
+def resegment(ctx, g4x_data, cell_labels, labels_key, branch, no_downstream):
     func_name = inspect.currentframe().f_code.co_name
-
-    g4x_obj, out_dir = cli_setup.initialize_sample(data_dir=g4x_data, in_place=in_place, n_threads=ctx.obj['threads'])
 
     try:
         with cli_setup._spinner(f'Initializing {func_name} process...'):
+            from ..main_features import _create_branch
             from ..main_features import resegment as main_resegment
 
+        if branch is not None:
+            if branch == 'main':
+                out_dir = g4x_data
+            else:
+                out_dir = _create_branch(g4x_data, branch)
+        else:
+            out_dir = None
+
         main_resegment(
-            g4x_obj=g4x_obj,
+            smp_dir=g4x_data,
             out_dir=out_dir,
-            cell_labels=cell_labels,
-            labels_key=labels_key,
-            n_threads=ctx.obj['threads'],
+            segmentation_mask=cell_labels,
+            mask_key=labels_key,
+            downstream=not no_downstream,
             verbose=ctx.obj['verbose'],
         )
     except Exception as e:
@@ -105,50 +172,11 @@ def viewer(ctx):
 
 
 ############################################################
-# region redemux
-name = 'redemux'
-
-
-@viewer.command(name=name, help=hm.REDMX_HELP)
-@cli_setup.g4x_data_opt()
-@click.option(
-    '--manifest',
-    required=True,
-    type=click.Path(exists=True, dir_okay=False),
-    help='Path to manifest for demuxing.\n\n Must contain a "probe_name" column with the format "geneid-sequence-primer"',
-)
-@click.option(
-    '--batch-size',
-    default=1_000_000,
-    show_default=True,
-    type=int,
-    help='Number of transcripts to process per batch.',
-)
-@cli_setup.in_place_opt(name)
-@cli_setup.no_downstream_opt(name)
-@click.pass_context
-def redemux(ctx, g4x_data, manifest, batch_size, in_place):
-    func_name = inspect.currentframe().f_code.co_name
-    g4x_obj, out_dir = cli_setup.initialize_sample(data_dir=g4x_data, in_place=in_place, n_threads=ctx.obj['threads'])
-    try:
-        with cli_setup._spinner(f'Initializing {func_name} process...'):
-            from ..main_features import redemux as main_redemux
-
-        main_redemux(
-            g4x_obj=g4x_obj,
-            out_dir=out_dir,
-            manifest=manifest,
-            batch_size=batch_size,
-            n_threads=ctx.obj['threads'],
-            verbose=ctx.obj['verbose'],
-        )
-    except Exception as e:
-        cli_setup._fail_message(func_name, e)
-
-
-############################################################
 # region migrate
-@cli.command(name='migrate', help=hm.MIGRT_HELP)
+name = 'migrate'
+
+
+@cli.command(name=name, help=hm.MIGRT_HELP)
 @cli_setup.g4x_data_opt()
 @click.option(
     '-o',
@@ -166,15 +194,18 @@ def redemux(ctx, g4x_data, manifest, batch_size, in_place):
     default=None,
     help='Region of interest for migration (x0, y0, x1, y1)',
 )
+@cli_setup.no_downstream_opt(name)
 @click.pass_context
-def migrate(ctx, g4x_data, out_dir, roi):
+def migrate(ctx, g4x_data, out_dir, roi, no_downstream):
     func_name = inspect.currentframe().f_code.co_name
 
     try:
         with cli_setup._spinner(f'Initializing {func_name} process...'):
             from ..main_features import migrate as main_migrate
 
-        main_migrate(smp_dir=g4x_data, out_dir=out_dir, roi_coords=roi, verbose=ctx.obj['verbose'])
+        main_migrate(
+            smp_dir=g4x_data, out_dir=out_dir, roi_coords=roi, downstream=not no_downstream, verbose=ctx.obj['verbose']
+        )
     except Exception as e:
         cli_setup._fail_message(func_name, e)
 
@@ -187,15 +218,12 @@ def migrate(ctx, g4x_data, out_dir, roi):
 def validate(ctx, g4x_data):
     func_name = inspect.currentframe().f_code.co_name
 
-    g4x_obj, _ = cli_setup.initialize_sample(data_dir=g4x_data, in_place=False, n_threads=ctx.obj['threads'])
-
     try:
         with cli_setup._spinner(f'Initializing {func_name} process...'):
             from ..main_features import validate as main_validate
 
         main_validate(
-            g4x_obj=g4x_obj,
-            n_threads=ctx.obj['threads'],
+            smp_dir=g4x_data,
             verbose=ctx.obj['verbose'],
         )
     except Exception as e:

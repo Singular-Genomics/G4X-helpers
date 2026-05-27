@@ -3,11 +3,23 @@ import logging
 from typing import Literal
 
 from . import __version__, io
+from . import constants as c
 from . import logging_utils as logut
 from . import utils as ut
 from .g4x_output import G4Xoutput
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _create_branch(sample_dir: str, name: str):
+    HELPERS_DIR_NAME = 'g4x-helpers'
+
+    sample_dir = io.pathval.validate_dir_path(sample_dir)
+    branch_dir = sample_dir / HELPERS_DIR_NAME / name
+
+    if not branch_dir.exists():
+        branch_dir.mkdir(parents=True, exist_ok=True)
+    return branch_dir
 
 
 def _base_command(func):
@@ -27,7 +39,7 @@ def _base_command(func):
         smp_dir = io.pathval.validate_dir_path(smp_dir)
 
         if out_dir is None:
-            out_dir = smp_dir
+            out_dir = _create_branch(smp_dir, func.__name__)
         else:
             out_dir = io.pathval.validate_dir_path(out_dir)
 
@@ -77,11 +89,12 @@ def _base_command(func):
 
 
 @_base_command
-def demux(
+def redemux(
     smp_dir: str,
     manifest: str,
     *,
     out_dir: str | None = None,
+    batch_size: int = c.DEFAULT_BATCH_SIZE,
     overwrite: bool = True,
     downstream: bool = True,
     show_progress: bool = False,
@@ -98,6 +111,7 @@ def demux(
         manifest=manifest,
         out_dir=out_dir,
         overwrite=overwrite,
+        batch_size=batch_size,
         show_progress=show_progress,
         logger=log,
     )
@@ -117,7 +131,7 @@ def demux(
 
         if smp.alt_source is not None:
             viewer.init_viewer_zarr(smp, out_dir=out_dir, overwrite=overwrite, logger=log)
-            viewer.link_viewer_group(smp, out_dir, group_name='images', overwrite=overwrite)
+            viewer.link_viewer_group(smp, branch_dir=out_dir, group_name='images', overwrite=overwrite)
 
         viewer.write_transcripts(smp, overwrite=overwrite, logger=log)
         viewer.write_cells(smp, seg_name='g4x-default', overwrite=overwrite, logger=log)
@@ -126,12 +140,12 @@ def demux(
 
 
 @_base_command
-def aggregate(
+def resegment(
     smp_dir: str,
     segmentation_mask: str,
     *,
-    mask_key: str | None = None,
     out_dir: str,
+    mask_key: str | None = None,
     overwrite: bool = True,
     downstream: bool = True,
     show_progress: bool = False,
@@ -161,7 +175,7 @@ def aggregate(
 
         if smp.alt_source is not None:
             viewer.init_viewer_zarr(smp, out_dir=out_dir, overwrite=overwrite, logger=log)
-            viewer.link_viewer_group(smp, out_dir, group_name='images', overwrite=overwrite)
+            viewer.link_viewer_group(smp, branch_dir=out_dir, group_name='images', overwrite=overwrite)
 
         viewer.write_transcripts(smp, overwrite=overwrite, logger=log)
         viewer.write_cells(smp, seg_name='g4x-default', overwrite=overwrite, logger=log)
@@ -186,10 +200,12 @@ def migrate(
 @_base_command
 def validate(smp_dir: str, **kwargs):
     log = kwargs.get('logger', LOGGER)
-    smp = G4Xoutput(smp_dir)
-    report = smp.src.validation_report(raise_exception=False)
+    from .schema import FileTree
 
-    if smp.src.is_valid_all:
+    ft = FileTree(smp_dir)
+    report = ft.validation_report(raise_exception=False)
+
+    if ft.is_valid_all:
         logut.log_msg_wrapped('Sample is valid:\n', report, logger=log, level='info', prefix=' ')
     else:
         logut.log_msg_wrapped('Sample validation failed:\n', report, logger=log, level='error', prefix=' ')

@@ -118,8 +118,8 @@ def g4x_data_opt():
 
 help_map = {
     'redemux': 'After demuxing completes, do not create single-cell outputs or initialize viewer files',
-    'resegment': 'After re-segmentation, do not create single-cell outputs or initialize viewer files',
-    'sc_process': 'After single-cell outputs are generated, do not initialize viewer files',
+    'resegment': 'After aggregation, do not post-process single-cell outputs or initialize viewer files',
+    'migrate': 'Only migrate raw data files and metadata, but do not create single-cell output or viewer files',
 }
 
 
@@ -137,4 +137,19 @@ def in_place_opt(cmd_name: str = ''):
         '--in-place',
         is_flag=True,
         help=f'Edit G4X-data in-place if this flag is set.\n\nOtherwise creates a "g4x_helpers/{cmd_name}" folder.',
+    )
+
+
+def branch_opt(cmd_name: str = ''):
+    return click.option(
+        '-b',
+        '--branch',
+        is_flag=False,
+        type=str,
+        default=None,
+        help=(
+            f'Branch of processed data to use. If not specified, a branch named '
+            f'"g4x-helpers/{cmd_name}" will be created or reused automatically. '
+            f'Set to "main" to use the main branch and edit the original data in-place.'
+        ),
     )
