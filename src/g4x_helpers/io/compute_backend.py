@@ -54,7 +54,7 @@ def check_rapids() -> RapidsCheck:
     except metadata.PackageNotFoundError:
         return RapidsCheck(
             status=RapidsStatus.NOT_INSTALLED,
-            detail="Distribution 'rapids-singlecell' not found. Install with `uv sync --extra rapids`.",
+            detail="Distribution 'rapids-singlecell' not found. Install with `uv sync --extra gpu` on supported systems.",
         )
 
     try:

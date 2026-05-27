@@ -64,17 +64,38 @@ def init_viewer_zarr(
     return root_group
 
 
-def link_viewer_group(smp, out_dir, group_name: str, overwrite: bool = True):
-    link = out_dir / smp.src.ViewerZarr.DEFAULT_TARGET_PATH / group_name
-    
-    if link.exists() or link.is_symlink():
-        if not overwrite:
+# def link_viewer_group(smp, out_dir, group_name: str, overwrite: bool = True):
+#     link = out_dir / smp.src.ViewerZarr.DEFAULT_TARGET_PATH / group_name
+
+#     if link.exists() or link.is_symlink():
+#         if not overwrite:
+#             raise FileExistsError(f'Link {link} already exists and overwrite is set to False.')
+
+#         if link.is_symlink() or link.is_file():
+#             link.unlink()
+#         else:
+#             shutil.rmtree(link)
+
+#     link.symlink_to(smp.src.ViewerZarr.p / group_name, target_is_directory=True)
+
+
+def link_viewer_group(smp, branch_dir, group_name: str, overwrite: bool = True):
+    import os
+
+    target = smp.data_dir / smp.src.ViewerZarr.DEFAULT_TARGET_PATH / group_name
+    link = branch_dir / smp.src.ViewerZarr.DEFAULT_TARGET_PATH / group_name
+
+    # Compute target relative to the link's parent directory
+    relative_target = os.path.relpath(target, start=link.parent)
+
+    if link.is_symlink() or link.is_file():
+        link.unlink()
+
+    elif link.exists():
+        if overwrite:
+            shutil.rmtree(link)
+        else:
             raise FileExistsError(f'Link {link} already exists and overwrite is set to False.')
 
-        if link.is_symlink() or link.is_file():
-            link.unlink()
-
-        else:
-            shutil.rmtree(link)
-
-    link.symlink_to(smp.src.ViewerZarr.p, target_is_directory=True)
+    # Create the symlink
+    link.symlink_to(relative_target, target_is_directory=True)

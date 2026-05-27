@@ -312,6 +312,13 @@ def hex_to_rgb(hex_color, normalized=False):
     return rgb
 
 
+def rgb_to_hex(rgb, normalized=False):
+    if normalized:
+        rgb = tuple(int(v * 255) for v in rgb)
+
+    return '#{:02x}{:02x}{:02x}'.format(*rgb)
+
+
 def map_clusters_to_mask(meta: pl.DataFrame, cluster_key: str, mask: np.ndarray):
     cluster_cat = pd.Categorical(meta[cluster_key])
 
