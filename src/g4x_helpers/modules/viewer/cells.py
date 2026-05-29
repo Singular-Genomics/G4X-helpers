@@ -403,21 +403,22 @@ def get_cell_metadata(seg_group):
 
 
 def apply_viewer_metadata(seg_group, new_data):
+    new_data_df = pl.read_csv(new_data)
     existing_data = get_cell_metadata(seg_group)
 
-    if c.CELL_ID_NAME not in new_data.columns:
+    if c.CELL_ID_NAME not in new_data_df.columns:
         raise ValueError(f"Expected column '{c.CELL_ID_NAME}' not found in new data")
 
-    if not new_data[c.CELL_ID_NAME].equals(existing_data[c.CELL_ID_NAME]):
+    if not new_data_df[c.CELL_ID_NAME].equals(existing_data[c.CELL_ID_NAME]):
         raise ValueError('Cell ID columns do not match between existing and new data')
 
-    cluster_labels_meta, clusterings_order = get_user_cluster_metadata(new_data)
+    cluster_labels_meta, clusterings_order = get_user_cluster_metadata(new_data_df)
     seg_group.attrs['cluster_labels'] = cluster_labels_meta
     seg_group.attrs['cluster_labels_order'] = clusterings_order
 
     meta_columns = {
-        'cluster_id': (new_data.select(clusterings_order), 'U'),
-        'umap': (new_data.select(['UMAP1', 'UMAP2']).fill_null(np.nan), 'float16'),
+        'cluster_id': (new_data_df.select(clusterings_order), 'U'),
+        'umap': (new_data_df.select(['UMAP1', 'UMAP2']).fill_null(np.nan), 'float16'),
     }
 
     write_metadata_arrays(seg_group, meta_columns)

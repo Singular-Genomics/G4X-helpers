@@ -11,9 +11,9 @@ from . import io, logging_utils, schema
 from . import utils as ut
 
 _LAZY_ATTRS = {
-    'redemux': ('.main_features', 'redemux'),
-    'resegment': ('.main_features', 'resegment'),
-    'migrate': ('.main_features', 'migrate'),
+    'redemux': ('.cli.features.general_group', 'redemux'),
+    'resegment': ('.cli.features.general_group', 'resegment'),
+    'migrate': ('.cli.features.general_group', 'migrate'),
     'G4Xoutput': ('.g4x_output', 'G4Xoutput'),
 }
 
