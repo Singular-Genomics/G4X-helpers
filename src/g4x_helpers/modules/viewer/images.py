@@ -66,7 +66,7 @@ OMERO_DEFAULT = {
 }
 
 
-def write_muliplex_img(
+def write_multiplex_img(
     smp,
     protein_list: list[str] | None = None,
     overwrite: bool = True,
