@@ -1,4 +1,3 @@
-import colorsys
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -11,7 +10,7 @@ from ... import c
 from ... import logging_utils as logut
 from ...schema.definition import Dgex, Manifest, TxTable
 from ..workflow import PRESET_SOURCE, collect_input
-from .utils import create_array
+from . import utils
 
 if TYPE_CHECKING:
     from zarr.hierarchy import Group as zGroup
@@ -199,7 +198,7 @@ def write_tx_zarr(
             for key, arr in [('position', coords), ('gene_name', gene_names), ('cell_id', cell_ids)]:
                 if overwrite and key in tile_group:
                     del tile_group[key]
-                create_array(tile_group, key, data=arr, compressor=compressor)
+                utils.create_array(tile_group, key, data=arr, compressor=compressor)
 
 
 def get_gene_metadata(smp, manifest, dgex, logger: logging.Logger | None = None):
@@ -230,7 +229,7 @@ def get_gene_metadata(smp, manifest, dgex, logger: logging.Logger | None = None)
 
         gene_metadata = {}
         for g in colors.iter_rows(named=True):
-            gene_metadata[g['gene_id']] = {'color': hex_to_rgb(g['hex'])}
+            gene_metadata[g['gene_id']] = {'color': utils.hex_to_rgb(g['hex'])}
     else:
         gene_list = tx_panel['gene_name'].unique().sort().to_list()
 
@@ -243,19 +242,6 @@ def get_gene_metadata(smp, manifest, dgex, logger: logging.Logger | None = None)
 
 
 # region colors
-def hex_to_rgb(hex_color):
-    hex_color = hex_color.lstrip('#')
-
-    return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
-
-
-def hsv_to_hex(h, s, v):
-    # wrap hue into [0,1]
-    h = h % 1.0
-    r, g, b = colorsys.hsv_to_rgb(h, s, v)
-    return '#{:02x}{:02x}{:02x}'.format(int(r * 255), int(g * 255), int(b * 255))
-
-
 def _normalize_range(df, column, out_range=(0, 1)):
     result = df.with_columns((out_range[0] + (out_range[1] - out_range[0]) * pl.col(column)).alias(column))
     return result
@@ -342,6 +328,8 @@ def complete_panel_colors(tx_panel, assignments):
 
     colors = colors.vstack(missing_colors)
     colors = colors.with_columns(
-        pl.struct(['hue', 'sat', 'val']).map_elements(lambda x: hsv_to_hex(x['hue'], x['sat'], x['val'])).alias('hex')
+        pl.struct(['hue', 'sat', 'val'])
+        .map_elements(lambda x: utils.hsv_to_hex(x['hue'], x['sat'], x['val']))
+        .alias('hex')
     )
     return colors

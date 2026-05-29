@@ -1,4 +1,5 @@
 import inspect
+from pathlib import Path
 
 from .. import __version__
 from .. import constants as c
@@ -166,8 +167,84 @@ def resegment(ctx, g4x_data, cell_labels, labels_key, branch, no_downstream):
     add_help_option=True,
     help='viewer',
 )
+@click.argument(
+    'viewer-zarr',
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help='Path to a g4x-viewer.zarr',
+    # panel='data i/o',
+)
 @click.pass_context
-def viewer(ctx):
+def viewer(ctx, viewer_zarr):
+    ctx.obj = {'viewer_zarr': viewer_zarr}
+    pass
+
+
+@viewer.command(name='images', help=hm.MIGRT_HELP)
+@click.option(
+    '--export-metadata',
+    type=click.Choice(['auto', 'cpu', 'gpu'], case_sensitive=False),
+    default='auto',
+    show_default=True,
+    help='Execution backend.',
+)
+@click.pass_context
+def images(ctx):
+    pass
+
+
+@viewer.command(name='cells', help=hm.MIGRT_HELP)
+@click.option(
+    '--import-metadata',
+    type=click.Path(exists=True, dir_okay=False),
+    help='CSV file containing cell metadata to import.',
+)
+@click.option(
+    '--export-metadata',
+    type=click.Path(exists=False, writable=True, dir_okay=False),
+    # default='./cell_metadata.csv',
+    default=None,
+    flag_value='./cell_metadata.csv',
+    show_default=True,
+    help='Output CSV file for exported cell metadata.',
+)
+@click.option(
+    '--segmentation',
+    type=click.Path(exists=False, writable=True, dir_okay=False),
+    default='g4x_default_segmentation',
+    # show_default=True,
+    required=False,
+    help='Only required if multiple segmentations are available.',
+)
+@click.pass_context
+def cells(ctx, import_metadata, export_metadata, segmentation):
+
+    func_name = 'viewer/' + inspect.currentframe().f_code.co_name
+
+    try:
+        with cli_setup._spinner(f'Initializing {func_name} process...'):
+            from ..modules.viewer import cells as viewer_cells
+
+        def get_metadata(viewer_dir, seg_source: str = 'g4x_default_segmentation'):
+            seg_group = viewer_cells.get_seg_group(viewer_dir, seg_source)
+            return viewer_cells.get_cell_metadata(seg_group)
+
+        meta = get_metadata(ctx.obj['viewer_zarr'], segmentation)
+        meta.write_csv(export_metadata)
+
+    except Exception as e:
+        cli_setup._fail_message(func_name, e)
+
+
+@viewer.command(name='transcripts', help=hm.MIGRT_HELP)
+@click.option(
+    '--export-metadata',
+    type=click.Choice(['auto', 'cpu', 'gpu'], case_sensitive=False),
+    default='auto',
+    show_default=True,
+    help='Execution backend.',
+)
+@click.pass_context
+def transcripts(ctx):
     pass
 
 

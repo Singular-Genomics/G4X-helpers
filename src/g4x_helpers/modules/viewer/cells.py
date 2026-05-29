@@ -12,7 +12,7 @@ from shapely import to_ragged_array
 from ... import c, io
 from ...schema.definition import CellMetadata, CellxGene, CellxProt, ClusteringUmap, Segmentation
 from ..workflow import PRESET_SOURCE, collect_input
-from .utils import calculate_chunks, create_array
+from . import utils
 
 if TYPE_CHECKING:
     from ...g4x_output import G4Xoutput
@@ -71,8 +71,12 @@ def write_cells(
 
     gene_name_array = np.array(gene_names).astype('U')
     prot_name_array = np.array(protein_names).astype('U')
-    create_array(seg_group, 'gene_names', data=gene_name_array, compressor=COMPRESSOR, chunks=gene_name_array.shape)
-    create_array(seg_group, 'protein_names', data=prot_name_array, compressor=COMPRESSOR, chunks=prot_name_array.shape)
+    utils.create_array(
+        seg_group, 'gene_names', data=gene_name_array, compressor=COMPRESSOR, chunks=gene_name_array.shape
+    )
+    utils.create_array(
+        seg_group, 'protein_names', data=prot_name_array, compressor=COMPRESSOR, chunks=prot_name_array.shape
+    )
 
     ################## preparing to write arrays
     meta_columns = {
@@ -90,18 +94,24 @@ def write_cells(
     }
 
     log.info('Writing cell metadata arrays')
-    for key, (arr, dtype) in meta_columns.items():
-        array = arr.to_numpy() if isinstance(arr, (pl.DataFrame, pl.Series)) else arr
-
-        array = array.astype(dtype)
-        chunks = calculate_chunks(array, target_mb=4)
-
-        create_array(seg_group, key, data=array, compressor=COMPRESSOR, chunks=chunks)
+    write_metadata_arrays(seg_group, meta_columns)
 
     log.info('Writing cell polygon arrays')
     for array, name in zip([offsets, verts_xy], ['polygon_offsets', 'polygon_vertices_xy']):
-        chunks = calculate_chunks(array, target_mb=4)
-        create_array(seg_group, name, data=array, compressor=COMPRESSOR, chunks=chunks)
+        chunks = utils.calculate_chunks(array, target_mb=4)
+        utils.create_array(seg_group, name, data=array, compressor=COMPRESSOR, chunks=chunks)
+
+
+def write_metadata_arrays(seg_group, meta_columns):
+    for key, (arr, dtype) in meta_columns.items():
+        if key in seg_group:
+            del seg_group[key]
+
+        array = arr.to_numpy() if isinstance(arr, (pl.DataFrame, pl.Series)) else arr
+        array = array.astype(dtype)
+        chunks = utils.calculate_chunks(array, target_mb=4)
+
+        utils.create_array(seg_group, key, data=array, compressor=COMPRESSOR, chunks=chunks)
 
 
 def prepare_metadata_for_tiling(metadata, tile_size, img_res):
@@ -218,10 +228,6 @@ def get_sorted_cluster_ids(df, cluster_key: str):
 
 
 def generate_cluster_palette(ordered_unique_clusters: list, max_colors: int = 256) -> dict:
-    import matplotlib.colors as mcolors
-
-    def hex2rgb(hex: str) -> list[int, int, int]:
-        return [int(x * 255) for x in mcolors.to_rgb(hex)]
 
     n_clusters = len(ordered_unique_clusters)
 
@@ -235,9 +241,9 @@ def generate_cluster_palette(ordered_unique_clusters: list, max_colors: int = 25
 
     cluster_palette = {}
     for i, cluster in enumerate(ordered_unique_clusters):
-        cluster_palette[str(cluster)] = hex2rgb(hex_list[i])
+        cluster_palette[str(cluster)] = utils.hex_to_rgb(hex_list[i])
 
-    cluster_palette[UNASSIGNED_CELL] = hex2rgb(c.UNASSIGNED_COLOR)
+    cluster_palette[UNASSIGNED_CELL] = utils.hex_to_rgb(c.UNASSIGNED_COLOR)
 
     return cluster_palette
 
@@ -303,22 +309,6 @@ def map_categories(mask: np.ndarray, labels: np.ndarray, categories: np.ndarray,
     return out_flat.reshape(mask.shape)
 
 
-def hex_to_rgb(hex_color, normalized=False):
-    hex_color = hex_color.lstrip('#')
-    rgb = tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
-
-    if normalized:
-        return tuple(v / 255 for v in rgb)
-    return rgb
-
-
-def rgb_to_hex(rgb, normalized=False):
-    if normalized:
-        rgb = tuple(int(v * 255) for v in rgb)
-
-    return '#{:02x}{:02x}{:02x}'.format(*rgb)
-
-
 def map_clusters_to_mask(meta: pl.DataFrame, cluster_key: str, mask: np.ndarray):
     cluster_cat = pd.Categorical(meta[cluster_key])
 
@@ -333,9 +323,101 @@ def map_clusters_to_mask(meta: pl.DataFrame, cluster_key: str, mask: np.ndarray)
     p_mask = map_categories(mask=mask, labels=meta['cell_id'].to_numpy(), categories=cluster_codes)
 
     pal = [c.UNASSIGNED_COLOR] + c.SG_PALETTE
-    pal = np.array([hex_to_rgb(c, normalized=False) for c in pal])
+    pal = np.array([utils.hex_to_rgb(c, normalized=False) for c in pal])
 
     rgb = pal[p_mask]
     rgb[p_mask == -1] = [0, 0, 0]
 
     return rgb
+
+
+def get_user_cluster_metadata(new_data: pl.DataFrame) -> dict[str, dict]:
+    cols = new_data.columns
+    cluster_cols = [col for col in cols if col not in (c.CELL_ID_NAME, 'UMAP1', 'UMAP2')]
+
+    clusterings_dict = {
+        col: f'{col}_color' if f'{col}_color' in cluster_cols else None
+        for col in cluster_cols
+        if not col.endswith('_color')
+    }
+
+    clusterings_order = get_sorted_clusterings(new_data, clusterings_dict.keys())
+
+    cluster_labels_meta = {}
+    for i, key in enumerate(clusterings_order):
+        sorted_cluster_ids = get_sorted_cluster_ids(new_data, key)
+        if clusterings_dict[key] is None:
+            cluster_color_map = generate_cluster_palette(sorted_cluster_ids)
+        else:
+            color_map = (
+                new_data.select([key, clusterings_dict[key]])
+                .unique()
+                .cast({key: pl.Enum(sorted_cluster_ids)})
+                .sort(key)
+            )
+            cluster_color_map = {}
+            for row in color_map.iter_rows():
+                cluster_color_map[row[0]] = utils.hex_to_rgb(row[1])
+
+        cluster_labels_meta[key] = {
+            'index': i,
+            'clusterID_order': list(cluster_color_map.keys()),
+            'clusterID_colors': cluster_color_map,
+        }
+
+    return cluster_labels_meta, clusterings_order
+
+
+def get_seg_group(viewer_dir, segmentation_source='g4x_default_segmentation'):
+    cell_group = zarr.open(viewer_dir / 'cells', mode='r+')
+
+    if segmentation_source not in cell_group:
+        raise ValueError(
+            f'Segmentation source "{segmentation_source}" not found in the data. Available sources: {list(cell_group.keys())}'
+        )
+
+    return cell_group[segmentation_source]
+
+
+def get_cell_metadata(seg_group):
+    cell_ids = pl.Series(name=c.CELL_ID_NAME, values=seg_group['cell_id'][:])
+
+    seg_meta_dict = dict(seg_group.attrs)
+    df = pl.DataFrame(cell_ids)
+
+    umap_dims = ['UMAP1', 'UMAP2']
+    for i, label in enumerate(umap_dims):
+        s = pl.Series(name=label, values=seg_group['umap'][:, i])
+        df = df.with_columns(s)
+
+    cluster_names = seg_meta_dict['cluster_labels_order']
+    for i, label in enumerate(cluster_names):
+        s = pl.Series(name=label, values=seg_group['cluster_id'][:, i])
+        df = df.with_columns(s)
+
+        cmap = seg_meta_dict['cluster_labels'][label]['clusterID_colors']
+        cmap = {k: utils.rgb_to_hex(v) for k, v in cmap.items()}
+        df = df.with_columns(pl.col(label).replace(cmap).alias(f'{label}_color'))
+
+    return df
+
+
+def apply_viewer_metadata(seg_group, new_data):
+    existing_data = get_cell_metadata(seg_group)
+
+    if c.CELL_ID_NAME not in new_data.columns:
+        raise ValueError(f"Expected column '{c.CELL_ID_NAME}' not found in new data")
+
+    if not new_data[c.CELL_ID_NAME].equals(existing_data[c.CELL_ID_NAME]):
+        raise ValueError('Cell ID columns do not match between existing and new data')
+
+    cluster_labels_meta, clusterings_order = get_user_cluster_metadata(new_data)
+    seg_group.attrs['cluster_labels'] = cluster_labels_meta
+    seg_group.attrs['cluster_labels_order'] = clusterings_order
+
+    meta_columns = {
+        'cluster_id': (new_data.select(clusterings_order), 'U'),
+        'umap': (new_data.select(['UMAP1', 'UMAP2']).fill_null(np.nan), 'float16'),
+    }
+
+    write_metadata_arrays(seg_group, meta_columns)
