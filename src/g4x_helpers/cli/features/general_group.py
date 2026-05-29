@@ -2,11 +2,11 @@ import functools
 import logging
 from typing import Literal
 
-from . import __version__, io
-from . import constants as c
-from . import logging_utils as logut
-from . import utils as ut
-from .g4x_output import G4Xoutput
+from ... import __version__, io
+from ... import constants as c
+from ... import logging_utils as logut
+from ... import utils as ut
+from ...g4x_output import G4Xoutput
 
 LOGGER = logging.getLogger(__name__)
 
