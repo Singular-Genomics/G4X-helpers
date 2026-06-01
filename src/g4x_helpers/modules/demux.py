@@ -28,7 +28,6 @@ def demux_raw_features(
     *,
     out_dir: str = PRESET_SOURCE,
     batch_size: int = c.DEFAULT_BATCH_SIZE,
-    demux_mode: str = 'default',
     max_ham_dist: int = 2,
     min_delta: int = 2,
     demux_length: int = 15,
@@ -71,6 +70,7 @@ def demux_raw_features(
             batch_dir=batch_dir,
             batch_size=batch_size,
             max_ham_dist=max_ham_dist,
+            demux_length=demux_length,
             min_delta=min_delta,
             show_progress=show_progress,
             logger=log,
@@ -102,6 +102,7 @@ def batched_demuxing(
     batch_size: int = c.DEFAULT_BATCH_SIZE,
     max_ham_dist: int = 2,
     min_delta: int = 2,
+    demux_length: int = 15,
     show_progress: bool | None = None,
     logger: logging.Logger | None = None,
 ):
@@ -145,6 +146,9 @@ def batched_demuxing(
 
             seqs = feature_batch_read['sequence'].to_list()
             codes = manifest_read['sequence'].to_list()
+            seqs = [seq[:demux_length] for seq in seqs]
+            codes = [seq[:demux_length] for seq in codes]
+
             codebook_target_ids = np.array(manifest_read['probe_id'].to_list())
 
             hammings = batched_dot_product_hamming_matrix(seqs, codes, lut=LUT, batch_size=batch_size)
