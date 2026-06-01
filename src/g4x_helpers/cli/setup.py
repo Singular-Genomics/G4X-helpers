@@ -35,7 +35,15 @@ click.rich_click.ARGUMENTS_PANEL_TITLE = 'input'
 click.rich_click.COMMAND_GROUPS = {
     'g4x-helpers': [
         {'name': 'commands', 'commands': ['viewer', 'redemux', 'resegment', 'migrate', 'validate']},
-        # {"name": "utilities", "commands": ["log"]},
+    ],
+    '* viewer': [
+        {'name': 'commands', 'commands': ['images', 'cells', 'transcripts']},
+    ],
+}
+
+click.rich_click.OPTION_GROUPS = {
+    'g4x-helpers viewer': [
+        {'name': 'input', 'options': ['viewer-zarr']},
     ],
 }
 
@@ -134,6 +142,7 @@ def branch_opt(cmd_name: str = ''):
         ),
     )
 
+
 def out_dir_from_branch(g4x_data, branch):
     from .features.general_group import _create_branch
 
@@ -145,23 +154,3 @@ def out_dir_from_branch(g4x_data, branch):
     else:
         out_dir = None
     return out_dir
-
-
-# click.rich_click.OPTION_GROUPS = {
-#     'g4x-helpers': [
-#         {
-#             'name': 'in/out',  #
-#             'options': ['--input', '--output'],
-#         },
-#         {
-#             'name': 'options',  #
-#             'options': [
-#                 '--sample-id',
-#                 '--threads',
-#                 '--verbose',
-#                 '--version',
-#                 '--help',
-#             ],
-#         },
-#     ]
-# }

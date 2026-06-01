@@ -5,6 +5,8 @@ from .. import __version__
 from .. import constants as c
 from . import help_messages as hm
 from . import setup
+from .features import general_group as gfeats
+from .features import viewer_group as vfeats
 from .setup import click
 
 
@@ -79,16 +81,14 @@ name = 'redemux'
 @setup.branch_opt(name)
 @setup.no_downstream_opt(name)
 @click.pass_context
-def cli_redemux(ctx, g4x_data, manifest, batch_size, branch, no_downstream):
+def redemux(ctx, g4x_data, manifest, batch_size, branch, no_downstream):
     func_name = inspect.currentframe().f_code.co_name
 
     try:
-        with setup._spinner(f'Initializing {func_name} process...'):
-            from .features.general_group import redemux
-
+        # with setup._spinner(f'Running {func_name} process...'):
         out_dir = setup.out_dir_from_branch(g4x_data, branch)
 
-        redemux(
+        gfeats.redemux(
             smp_dir=g4x_data,
             out_dir=out_dir,
             manifest=manifest,
@@ -123,16 +123,14 @@ name = 'resegment'
 @setup.branch_opt(name)
 @setup.no_downstream_opt(name)
 @click.pass_context
-def cli_resegment(ctx, g4x_data, cell_labels, labels_key, branch, no_downstream):
+def resegment(ctx, g4x_data, cell_labels, labels_key, branch, no_downstream):
     func_name = inspect.currentframe().f_code.co_name
 
     try:
-        with setup._spinner(f'Initializing {func_name} process...'):
-            from .features.general_group import resegment
-
+        # with setup._spinner(f'Initializing {func_name} process...'):
         out_dir = setup.out_dir_from_branch(g4x_data, branch)
 
-        resegment(
+        gfeats.resegment(
             smp_dir=g4x_data,
             out_dir=out_dir,
             segmentation_mask=cell_labels,
@@ -169,14 +167,14 @@ name = 'migrate'
 )
 @setup.no_downstream_opt(name)
 @click.pass_context
-def cli_migrate(ctx, g4x_data, out_dir, roi, no_downstream):
+def migrate(ctx, g4x_data, out_dir, roi, no_downstream):
     func_name = inspect.currentframe().f_code.co_name
 
     try:
-        with setup._spinner(f'Initializing {func_name} process...'):
-            from .features.general_group import migrate
+        # with setup._spinner(f'Initializing {func_name} process...'):
+        #     from .features.general_group import migrate
 
-        migrate(
+        gfeats.migrate(
             smp_dir=g4x_data, out_dir=out_dir, roi_coords=roi, downstream=not no_downstream, verbose=ctx.obj['verbose']
         )
     except Exception as e:
@@ -188,14 +186,14 @@ def cli_migrate(ctx, g4x_data, out_dir, roi, no_downstream):
 @cli.command(name='validate', help=hm.VLDTE_HELP)
 @setup.g4x_data_opt()
 @click.pass_context
-def cli_validate(ctx, g4x_data):
+def validate(ctx, g4x_data):
     func_name = inspect.currentframe().f_code.co_name
 
     try:
-        with setup._spinner(f'Initializing {func_name} process...'):
-            from .features.general_group import validate
+        # with setup._spinner(f'Initializing {func_name} process...'):
+        #     from .features.general_group import validate
 
-        validate(
+        gfeats.validate(
             smp_dir=g4x_data,
             verbose=ctx.obj['verbose'],
         )
@@ -257,23 +255,10 @@ def images(ctx):
 )
 @click.pass_context
 def cells(ctx, import_metadata, export_metadata, segmentation):
-
-    if import_metadata is not None and export_metadata is not None:
-        raise click.UsageError('--import-metadata and --export-metadata cannot be used together.')
-
     func_name = 'viewer/' + inspect.currentframe().f_code.co_name
 
     try:
-        with setup._spinner(f'Initializing {func_name} process...'):
-            from ..modules.viewer import cells as viewer_cells
-
-        seg_group = viewer_cells.get_seg_group(ctx.obj['viewer_zarr'], segmentation)
-
-        if export_metadata is not None:
-            meta = viewer_cells.get_cell_metadata(seg_group)
-            meta.write_csv(export_metadata)
-        if import_metadata is not None:
-            viewer_cells.apply_viewer_metadata(seg_group, import_metadata)
+        vfeats.cell_metadata(ctx.obj['viewer_zarr'], import_metadata, export_metadata, segmentation)
 
     except Exception as e:
         setup._fail_message(func_name, e)

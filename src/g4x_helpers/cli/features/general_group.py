@@ -101,7 +101,7 @@ def redemux(
     compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
     **kwargs,
 ):
-    from .modules import aggregate, demux, single_cell, viewer
+    from ...modules import aggregate, demux, single_cell, viewer
 
     log = kwargs.get('logger', LOGGER)
     smp = G4Xoutput(smp_dir, alt_source=out_dir)
@@ -152,7 +152,7 @@ def resegment(
     compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
     **kwargs,
 ):
-    from .modules import aggregate, single_cell, viewer
+    from ...modules import aggregate, single_cell, viewer
 
     log = kwargs.get('logger', LOGGER)
 
@@ -192,7 +192,7 @@ def migrate(
     downstream: bool = True,
     **kwargs,
 ) -> None:
-    from .modules import migrate
+    from ...modules import migrate
 
     migrate.migrate_sample(sample_dir=smp_dir, out_dir=out_dir, roi_coords=roi_coords, downstream=downstream, **kwargs)
 
