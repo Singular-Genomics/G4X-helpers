@@ -145,7 +145,7 @@ class Manifest_Migrator(DataMigrator, sd.Manifest):
         'gene_name': pl.String,
         'panel_type': pl.String,
         'probe_type': pl.String,
-        'read_num': pl.Int32,
+        # 'read_num': pl.Int32,
     }
 
     class Manifest_V1(sd.Manifest):
