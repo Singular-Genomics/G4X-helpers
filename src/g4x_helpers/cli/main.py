@@ -158,6 +158,13 @@ name = 'migrate'
     help='Output directory for migration results',
 )
 @click.option(
+    '-c',
+    '--check',
+    required=False,
+    is_flag=True,
+    help='Check if the sample is migratable and display status of each migrator without performing migration.',
+)
+@click.option(
     '--roi',
     required=False,
     nargs=4,
@@ -167,15 +174,19 @@ name = 'migrate'
 )
 @setup.no_downstream_opt(name)
 @click.pass_context
-def migrate(ctx, g4x_data, out_dir, roi, no_downstream):
+def migrate(ctx, g4x_data, out_dir, check, roi, no_downstream):
     func_name = inspect.currentframe().f_code.co_name
 
     try:
         # with setup._spinner(f'Initializing {func_name} process...'):
         #     from .features.general_group import migrate
 
+        if check:
+            gfeats.migrate_check(smp_dir=g4x_data)
+            return
+        
         gfeats.migrate(
-            smp_dir=g4x_data, out_dir=out_dir, roi_coords=roi, downstream=not no_downstream, verbose=ctx.obj['verbose']
+            smp_dir=g4x_data, out_dir=out_dir, status=check, roi_coords=roi, downstream=not no_downstream, verbose=ctx.obj['verbose']
         )
     except Exception as e:
         setup._fail_message(func_name, e)

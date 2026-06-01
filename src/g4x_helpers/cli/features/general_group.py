@@ -188,6 +188,7 @@ def migrate(
     smp_dir: str,
     out_dir: str,
     *,
+    status: bool = False,
     roi_coords: tuple | None = None,
     downstream: bool = True,
     **kwargs,
@@ -195,6 +196,12 @@ def migrate(
     from ...modules import migrate
 
     migrate.migrate_sample(sample_dir=smp_dir, out_dir=out_dir, roi_coords=roi_coords, downstream=downstream, **kwargs)
+
+
+def migrate_check(smp_dir: str) -> None:
+    from ...modules import migrate
+
+    migrate.status(sample_dir=smp_dir)
 
 
 @_base_command
