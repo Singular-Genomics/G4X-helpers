@@ -188,7 +188,6 @@ def migrate(ctx, g4x_data, out_dir, check, roi, no_downstream):
         gfeats.migrate(
             smp_dir=g4x_data,
             out_dir=out_dir,
-            status=check,
             roi_coords=roi,
             downstream=not no_downstream,
             verbose=ctx.obj['verbose'],
