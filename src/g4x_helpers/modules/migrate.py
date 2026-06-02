@@ -54,8 +54,9 @@ def migrate_sample(
 
     log.info('All migrators completed migration. Starting post-processing...')
 
+    smp = G4Xoutput(data_dir=out_dir)
+
     if downstream:
-        smp = G4Xoutput(data_dir=out_dir)
         aggregate.aggregate_cell_data(smp, overwrite=True, compute_backend=compute_backend, logger=log)
         single_cell.process_sc_output(smp, overwrite=True, compute_backend=compute_backend, logger=log)
         viewer.create_default_viewer(smp, logger=log)
@@ -94,7 +95,10 @@ def gather_migrators(sample_dir):
     return basic_migrators, roi_migrators
 
 
-def status(sample_dir):
+def status(
+    sample_dir,
+) -> None:
+
     basic_migrators, roi_migrators = gather_migrators(sample_dir)
     migrators = basic_migrators + roi_migrators
 

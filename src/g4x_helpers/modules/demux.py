@@ -22,13 +22,15 @@ LOGGER = logging.getLogger(__name__)
 
 
 # region main function
-# @g4x_workflow
 def demux_raw_features(
     smp: 'G4Xoutput',
     manifest: str = PRESET_SOURCE,
     *,
     out_dir: str = PRESET_SOURCE,
     batch_size: int = c.DEFAULT_BATCH_SIZE,
+    max_ham_dist: int = 2,
+    min_delta: int = 2,
+    demux_length: int = 15,
     overwrite: bool = True,
     show_progress: bool | None = None,
     logger: logging.Logger | None = None,
@@ -67,6 +69,9 @@ def demux_raw_features(
             manifest=manifest,
             batch_dir=batch_dir,
             batch_size=batch_size,
+            max_ham_dist=max_ham_dist,
+            demux_length=demux_length,
+            min_delta=min_delta,
             show_progress=show_progress,
             logger=log,
         )
@@ -95,6 +100,9 @@ def batched_demuxing(
     manifest: pl.DataFrame,
     batch_dir: str,
     batch_size: int = c.DEFAULT_BATCH_SIZE,
+    max_ham_dist: int = 2,
+    min_delta: int = 2,
+    demux_length: int = 15,
     show_progress: bool | None = None,
     logger: logging.Logger | None = None,
 ):
@@ -138,10 +146,20 @@ def batched_demuxing(
 
             seqs = feature_batch_read['sequence'].to_list()
             codes = manifest_read['sequence'].to_list()
+            seqs = [seq[:demux_length] for seq in seqs]
+            codes = [seq[:demux_length] for seq in codes]
+
             codebook_target_ids = np.array(manifest_read['probe_id'].to_list())
 
             hammings = batched_dot_product_hamming_matrix(seqs, codes, lut=LUT, batch_size=batch_size)
-            feature_batch_read = demux(hammings, feature_batch_read, codebook_target_ids, probe_dict)
+            feature_batch_read = demux(
+                hammings=hammings,
+                reads=feature_batch_read,
+                codebook_target_ids=codebook_target_ids,
+                probe_dict=probe_dict,
+                max_ham_dist=max_ham_dist,
+                min_delta=min_delta,
+            )
             feature_batch_read = feature_batch_read.drop(['sequence', 'read_num'])
             redemuxed_feature_batch.append(feature_batch_read)
 
