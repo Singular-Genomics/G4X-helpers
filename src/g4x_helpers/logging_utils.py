@@ -28,7 +28,7 @@ def configure_g4x_logging(
         logger.handlers.clear()
 
     level = level.upper() if isinstance(level, str) else level
-    
+
     # stream_format = '%(g4x_name)s - %(message)s'
     stream_format = '%(asctime)s %(levelshort)1s: %(message)s'
     file_format = '%(asctime)s %(levelname)7s | %(g4x_name)s - %(message)s'
@@ -111,3 +111,23 @@ def log_with_path(
         msg += f'\n{INDENT}{after_path}'
 
     log.log(level, msg)
+
+
+def verbose_to_level(verbose: int) -> int:
+    """Convert a verbosity level to a logging level.
+
+    -1: disable logging
+     0: warnings and above
+     1: info and above
+     2+: debug and above
+    """
+    if verbose < 0:
+        return logging.CRITICAL + 1  # effectively disables logging
+
+    levels = [
+        logging.WARNING,
+        logging.INFO,
+        logging.DEBUG,
+    ]
+
+    return levels[min(verbose, len(levels) - 1)]

@@ -48,8 +48,9 @@ def _base_command(func):
             if not log_dir.exists():
                 log_dir.mkdir(parents=True, exist_ok=True)
 
+            lvl = logut.verbose_to_level(verbose)
             logger = logut.configure_g4x_logging(
-                level='INFO', file_log=True, out_dir=log_dir, append_time=True, file_mode='w'
+                level=lvl, file_log=True, out_dir=log_dir, append_time=True, file_mode='w'
             )
 
         backend = io.get_backend(compute_backend)
@@ -188,7 +189,6 @@ def migrate(
     smp_dir: str,
     out_dir: str,
     *,
-    status: bool = False,
     roi_coords: tuple | None = None,
     downstream: bool = True,
     **kwargs,
