@@ -4,7 +4,8 @@ import anndata as ad
 import numpy as np
 import polars as pl
 
-from .. import c, io
+from .. import constants as c
+from .. import io
 from .validator import (
     BaseValidator,
     FileValidator,
@@ -381,91 +382,3 @@ class HnEDir(ImgDirectoryValidator):
 class ViewerZarr(BaseValidator):
     PRIMARY = False
     DEFAULT_TARGET_PATH = c.FILE_VIEWER_ZARR
-
-
-# class HnEDir(FolderValidator):
-#     DEFAULT_TARGET_PATH = c.HE_DIR
-#     EXPECTED_FILES = {
-#         f'{c.CYTOPLASMIC_STAIN}.ome.tiff',
-#         f'{c.H_AND_E}.ome.tiff',
-#         f'{c.NUCLEAR_STAIN}.ome.tiff',
-#     }
-
-#     ALT_FILES = {
-#         f'{c.CYTOPLASMIC_STAIN}.jp2',
-#         f'{c.H_AND_E}.jp2',
-#         f'{c.NUCLEAR_STAIN}.jp2',
-#     }
-
-#     EXPECTED_DIRS = {'thumbs'}
-
-#     def get_img(self, query: str):
-#         search_pool = self.ALT_FILES if self.alt_present else self.EXPECTED_FILES
-#         fname = next(x for x in search_pool if query in x)
-#         return self.p / fname
-
-
-# class HnEDir(BaseValidator):
-#     DEFAULT_TARGET_PATH = c.HE_DIR
-
-#     IMG_SUFFIXES = [c.PREFERRED_IMG_SUFFIX, c.ALT_IMG_SUFFIX]
-
-#     IMAGES = [
-#         c.NUC_IMG,
-#         c.CYT_IMG,
-#         c.HNE_IMG,
-#     ]
-
-#     def __init__(self, root):
-#         super().__init__(root=root)
-
-#         self.existing_files = {}
-#         for img in self.IMAGES:
-#             img_path = Path(f'{img}__missing__')
-#             for suffix in self.IMG_SUFFIXES:
-#                 candidate = (self.root / img).with_suffix(suffix)
-#                 if candidate.exists():
-#                     img_path = candidate
-
-#             self.existing_files[img] = img_path  # is not None
-
-#     @validation_test
-#     def images_present(self):
-#         existing_files = {}
-#         for img_name, img_path in self.existing_files.items():
-#             existing_files[img_name] = img_path.exists()
-#         return all(existing_files.values())
-
-# class ProteinDir(FolderValidator):
-#     DEFAULT_TARGET_PATH = c.PR_DIR
-#     IMG_SUFFIXES = [c.PREFERRED_IMG_SUFFIX, c.ALT_IMG_SUFFIX]
-#     EXPECTED_DIRS = {'thumbs'}
-
-#     @property
-#     def panel(self):
-#         return ProteinPanel(root=self.root)
-
-#     @property
-#     def proteins(self):
-#         if self.panel.is_valid:
-#             return self.panel.load()['target'].to_list()
-#         else:
-#             return []
-
-#     @property
-#     def existing_images(self):
-#         return [f for f in self.existing_files() if any(suffix in f.name for suffix in ProteinDir.IMG_SUFFIXES)]
-
-#     @validation_test
-#     def has_panel(self):
-#         return self.panel.is_valid
-
-#     @validation_test
-#     def images_match_panel(self):
-#         image_names = [f.name.split('.')[0] for f in self.existing_images]
-#         return set(image_names).issubset(set(self.proteins))
-
-#     def get_img(self, query: str):
-#         search_pool = self.existing_images
-#         fname = next(x for x in search_pool if query in x.name)
-#         return self.p / fname

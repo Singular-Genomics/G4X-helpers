@@ -65,12 +65,18 @@ class FileTree:
         self.alt_source = Path(alt_source) if alt_source else None
 
         meta_validator = MAIN_VALIDATOR(root=self.smp_dir)
+        if not meta_validator.path_exists():
+            msg = 'Missing sample.g4x\n'
+            msg += 'G4X-helpers v4 requires that G4X-data must contain a metadata file named "sample.g4x"\n\n'
+            msg += 'If this data was generated with an older software version, you can migrate it to the lastest schema using "g4x-helpers migrate"'
+            raise ValidationError(msg)
+
         if not meta_validator.is_valid:
-            raise ValueError('Sample metadata is not valid. Please check the validation errors.')
+            raise ValidationError(f'sample.g4x is not valid\nCaused by: {meta_validator.validation()}')
 
         assay_type = ut.detect_assay_type(meta_validator.load())
         if assay_type == 'undefined':
-            raise ValueError('Could not detect assay type from sample metadata.')
+            raise ValidationError('Could not detect assay type from sample.g4x')
 
         self.assay_type = assay_type
         self.tx_detected = True if assay_type in ['combined', 'tx_only'] else False

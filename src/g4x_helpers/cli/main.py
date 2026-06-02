@@ -17,13 +17,13 @@ from .setup import click
     add_help_option=True,
     help=hm.CLI_HELP,
 )
-@click.option(
-    '--backend',
-    type=click.Choice(['auto', 'cpu', 'gpu'], case_sensitive=False),
-    default='auto',
-    show_default=True,
-    help='Execution backend.',
-)
+# @click.option(
+#     '--backend',
+#     type=click.Choice(['auto', 'cpu', 'gpu'], case_sensitive=False),
+#     default='auto',
+#     show_default=True,
+#     help='Execution backend for GPU-accelerated operations',
+# )
 @click.option(
     '-v',
     '--verbose',
@@ -40,7 +40,7 @@ from .setup import click
     help='Display g4x-helpers version',
 )
 @click.pass_context
-def cli(ctx, backend, verbose, version):
+def cli(ctx, verbose, version):
     if version:
         click.echo(f'g4x-helpers: {__version__}')
         ctx.exit()
@@ -53,7 +53,7 @@ def cli(ctx, backend, verbose, version):
     if ctx.invoked_subcommand:
         ctx.ensure_object(dict)
 
-        ctx.obj['backend'] = backend
+        ctx.obj['backend'] = 'auto'  # backend
         ctx.obj['verbose'] = verbose
         ctx.obj['version'] = __version__
 
@@ -63,7 +63,7 @@ def cli(ctx, backend, verbose, version):
 name = 'redemux'
 
 
-@cli.command(name=name, help=hm.REDMX_HELP)
+@cli.command(name=name, help=hm.REDEMUX_HELP)
 @setup.g4x_data_opt()
 @click.option(
     '--manifest',
@@ -105,7 +105,7 @@ def redemux(ctx, g4x_data, manifest, batch_size, branch, no_downstream):
 name = 'resegment'
 
 
-@cli.command(name=name, help=hm.RESEG_HELP)
+@cli.command(name=name, help=hm.RESEGMENT_HELP)
 @setup.g4x_data_opt()
 @click.option(
     '--cell-labels',
@@ -147,7 +147,7 @@ def resegment(ctx, g4x_data, cell_labels, labels_key, branch, no_downstream):
 name = 'migrate'
 
 
-@cli.command(name=name, help=hm.MIGRT_HELP)
+@cli.command(name=name, help=hm.MIGRATE_HELP)
 @setup.g4x_data_opt()
 @click.option(
     '-o',
@@ -162,7 +162,7 @@ name = 'migrate'
     '--check',
     required=False,
     is_flag=True,
-    help='Check if the sample is migratable and display status of each migrator without performing migration.',
+    help='Check if the sample is migratable; without moving data',
 )
 @click.option(
     '--roi',
@@ -184,9 +184,14 @@ def migrate(ctx, g4x_data, out_dir, check, roi, no_downstream):
         if check:
             gfeats.migrate_check(smp_dir=g4x_data)
             return
-        
+
         gfeats.migrate(
-            smp_dir=g4x_data, out_dir=out_dir, status=check, roi_coords=roi, downstream=not no_downstream, verbose=ctx.obj['verbose']
+            smp_dir=g4x_data,
+            out_dir=out_dir,
+            status=check,
+            roi_coords=roi,
+            downstream=not no_downstream,
+            verbose=ctx.obj['verbose'],
         )
     except Exception as e:
         setup._fail_message(func_name, e)
@@ -194,7 +199,7 @@ def migrate(ctx, g4x_data, out_dir, check, roi, no_downstream):
 
 ############################################################
 # region validate
-@cli.command(name='validate', help=hm.VLDTE_HELP)
+@cli.command(name='validate', help=hm.VALIDATE_HELP)
 @setup.g4x_data_opt()
 @click.pass_context
 def validate(ctx, g4x_data):
@@ -216,7 +221,7 @@ def validate(ctx, g4x_data):
 @cli.group(
     context_settings=dict(help_option_names=['-h', '--help']),
     add_help_option=True,
-    help='Modify metadata in a G4X-viewer zarr store',
+    help=hm.VIEWER_HELP,
 )
 @click.argument(
     'viewer-zarr',
@@ -243,7 +248,7 @@ def images(ctx):
 
 @viewer.command(
     name='cells',
-    help='Modify cell metadata in a G4X-viewer zarr store\n\n--import and --export options cannot be used together.',
+    help='Modify cell metadata in a G4X-viewer zarr store\n\n--import and --export options cannot be used together',
 )
 @click.option(
     '--import-metadata',
@@ -268,6 +273,10 @@ def images(ctx):
 def cells(ctx, import_metadata, export_metadata, segmentation):
     func_name = 'viewer/' + inspect.currentframe().f_code.co_name
 
+    if not import_metadata and not export_metadata:
+        click.echo('Please provide one of --import-metadata or --export-metadata options')
+        ctx.exit(0)
+    
     try:
         vfeats.cell_metadata(ctx.obj['viewer_zarr'], import_metadata, export_metadata, segmentation)
 

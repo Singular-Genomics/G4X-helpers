@@ -194,15 +194,11 @@ def migrate_check(smp_dir: str) -> None:
     migrate.status(sample_dir=smp_dir)
 
 
-@_base_command
+# @_base_command
 def validate(smp_dir: str, **kwargs):
-    log = kwargs.get('logger', LOGGER)
-    from .schema import FileTree
+
+    from ...schema import FileTree
 
     ft = FileTree(smp_dir)
     report = ft.validation_report(raise_exception=False)
-
-    if ft.is_valid_all:
-        logut.log_msg_wrapped('Sample is valid:\n', report, logger=log, level='info', prefix=' ')
-    else:
-        logut.log_msg_wrapped('Sample validation failed:\n', report, logger=log, level='error', prefix=' ')
+    print(report)

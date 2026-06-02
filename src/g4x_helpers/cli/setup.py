@@ -56,7 +56,7 @@ def _spinner(message: str):
 
 def _fail_message(func_name, e, trace_back=False):
     click.echo('')
-    click.secho(f'Failed {func_name}:', fg='red', err=True, bold=True)
+    click.secho(f'[{func_name}] failed:', fg='red', err=True, bold=True)
     if trace_back:
         traceback.print_exc()
     raise click.ClickException(f'{type(e).__name__}: {e}')
@@ -107,7 +107,7 @@ def g4x_data_opt():
 help_map = {
     'redemux': 'After demuxing completes, do not create single-cell outputs or initialize viewer files',
     'resegment': 'After aggregation, do not post-process single-cell outputs or initialize viewer files',
-    'migrate': 'Only migrate raw data files and metadata, but do not create single-cell output or viewer files',
+    'migrate': 'Only migrate raw data and metadata; do not create single-cell output or viewer files',
 }
 
 
