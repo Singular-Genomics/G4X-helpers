@@ -25,11 +25,11 @@ class G4Xoutput:
 
     """
 
-    # TODO rename data_dir
-    def __init__(self, data_dir: str, alt_source: str | None = None, use_cache: bool = False, validate: bool = True):
-        self.data_dir = Path(data_dir)
+    # TODO rename smp_dir
+    def __init__(self, smp_dir: str, alt_source: str | None = None, use_cache: bool = False, validate: bool = True):
+        self.smp_dir = Path(smp_dir)
         self.alt_source = Path(alt_source) if alt_source is not None else None
-        self.src = schema.FileTree(self.data_dir, alt_source=alt_source)
+        self.src = schema.FileTree(self.smp_dir, alt_source=alt_source)
         self.out = self.src.copy()
         self.use_cache = use_cache
 
@@ -49,7 +49,7 @@ class G4Xoutput:
         machine_num = self.machine.removeprefix('g4-').lstrip('0')
         mac_run_id = f'G{machine_num.zfill(2)}-{self.run_id}'
         gap = 16
-        repr_string = f'G4X-data @ {self.data_dir}\n'
+        repr_string = f'G4X-data @ {self.smp_dir}\n'
 
         shp = (np.array(self.shape) * 0.3125) / 1000
 
@@ -256,7 +256,7 @@ class G4Xoutput:
         if subdir is None:
             subdir = ''
 
-        list_path = self.data_dir / subdir
+        list_path = self.smp_dir / subdir
         output = os.listdir(list_path)
 
         contents = {'dirs': [], 'files': []}

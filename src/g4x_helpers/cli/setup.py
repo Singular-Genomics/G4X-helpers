@@ -63,9 +63,9 @@ def _fail_message(func_name, e, trace_back=False):
 
 
 def initialize_sample(
-    data_dir: str, sample_id: str | None = None, in_place: bool = False, n_threads: int = constants.DEFAULT_THREADS
+    smp_dir: str, sample_id: str | None = None, in_place: bool = False, n_threads: int = constants.DEFAULT_THREADS
 ) -> None:
-    msg = f'loading G4X-data from [blue]{data_dir}[/blue]'
+    msg = f'loading G4X-data from [blue]{smp_dir}[/blue]'
     with _spinner(msg):
         import glymur
 
@@ -73,17 +73,17 @@ def initialize_sample(
 
         glymur.set_option('lib.num_threads', n_threads)
         try:
-            sample = G4Xoutput(data_dir=data_dir, sample_id=sample_id)
+            sample = G4Xoutput(smp_dir=smp_dir, sample_id=sample_id)
         except Exception as e:
             click.echo('\n')
             click.secho('Failed to load G4X-data:', fg='red', err=True, bold=True)
             raise click.ClickException(f'{e}')
 
     if in_place:
-        out_dir = sample.data_dir
+        out_dir = sample.smp_dir
         click.secho('Editing in-place!', fg='blue', bold=True)
     else:
-        out_dir = sample.data_dir / 'g4x_helpers'
+        out_dir = sample.smp_dir / 'g4x_helpers'
 
     return sample, out_dir
 

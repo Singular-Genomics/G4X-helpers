@@ -55,7 +55,7 @@ def process_sc_output(
         log.info('Using provided AnnData object with %d cells and %d genes', adata.n_obs, adata.n_vars)
 
     # Validate and prepare output, set up reusable functions
-    out_dir = smp.data_dir if out_dir == PRESET_SOURCE else io.pathval.validate_dir_path(out_dir)
+    out_dir = smp.smp_dir if out_dir == PRESET_SOURCE else io.pathval.validate_dir_path(out_dir)
     prep_out = partial(reroute_source, smp, out_dir, overwrite=overwrite, logger=log)
     log_with_path = partial(logut.log_with_path, logger=log, level='info')
     write_dummys = partial(write_dummy_clustering_outputs, smp=smp, logger=log)

@@ -54,7 +54,7 @@ def migrate_sample(
 
     log.info('All migrators completed migration. Starting post-processing...')
 
-    smp = G4Xoutput(data_dir=out_dir)
+    smp = G4Xoutput(smp_dir=out_dir)
 
     if downstream:
         aggregate.aggregate_cell_data(smp, overwrite=True, compute_backend=compute_backend, logger=log)

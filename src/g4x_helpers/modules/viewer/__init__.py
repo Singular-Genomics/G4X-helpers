@@ -1,9 +1,6 @@
-from . import cells as cell
-from . import images as img
-from . import transcripts as tx
 from .cells import write_cells
-from .create_zarr import init_viewer_zarr, link_viewer_group
 from .images import write_he_img, write_multiplex_img
+from .manage_zarr import init_viewer_zarr, link_viewer_group
 from .transcripts import write_transcripts
 
 
@@ -16,9 +13,6 @@ def create_default_viewer(smp, logger):
 
 
 __all__ = [
-    'cell',
-    'img',
-    'tx',
     'init_viewer_zarr',
     'write_he_img',
     'write_multiplex_img',

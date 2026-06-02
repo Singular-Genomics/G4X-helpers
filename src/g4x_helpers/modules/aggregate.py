@@ -53,7 +53,7 @@ def aggregate_cell_data(
     mask = io.import_segmentation(segment_in.p, labels_key=mask_key, expected_shape=smp.shape)
 
     # 3: Validate and prepare output
-    out_dir = smp.data_dir if out_dir == PRESET_SOURCE else io.pathval.validate_dir_path(out_dir)
+    out_dir = smp.smp_dir if out_dir == PRESET_SOURCE else io.pathval.validate_dir_path(out_dir)
 
     log_with_path = partial(logut.log_with_path, logger=log, level='info')
     route_out = partial(reroute_source, smp, out_dir, overwrite=overwrite, logger=log)

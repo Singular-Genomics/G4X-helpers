@@ -43,7 +43,7 @@ def demux_raw_features(
     manifest_in = collect_input(smp, manifest, Manifest, logger=log)
 
     # 2: Validate and prepare output
-    out_dir = smp.data_dir if out_dir == PRESET_SOURCE else io.pathval.validate_dir_path(out_dir)
+    out_dir = smp.smp_dir if out_dir == PRESET_SOURCE else io.pathval.validate_dir_path(out_dir)
 
     overwrite_manifest = True if manifest == PRESET_SOURCE else overwrite
     reroute_source(smp, out_dir, validator=Manifest, overwrite=overwrite_manifest, logger=log)
@@ -284,7 +284,7 @@ def one_hot_encode_str_array(seqs: list[str], seq_len: int, lut: np.ndarray) -> 
 #     panel_name = manifest.name
 #     timestamp = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
 #     ## add info to run_meta.json
-#     with open(g4x_obj.data_dir / 'run_meta.json', 'r') as f:
+#     with open(g4x_obj.smp_dir / 'run_meta.json', 'r') as f:
 #         meta = json.load(f)
 
 #     meta['transcript_panel'] = panel_name
@@ -294,7 +294,7 @@ def one_hot_encode_str_array(seqs: list[str], seq_len: int, lut: np.ndarray) -> 
 #         json.dump(meta, f, indent=2)
 
 #     ## add info to run_meta.json in g4x_viewer
-#     with open(g4x_obj.data_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_run_metadata.json', 'r') as f:
+#     with open(g4x_obj.smp_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_run_metadata.json', 'r') as f:
 #         meta = json.load(f)
 
 #     meta['run_metadata']['transcript_panel'] = panel_name
