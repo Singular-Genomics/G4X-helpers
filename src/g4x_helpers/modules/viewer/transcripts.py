@@ -10,7 +10,7 @@ from ... import c
 from ... import logging_utils as logut
 from ...schema.definition import Dgex, Manifest, TxTable
 from ..workflow import PRESET_SOURCE, collect_input
-from . import utils
+from . import zarr_utils as utils
 
 if TYPE_CHECKING:
     from zarr.hierarchy import Group as zGroup

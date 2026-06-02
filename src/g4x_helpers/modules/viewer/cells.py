@@ -12,7 +12,7 @@ from shapely import to_ragged_array
 from ... import c, io
 from ...schema.definition import CellMetadata, CellxGene, CellxProt, ClusteringUmap, Segmentation
 from ..workflow import PRESET_SOURCE, collect_input
-from . import utils
+from . import zarr_utils as utils
 
 if TYPE_CHECKING:
     from ...g4x_output import G4Xoutput

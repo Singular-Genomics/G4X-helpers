@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import colorsys
 import logging
+import os
 import shutil
 
 import zarr
@@ -14,7 +15,6 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_ZARR_NAME = c.FILE_VIEWER_ZARR
 
 
-# @g4x_workflow
 def init_viewer_zarr(
     smp,
     *,
@@ -25,7 +25,12 @@ def init_viewer_zarr(
     log = logger or LOGGER
     log.info('Running init_viewer_zarr')
 
-    out_dir = smp.smp_dir if out_dir == PRESET_SOURCE else io.pathval.validate_dir_path(out_dir)
+    if out_dir == PRESET_SOURCE:
+        out_dir = smp.smp_dir if not smp.uses_branch else smp.alt_source
+    else:
+        out_dir = io.pathval.validate_dir_path(out_dir)
+
+    # out_dir = smp.smp_dir if out_dir == PRESET_SOURCE else io.pathval.validate_dir_path(out_dir)
     reroute_source(smp, out_dir, validator=ViewerZarr, overwrite=overwrite, logger=log)
 
     mode = 'w' if overwrite else 'a'
@@ -65,23 +70,21 @@ def init_viewer_zarr(
     return root_group
 
 
-def link_viewer_group(smp, branch_dir, group_name: str, overwrite: bool = True):
-    import os
-
-    target = smp.smp_dir / smp.src.ViewerZarr.DEFAULT_TARGET_PATH / group_name
-    link = branch_dir / smp.src.ViewerZarr.DEFAULT_TARGET_PATH / group_name
+def link_viewer_group(smp, group_name: str, overwrite: bool = True):
+    target = smp.src.ViewerZarr.p / group_name
+    link = smp.out.ViewerZarr.p / group_name
 
     # Compute target relative to the link's parent directory
     relative_target = os.path.relpath(target, start=link.parent)
+
+    if link.exists() and not overwrite:
+        raise FileExistsError(f"Zarr group '{link}' already exists. Set overwrite=True to replace it.")
 
     if link.is_symlink() or link.is_file():
         link.unlink()
 
     elif link.exists():
-        if overwrite:
-            shutil.rmtree(link)
-        else:
-            raise FileExistsError(f'Link {link} already exists and overwrite is set to False.')
+        shutil.rmtree(link)
 
     # Create the symlink
     link.symlink_to(relative_target, target_is_directory=True)

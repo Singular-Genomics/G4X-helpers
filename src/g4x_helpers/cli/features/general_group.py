@@ -130,12 +130,7 @@ def redemux(
             smp, out_dir=out_dir, compute_backend=compute_backend, overwrite=overwrite, logger=log
         )
 
-        if smp.alt_source is not None:
-            viewer.init_viewer_zarr(smp, out_dir=out_dir, overwrite=overwrite, logger=log)
-            viewer.link_viewer_group(smp, branch_dir=out_dir, group_name='images', overwrite=overwrite)
-
-        viewer.write_transcripts(smp, overwrite=overwrite, logger=log)
-        viewer.write_cells(smp, seg_name='g4x-default', overwrite=overwrite, logger=log)
+        viewer.create_default_viewer(smp, overwrite=overwrite, logger=log)
 
     return smp
 
@@ -174,12 +169,7 @@ def resegment(
             smp, out_dir=out_dir, compute_backend=compute_backend, overwrite=overwrite, logger=log
         )
 
-        if smp.alt_source is not None:
-            viewer.init_viewer_zarr(smp, out_dir=out_dir, overwrite=overwrite, logger=log)
-            viewer.link_viewer_group(smp, branch_dir=out_dir, group_name='images', overwrite=overwrite)
-
-        viewer.write_transcripts(smp, overwrite=overwrite, logger=log)
-        viewer.write_cells(smp, seg_name='g4x-default', overwrite=overwrite, logger=log)
+        viewer.create_default_viewer(smp, overwrite=overwrite, logger=log)
 
     return smp
 
