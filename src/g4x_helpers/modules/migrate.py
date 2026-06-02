@@ -59,7 +59,7 @@ def migrate_sample(
     if downstream:
         aggregate.aggregate_cell_data(smp, overwrite=True, compute_backend=compute_backend, logger=log)
         single_cell.process_sc_output(smp, overwrite=True, compute_backend=compute_backend, logger=log)
-        viewer.create_default_viewer(smp, logger=log)
+        viewer.create_default_viewer(smp, overwrite=True, logger=log)
 
     logut.log_msg_wrapped(
         header='Migration completed. Migrated data is available at\n', msg=smp, level='INFO', logger=log

@@ -5,6 +5,8 @@ from typing import Literal
 from . import definition as sd
 from . import utils as ut
 
+MAIN_VALIDATOR = sd.SampleG4X
+
 ASSAY_AGNOSTIC_VALIDATORS = (
     sd.SampleSheet,
     sd.QCSummary,
@@ -33,13 +35,36 @@ PR_VALIDATORS = (
 )
 
 
+class FlatTree:
+    def __init__(self, sample_dir: str):
+
+        self.smp_dir = Path(sample_dir)
+        validators = self.fetch_validators([MAIN_VALIDATOR])
+        validators += self.fetch_validators(ASSAY_AGNOSTIC_VALIDATORS)
+        validators += self.fetch_validators(TX_VALIDATORS)
+        validators += self.fetch_validators(PR_VALIDATORS)
+
+        self.validators = validators
+
+        for v in self.validators:
+            setattr(self, v.name, v)
+
+    def fetch_validators(self, validators: tuple):
+        fetched = []
+
+        for validator_cls in validators:
+            fetched.append(validator_cls(root=self.smp_dir))
+
+        return fetched
+
+
 class FileTree:
     def __init__(self, sample_dir: str, alt_source: str | None = None):
 
         self.smp_dir = Path(sample_dir)
         self.alt_source = Path(alt_source) if alt_source else None
 
-        meta_validator = sd.SampleG4X(root=self.smp_dir)
+        meta_validator = MAIN_VALIDATOR(root=self.smp_dir)
         if not meta_validator.is_valid:
             raise ValueError('Sample metadata is not valid. Please check the validation errors.')
 

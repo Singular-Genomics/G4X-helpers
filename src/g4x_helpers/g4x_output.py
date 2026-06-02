@@ -33,6 +33,11 @@ class G4Xoutput:
         self.out = self.src.copy()
         self.use_cache = use_cache
 
+        if self.alt_source:
+            self.alt = schema.FlatTree(self.alt_source)
+        else:
+            self.alt = self.src
+
         if validate:
             self.src.validation_report(format='minimal', raw_only=True, report_pass=False, raise_exception=True)
 
@@ -145,14 +150,18 @@ class G4Xoutput:
         self.proteins = self.available_proteins.copy()
 
     @property
+    def uses_branch(self):
+        return self.alt_source is not None and self.alt_source != self.smp_dir
+
+    @property
     def is_demuxed(self):
-        return False if not self.src.tx_detected else self.src.TxTable.is_valid
+        return False if not self.src.tx_detected else self.alt.TxTable.is_valid
 
     @property
     def is_aggregated(self):
-        met = self.src.CellMetadata.is_valid
-        cxg = True if not self.src.tx_detected else self.src.CellxGene.is_valid
-        cxp = True if not self.src.pr_detected else self.src.CellxProt.is_valid
+        met = self.alt.CellMetadata.is_valid
+        cxg = True if not self.src.tx_detected else self.alt.CellxGene.is_valid
+        cxp = True if not self.src.pr_detected else self.alt.CellxProt.is_valid
         return met and cxg and cxp
 
     @property
