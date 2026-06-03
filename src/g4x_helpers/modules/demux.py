@@ -166,10 +166,11 @@ def batched_demuxing(
         batch_dir = Path(batch_dir)
         pl.concat(redemuxed_feature_batch).write_parquet(batch_dir / f'batch_{i}.parquet')
 
-        pct_complete = ((i + 1) * 100) // num_expected_batches
-        while pct_complete >= next_progress_pct:
-            log.debug('Demuxing progress: %d%% (%d/%d batches)', next_progress_pct, i + 1, num_expected_batches)
-            next_progress_pct += 10
+        if num_expected_batches > 1:
+            pct_complete = ((i + 1) * 100) // num_expected_batches
+            while pct_complete >= next_progress_pct:
+                log.debug('Demuxing progress: %d%% (%d/%d batches)', next_progress_pct, i + 1, num_expected_batches)
+                next_progress_pct += 10
 
 
 def stream_features(
