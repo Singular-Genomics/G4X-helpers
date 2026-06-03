@@ -205,14 +205,6 @@ def demux(
         pass_filter = uniquely_hit & ~close_hit
         demuxed[pass_filter] = 1
 
-        # logger.info(f"""
-        # ... ... {fq.stem}
-        # hamming == {i}, min_delta == {min_delta}
-        # unique hits = {sum(uniquely_hit)}
-        # total cumulative hits within min_delta = {sum(close_hit)}
-        # total demuxed (unique hits without another hit within min_delta) = {sum(pass_filter)}
-        # """)
-
     # --- Get best hits ---
     hit_ids = hammings.argmin(axis=1)
     hit_targets = codebook_target_ids[hit_ids]
@@ -227,7 +219,6 @@ def demux(
             pl.Series('demuxed', demuxed),
         ]
     )
-
     return reads
 
 
@@ -252,9 +243,7 @@ def batched_dot_product_hamming_matrix(
     N = len(reads)
     hamming_matrix = np.empty((N, M), dtype=np.uint8)
 
-    # num_expected_batches = math.ceil(N / batch_size)
-    # for i in tqdm(range(0, N, batch_size), total=num_expected_batches, desc='Demuxing batch', position=1, leave=False):
-    for i in range(0, N, batch_size):  # , total=num_expected_batches, desc='Demuxing batch', position=1, leave=False):
+    for i in range(0, N, batch_size):
         batch_reads = reads[i : i + batch_size]
         batch_oh = one_hot_encode_str_array(batch_reads, seq_len, lut)
         matches = batch_oh @ codebook_oh.T
@@ -274,31 +263,3 @@ def one_hot_encode_str_array(seqs: list[str], seq_len: int, lut: np.ndarray) -> 
     arr = np.frombuffer(''.join(seqs).encode('ascii'), dtype=np.uint8).reshape(N, seq_len)
     # Apply LUT: arr → (N, seq_len, 4), then flatten
     return lut[arr].reshape(N, seq_len * 4)
-
-
-# TODO consider re-implementing this function if needed
-# def update_metadata_and_tx_file(g4x_obj: 'G4Xoutput', manifest, out_dir):
-#     if not manifest == out_dir / 'transcript_panel.csv':
-#         shutil.copy(manifest, out_dir / 'transcript_panel.csv')
-
-#     panel_name = manifest.name
-#     timestamp = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
-#     ## add info to run_meta.json
-#     with open(g4x_obj.smp_dir / 'run_meta.json', 'r') as f:
-#         meta = json.load(f)
-
-#     meta['transcript_panel'] = panel_name
-#     meta['redemuxed_timestamp'] = timestamp
-
-#     with open(out_dir / 'run_meta.json', 'w') as f:
-#         json.dump(meta, f, indent=2)
-
-#     ## add info to run_meta.json in g4x_viewer
-#     with open(g4x_obj.smp_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_run_metadata.json', 'r') as f:
-#         meta = json.load(f)
-
-#     meta['run_metadata']['transcript_panel'] = panel_name
-#     meta['run_metadata']['redemuxed_timestamp'] = timestamp
-
-#     with open(out_dir / 'g4x_viewer' / f'{g4x_obj.sample_id}_run_metadata.json', 'w') as f:
-#         json.dump(meta, f, indent=2)
