@@ -143,7 +143,7 @@ def import_segmentation(
     SUPPORTED_MASK_FILETYPES = {'.npy', '.npz', '.geojson'}
 
     ## load new segmentation
-    cell_labels = pathval.validate_file_path(seg_path, must_exist=True)
+    cell_labels = pathval.validate_file_path(seg_path)
 
     suffix = cell_labels.suffix.lower()
     if suffix not in SUPPORTED_MASK_FILETYPES:
