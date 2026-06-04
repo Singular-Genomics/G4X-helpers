@@ -45,6 +45,15 @@ def validate_file_parent(path, *, resolve: bool = False) -> Path:
     return path
 
 
+def validate_dir_parent(path, *, resolve: bool = False) -> Path:
+    """
+    Validate that the parent directory of a directory path exists.
+    """
+    path = _ingest_path(path, must_exist=False, resolve=resolve)
+    _ = validate_dir_path(path.parent, resolve=resolve)
+    return path
+
+
 def ensure_dir(path, *, resolve: bool = False) -> Path:
     """
     Ensure a directory exists.
