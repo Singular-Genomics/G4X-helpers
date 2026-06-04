@@ -10,13 +10,9 @@ from anndata import AnnData
 from scipy.sparse import csr_matrix
 
 from ... import c
-from ...schema.definition import CellMetadata, CellxGene, CellxProt, Manifest
-from ..workflow import PRESET_SOURCE, collect_input
 
 if TYPE_CHECKING:
     from anndata import AnnData
-
-    from ...g4x_output import G4Xoutput
 
 
 LOGGER = logging.getLogger(__name__)
@@ -24,25 +20,17 @@ LOGGER = logging.getLogger(__name__)
 
 # region main functions
 def init_adata(
-    smp: 'G4Xoutput',
-    *,
-    manifest: str = PRESET_SOURCE,
-    cell_metadata: str = PRESET_SOURCE,
-    cell_x_gene: str = PRESET_SOURCE,
-    cell_x_protein: str = PRESET_SOURCE,
+    manifest: pl.DataFrame,
+    cell_metadata: pl.DataFrame,
+    cell_x_gene: pl.DataFrame,
+    cell_x_protein: pl.DataFrame | None = None,
     logger: logging.Logger | None = None,
 ) -> 'AnnData':
 
     log = logger or LOGGER
 
-    # 1: Validate and collect input
-    manifest_in = collect_input(smp, manifest, Manifest, logger=log)
-    cellmeta_in = collect_input(smp, cell_metadata, CellMetadata, logger=log)
-    cellxgene_in = collect_input(smp, cell_x_gene, CellxGene, logger=log)
-
-    manifest = manifest_in.parse()
-    cellmeta = cellmeta_in.load().sort(c.CELL_ID_NAME)
-    cellxgene = cellxgene_in.load().sort(c.CELL_ID_NAME)
+    cell_metadata = cell_metadata.sort(c.CELL_ID_NAME)
+    cell_metadata = cell_metadata.sort(c.CELL_ID_NAME)
 
     sanitize_cols = [
         'n_genes_by_counts',
@@ -54,29 +42,28 @@ def init_adata(
         'pct_counts_ctrl',
     ]
     for col in sanitize_cols:
-        if col in cellmeta.columns:
-            cellmeta = cellmeta.drop(col)
+        if col in cell_metadata.columns:
+            cell_metadata = cell_metadata.drop(col)
 
     # 3: Ensure that cell IDs match between metadata and expression/protein matrices
-    _validate_cell_ids(cellmeta, cellxgene, 'CellMetadata', 'CellxGene')
+    _validate_cell_ids(cell_metadata, cell_x_gene, 'CellMetadata', 'CellxGene')
 
-    if smp.src.pr_detected:
-        cellxprot_in = collect_input(smp, cell_x_protein, CellxProt, logger=log)
-        cellxprot = cellxprot_in.load().sort(c.CELL_ID_NAME)
-        _validate_cell_ids(cellmeta, cellxprot, 'CellMetadata', 'CellxProt')
-        cellxprot = cellxprot.drop(c.CELL_ID_NAME)
+    if cell_x_protein is not None:
+        cell_x_protein = cell_x_protein.sort(c.CELL_ID_NAME)
+        _validate_cell_ids(cell_metadata, cell_x_protein, 'CellMetadata', 'CellxProt')
+        cell_x_protein = cell_x_protein.drop(c.CELL_ID_NAME)
 
     # 3: Set up AnnData object
     log.info('Setting up AnnData components')
     log.debug('Converting cell x gene matrix to sparse format')
-    X = cellxgene.drop(c.CELL_ID_NAME).to_numpy().astype(np.uint16)
+    X = cell_x_gene.drop(c.CELL_ID_NAME).to_numpy().astype(np.uint16)
     X = csr_matrix(X)
 
     log.info('Processing metadata for cells and genes')
-    obs_df = cellmeta.to_pandas().set_index(c.CELL_ID_NAME)
+    obs_df = cell_metadata.to_pandas().set_index(c.CELL_ID_NAME)
     obs_df.index = obs_df.index.astype(str)
 
-    gene_ids = pl.Series(name=c.GENE_ID_NAME, values=cellxgene.columns[1:])
+    gene_ids = pl.Series(name=c.GENE_ID_NAME, values=cell_x_gene.columns[1:])
     var_df = pl.DataFrame(gene_ids).with_columns(pl.lit('tx').alias('modality'))
 
     log.debug('Processing panel type information')
@@ -98,10 +85,10 @@ def init_adata(
     log.debug('Initializing AnnData object')
     adata = AnnData(X=X, obs=obs_df, var=var_df)
 
-    if smp.src.pr_detected:
+    if cell_x_protein is not None:
         log.debug('Adding protein data to AnnData object')
-        adata.uns['protein_names'] = [col.removesuffix(c.IMG_INTENSITY_HANDLE) for col in cellxprot.columns]
-        adata.obsm['protein'] = cellxprot.to_numpy()
+        adata.uns['protein_names'] = [col.removesuffix(c.IMG_INTENSITY_HANDLE) for col in cell_x_protein.columns]
+        adata.obsm['protein'] = cell_x_protein.to_numpy()
 
     # 5: Calculate QC metrics
     log.info('Calculating QC metrics')
