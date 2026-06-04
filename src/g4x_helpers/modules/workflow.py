@@ -15,27 +15,41 @@ PRESET_SOURCE = '__g4x_out_tree__'
 
 
 def collect_input(
-    smp: 'G4Xoutput',
     path: str,
     validator: 'BaseValidator',
     validate: bool = True,
-    logger: logging.Logger | None = None,
-) -> 'BaseValidator':
-    log = logger or LOGGER
-
-    if path == PRESET_SOURCE:
-        in_obj = getattr(smp.out, validator.__name__)
-        prefix = 'pre-set'
-    else:
-        path_valid = pathval.validate_file_path(path)
-        in_obj = validator(target_path=path_valid)
-        prefix = 'provided'
+):
+    path_valid = pathval.validate_file_path(path)
+    in_obj = validator(target_path=path_valid)
 
     if validate and not in_obj.is_valid:
-        raise ValueError(f'Provided {validator.__name__} is not valid!\nreason: {in_obj.report_validation()}')
+        raise ValueError(f'Provided {validator.__name__} is not valid!\n{in_obj.report_validation()}')
 
-    logut.log_with_path(f'Using {prefix} {validator.__name__} as input:', in_obj.p, logger=log)
     return in_obj
+
+
+# def collect_input(
+#     smp: 'G4Xoutput',
+#     path: str,
+#     validator: 'BaseValidator',
+#     validate: bool = True,
+#     logger: logging.Logger | None = None,
+# ) -> 'BaseValidator':
+#     log = logger or LOGGER
+
+#     if path == PRESET_SOURCE:
+#         in_obj = getattr(smp.out, validator.__name__)
+#         prefix = 'pre-set'
+#     else:
+#         path_valid = pathval.validate_file_path(path)
+#         in_obj = validator(target_path=path_valid)
+#         prefix = 'provided'
+
+#     if validate and not in_obj.is_valid:
+#         raise ValueError(f'Provided {validator.__name__} is not valid!\nreason: {in_obj.report_validation()}')
+
+#     logut.log_with_path(f'Using {prefix} {validator.__name__} as input:', in_obj.p, logger=log)
+#     return in_obj
 
 
 def reroute_source(

@@ -8,6 +8,7 @@ import numpy as np
 import polars as pl
 
 from . import c, io, schema, ut
+from . import logging_utils as logut
 
 if TYPE_CHECKING:
     from polars import DataFrame as plDF
@@ -284,3 +285,26 @@ class G4Xoutput:
             proteins.remove('Isotype')
             proteins = proteins + ['Isotype']
         return proteins
+
+    def reroute_source(
+        self,
+        validator,
+        out_dir: str,
+        overwrite: bool = False,
+        logger: logging.Logger | None = None,
+    ) -> bool:
+        log = logger or LOGGER
+
+        out_obj = getattr(self.src, validator.__name__)
+        out_obj.root = Path(out_dir)
+        io.pathval.ensure_parent_dir(out_obj.p)
+
+        if out_obj.path_exists() and not overwrite:
+            raise RuntimeError(
+                f'Operation aborted! {validator.__name__} already exists at:\n{logut.PGAP}{out_obj.p}\nUse overwrite=True to ignore this.',
+            )
+
+        suffix = 'overriding existing file' if out_obj.path_exists() else 'creating new file'
+        logut.log_with_path(
+            f'Using the following path for {validator.__name__} output ({suffix}):', out_obj.p, logger=log
+        )
