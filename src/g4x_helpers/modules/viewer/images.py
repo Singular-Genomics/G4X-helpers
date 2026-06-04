@@ -10,7 +10,9 @@ from numcodecs import Blosc
 from ome_zarr import scale as oz_scale
 from ome_zarr import writer as oz_writer
 
-from ... import c
+from ... import constants as c
+from ... import io
+from ...utils import get_image_shape
 
 LOGGER = logging.getLogger(__name__)
 
@@ -156,6 +158,59 @@ def write_he_img(smp, overwrite: bool = True, chunk_size: int = 1024, logger: lo
 
     log.info('Writing fH&E image')
     write_channel_stack(img_group, [c1, c2, c3], chunk_size=chunk_size)
+
+
+def write_images_to_zarr(
+    zarr_path: str,
+    images: dict[str, str],
+    visible_channels: list[str] | None = None,
+    channel_colors: dict[str, str] = {},
+    overwrite: bool = True,
+    chunk_size: int = 1024,
+    use_cache=False,
+    logger: logging.Logger | None = None,
+):
+    log = logger or LOGGER
+    log.debug('Preparing multiplex image')
+
+    zarr_path = io.pathval.validate_dir_path(zarr_path)
+
+    mode = 'w' if overwrite else 'a'
+    img_group = zarr.open_group(zarr_path / 'images' / 'multiplex', mode=mode)
+
+    # Prepare dask arrays for each channel
+    for name, path in images.items():
+        shape = get_image_shape(path)
+        arr = io.import_image_dask(path, shape=shape, use_cache=use_cache)
+
+        if arr.ndim == 2:
+            arr = arr[None, ...]  # add Z
+
+        images[name] = arr
+
+    if visible_channels is None:
+        visible_channels = list(images.keys())[0:4]
+
+    channels = []
+    for name, arr in images.items():
+        log.debug(f'Processing channel: {name}')
+
+        color = channel_colors.get(name, None)
+        if color is None:
+            color = saturated_colors[
+                list(saturated_colors.keys())[list(images.keys()).index(name) % len(saturated_colors)]
+            ]
+
+        active = True if name in visible_channels else False
+        window = default_window_recipe(arr)
+        color = color.removeprefix('#')
+        ic = ImageChannel(
+            arr, label=name, dtype=np.uint16, omero_attrs={'color': color, 'active': active, 'window': window}
+        )
+        channels.append(ic)
+
+    log.info('Writing multiplex image')
+    write_channel_stack(img_group, channels, chunk_size=chunk_size)
 
 
 def write_rgb_img(image, img_group, logger: logging.Logger | None = None):

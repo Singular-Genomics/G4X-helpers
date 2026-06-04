@@ -1,9 +1,9 @@
 import logging
 
 from .cells import write_cells
-from .images import write_he_img, write_multiplex_img
+from .images import write_he_img, write_images_to_zarr, write_multiplex_img
 from .transcripts import write_transcripts
-from .zarr_utils import init_viewer_zarr, link_viewer_group
+from .zarr_utils import init_viewer_zarr, link_viewer_group, setup_viewer_zarr
 
 LOGGER = logging.getLogger(__name__)
 
@@ -28,6 +28,8 @@ def create_default_viewer(
 
 
 __all__ = [
+    'write_images_to_zarr',
+    'setup_viewer_zarr',
     'init_viewer_zarr',
     'write_he_img',
     'write_multiplex_img',
