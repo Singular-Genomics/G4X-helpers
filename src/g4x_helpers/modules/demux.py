@@ -1,10 +1,9 @@
 import logging
 import math
 import shutil
-import sys
+import tempfile
 from collections.abc import Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import numpy as np
 import polars as pl
@@ -12,183 +11,166 @@ from tqdm import tqdm
 
 from .. import c, io
 from .. import logging_utils as logut
-from ..schema.definition import Manifest, TxTable
-from .workflow import PRESET_SOURCE, collect_input, reroute_source
-
-if TYPE_CHECKING:
-    from ..g4x_output import G4Xoutput
 
 LOGGER = logging.getLogger(__name__)
 
 
 # region main function
 def demux_raw_features(
-    smp: 'G4Xoutput',
-    manifest: str = PRESET_SOURCE,
+    raw_features: pl.LazyFrame,
+    manifest: pl.DataFrame,
     *,
-    out_dir: str = PRESET_SOURCE,
-    batch_size: int = c.DEFAULT_BATCH_SIZE,
     max_ham_dist: int = 2,
     min_delta: int = 2,
     demux_length: int = 15,
-    overwrite: bool = True,
-    show_progress: bool | None = None,
+    batch_size: int = c.DEFAULT_BATCH_SIZE,
+    batch_dir: Path | None = None,
+    show_progress: bool = False,
     logger: logging.Logger | None = None,
-) -> None:
-
+):
     log = logger or LOGGER
 
-    # 1: Validate and collect input
-    log.debug('Validating input and preparing output paths')
-    manifest_in = collect_input(smp, manifest, Manifest, logger=log)
-
-    # 2: Validate and prepare output
-    out_dir = smp.smp_dir if out_dir == PRESET_SOURCE else io.pathval.validate_dir_path(out_dir)
-
-    overwrite_manifest = True if manifest == PRESET_SOURCE else overwrite
-    reroute_source(smp, out_dir, validator=Manifest, overwrite=overwrite_manifest, logger=log)
-    reroute_source(smp, out_dir, validator=TxTable, overwrite=overwrite, logger=log)
-
-    # if we're using a provided manifest, copy it into the output tree
-    if manifest != PRESET_SOURCE:
-        if manifest_in.p == smp.out.Manifest.p:
-            log.debug('Provided manifest is already in the output tree, skipping copy')
-        else:
-            log.debug('Copying manifest from provided path into output tree')
-            shutil.copy(manifest_in.p, smp.out.Manifest.p)
-
-    # 3: Do the demuxing
     log.info('Starting batched demuxing of raw features')
 
-    manifest = manifest_in.parse()
-    show_progress = sys.stderr.isatty() if show_progress is None else show_progress
+    if batch_dir is None:
+        batch_dir = io.pathval.validate_dir_path(tempfile.mkdtemp(prefix='g4x_demux_tmp_'))
+    else:
+        batch_dir = io.pathval.validate_dir_path(batch_dir)
+        batch_dir = io.pathval.ensure_dir(batch_dir / 'demux_batches')
+
+    logut.log_with_path('Directory for temporary demux batches:', batch_dir, logger=log)
     try:
-        batch_dir = io.pathval.ensure_dir(out_dir / 'demux_batches')
-        batched_demuxing(
-            feature_table_path=smp.src.RawFeatures.p,
-            manifest=manifest,
-            batch_dir=batch_dir,
-            batch_size=batch_size,
-            max_ham_dist=max_ham_dist,
-            demux_length=demux_length,
-            min_delta=min_delta,
-            show_progress=show_progress,
-            logger=log,
-        )
+        probe_dict = _build_probe_id_to_gene_name(manifest)
+        seq_reads, manifest_by_read = _group_manifest_by_read(manifest)
 
-        # 4: Compile the demuxed transcript table
-        logut.log_with_path('Compiling demuxed transcript table from batch-dir:', batch_dir, logger=log)
-        tx_table = pl.scan_parquet(list(batch_dir.glob('*.parquet')))
-        tx_table = tx_table.filter(pl.col('demuxed')).drop('demuxed')
+        num_features = raw_features.select(pl.len()).collect().item()
+        num_expected_batches = math.ceil(num_features / batch_size)
+        next_progress_pct = 10
 
-        # 5: Write the demuxed transcript table
-        logut.log_with_path(f'Writing {smp.out.TxTable.name} table:', smp.out.TxTable.p, level='info', logger=log)
-        tx_table.sink_csv(smp.out.TxTable.p, compression='gzip')
+        lut = _build_base_lut()
 
-        # make sure that the gene list is populated with new genes for downstream steps
-        smp.set_genes()
+        for i, feature_batch in tqdm(
+            enumerate(_iter_feature_batches(raw_features, batch_size)),
+            total=num_expected_batches,
+            desc='Demuxing transcripts',
+            position=0,
+            disable=not show_progress,
+        ):
+            feature_batch = feature_batch.with_columns(
+                pl.col('TXUID').str.split('_').list.last().cast(int).alias('read_num')
+            )
+            redemuxed_feature_batch = []
+            for seq_read in seq_reads:
+                feature_batch_read = _demux_feature_batch(
+                    feature_batch=feature_batch,
+                    seq_read=seq_read,
+                    manifest_by_read=manifest_by_read,
+                    probe_dict=probe_dict,
+                    lut=lut,
+                    demux_length=demux_length,
+                    batch_size=batch_size,
+                    max_ham_dist=max_ham_dist,
+                    min_delta=min_delta,
+                )
 
-    # 6: Remove temporary demux batches
+                redemuxed_feature_batch.append(feature_batch_read)
+
+            demuxed_batch = pl.concat(redemuxed_feature_batch)
+            demuxed_batch.write_parquet(batch_dir / f'batch_{i}.parquet')
+
+            if num_expected_batches > 1:
+                pct_complete = ((i + 1) * 100) // num_expected_batches
+                while pct_complete >= next_progress_pct:
+                    log.debug('Demuxing progress: %d%% (%d/%d batches)', next_progress_pct, i + 1, num_expected_batches)
+                    next_progress_pct += 10
+
+            return _compile_demuxed_batches(batch_dir)
+
     finally:
         if batch_dir.exists():
             log.debug('Removing temporary demux-batch directory')
             shutil.rmtree(batch_dir)
 
 
-def batched_demuxing(
-    feature_table_path: str,
-    manifest: pl.DataFrame,
-    batch_dir: str,
-    batch_size: int = c.DEFAULT_BATCH_SIZE,
-    max_ham_dist: int = 2,
-    min_delta: int = 2,
-    demux_length: int = 15,
-    show_progress: bool | None = None,
-    logger: logging.Logger | None = None,
-):
-    log = logger or LOGGER
-    probe_dict = dict(zip(manifest['probe_id'].to_list(), manifest['gene_name'].to_list()))
-    probe_dict['UNDETERMINED'] = 'UNDETERMINED'
+def _compile_demuxed_batches(batch_dir: Path) -> pl.DataFrame:
+    tx_table = pl.scan_parquet(list(batch_dir.glob('*.parquet')))
+    return tx_table.filter(pl.col('demuxed')).drop('demuxed').collect()
 
+
+def _demux_feature_batch(
+    feature_batch: pl.DataFrame,
+    *,
+    seq_read: int,
+    manifest_by_read: dict[int, pl.DataFrame],
+    probe_dict: dict[str, str],
+    lut: np.ndarray,
+    demux_length: int,
+    batch_size: int,
+    max_ham_dist: int,
+    min_delta: int,
+) -> pl.DataFrame:
+    feature_batch_read = feature_batch.filter(pl.col('read_num') == seq_read)
+    manifest_read = manifest_by_read[seq_read]
+
+    if len(feature_batch_read) == 0 or len(manifest_read) == 0:
+        return pl.DataFrame()
+
+    seqs = feature_batch_read['sequence'].to_list()
+    codes = manifest_read['sequence'].to_list()
+    seqs = [seq[:demux_length] for seq in seqs]
+    codes = [seq[:demux_length] for seq in codes]
+
+    codebook_target_ids = np.array(manifest_read['probe_id'].to_list())
+
+    hammings = _compute_hamming_distance_matrix(seqs, codes, lut=lut, batch_size=batch_size)
+    feature_batch_read = _assign_probe_matches(
+        hammings=hammings,
+        reads=feature_batch_read,
+        codebook_target_ids=codebook_target_ids,
+        probe_dict=probe_dict,
+        max_ham_dist=max_ham_dist,
+        min_delta=min_delta,
+    )
+    feature_batch_read = feature_batch_read.drop(['sequence', 'read_num'])
+    return feature_batch_read
+
+
+def _build_base_lut() -> np.ndarray:
+    lut = np.zeros((256, 4), dtype=np.float32)
+    for base, idx in zip(c.BASE_ORDER, range(4)):
+        lut[ord(base), idx] = 1.0
+    return lut
+
+
+def _group_manifest_by_read(manifest: pl.DataFrame) -> tuple[list[int], dict[int, pl.DataFrame]]:
     seq_reads = manifest['read_num'].unique().to_list()
     seq_reads = [int(x.split('_')[-1]) if isinstance(x, str) else x for x in seq_reads]
-    manifest_by_read = {seq_read: manifest.filter(pl.col('read_num') == seq_read) for seq_read in seq_reads}
-
-    num_features = pl.scan_parquet(feature_table_path).select(pl.len()).collect().item()
-    num_expected_batches = math.ceil(num_features / batch_size)
-    next_progress_pct = 10
-
-    if num_features == 0:
-        log.info('Demuxing progress: 100%% (no features to process)')
-        return
-
-    LUT = np.zeros((256, 4), dtype=np.float32)
-    for base, idx in zip(c.BASE_ORDER, range(4)):
-        LUT[ord(base), idx] = 1.0
-
-    for i, feature_batch in tqdm(
-        enumerate(stream_features(feature_table_path, batch_size)),
-        total=num_expected_batches,
-        desc='Demuxing transcripts',
-        position=0,
-        disable=not show_progress,
-    ):
-        feature_batch = feature_batch.with_columns(
-            pl.col('TXUID').str.split('_').list.last().cast(int).alias('read_num')
-        )
-        redemuxed_feature_batch = []
-        for seq_read in seq_reads:
-            feature_batch_read = feature_batch.filter(pl.col('read_num') == seq_read)
-            manifest_read = manifest_by_read[seq_read]
-
-            if len(feature_batch_read) == 0 or len(manifest_read) == 0:
-                continue
-
-            seqs = feature_batch_read['sequence'].to_list()
-            codes = manifest_read['sequence'].to_list()
-            seqs = [seq[:demux_length] for seq in seqs]
-            codes = [seq[:demux_length] for seq in codes]
-
-            codebook_target_ids = np.array(manifest_read['probe_id'].to_list())
-
-            hammings = batched_dot_product_hamming_matrix(seqs, codes, lut=LUT, batch_size=batch_size)
-            feature_batch_read = demux(
-                hammings=hammings,
-                reads=feature_batch_read,
-                codebook_target_ids=codebook_target_ids,
-                probe_dict=probe_dict,
-                max_ham_dist=max_ham_dist,
-                min_delta=min_delta,
-            )
-            feature_batch_read = feature_batch_read.drop(['sequence', 'read_num'])
-            redemuxed_feature_batch.append(feature_batch_read)
-
-        batch_dir = Path(batch_dir)
-        pl.concat(redemuxed_feature_batch).write_parquet(batch_dir / f'batch_{i}.parquet')
-
-        if num_expected_batches > 1:
-            pct_complete = ((i + 1) * 100) // num_expected_batches
-            while pct_complete >= next_progress_pct:
-                log.debug('Demuxing progress: %d%% (%d/%d batches)', next_progress_pct, i + 1, num_expected_batches)
-                next_progress_pct += 10
+    manifest_by_read = {read: manifest.filter(pl.col('read_num') == read) for read in seq_reads}
+    return seq_reads, manifest_by_read
 
 
-def stream_features(
-    feature_table_path: str, batch_size: int = c.DEFAULT_BATCH_SIZE, columns: str | list[str] | None = None
+def _build_probe_id_to_gene_name(manifest: pl.DataFrame) -> dict[str, str]:
+    mapping = dict(zip(manifest['probe_id'].to_list(), manifest['gene_name'].to_list()))
+    mapping['UNDETERMINED'] = 'UNDETERMINED'
+    return mapping
+
+
+def _iter_feature_batches(
+    raw_features: pl.LazyFrame, batch_size: int = c.DEFAULT_BATCH_SIZE, columns: str | list[str] | None = None
 ) -> Iterator[pl.DataFrame]:
-    df = pl.scan_parquet(feature_table_path)
+
     if columns:
-        df = df.select(columns)
+        raw_features = raw_features.select(columns)
     offset = 0
     while True:
-        batch = df.slice(offset, batch_size).collect()
+        batch = raw_features.slice(offset, batch_size).collect()
         if batch.is_empty():
             break
         yield batch
         offset += batch_size
 
 
-def demux(
+def _assign_probe_matches(
     hammings: np.ndarray,
     reads: pl.DataFrame,
     codebook_target_ids: np.ndarray,
@@ -223,7 +205,7 @@ def demux(
     return reads
 
 
-def batched_dot_product_hamming_matrix(
+def _compute_hamming_distance_matrix(
     reads: list[str],
     codebook: list[str],
     lut: np.ndarray,
@@ -237,7 +219,7 @@ def batched_dot_product_hamming_matrix(
     assert all(len(seq) == seq_len for seq in codebook), 'All codebook entries must be same length'
 
     # One-hot encode the codebook once
-    codebook_oh = one_hot_encode_str_array(codebook, seq_len, lut)
+    codebook_oh = _one_hot_encode_sequences(codebook, seq_len, lut)
     M = len(codebook)
 
     # Prepare final result
@@ -246,7 +228,7 @@ def batched_dot_product_hamming_matrix(
 
     for i in range(0, N, batch_size):
         batch_reads = reads[i : i + batch_size]
-        batch_oh = one_hot_encode_str_array(batch_reads, seq_len, lut)
+        batch_oh = _one_hot_encode_sequences(batch_reads, seq_len, lut)
         matches = batch_oh @ codebook_oh.T
         hamming = seq_len - matches
         hamming_matrix[i : i + len(batch_reads)] = hamming
@@ -254,7 +236,7 @@ def batched_dot_product_hamming_matrix(
     return hamming_matrix
 
 
-def one_hot_encode_str_array(seqs: list[str], seq_len: int, lut: np.ndarray) -> np.ndarray:
+def _one_hot_encode_sequences(seqs: list[str], seq_len: int, lut: np.ndarray) -> np.ndarray:
     """
     Fast one-hot encoding using LUT.
     Returns: (N, seq_len * 4) float32 array
