@@ -165,6 +165,7 @@ def write_images_to_zarr(
     images: dict[str, str],
     visible_channels: list[str] | None = None,
     channel_colors: dict[str, str] = {},
+    channel_windows: dict[str, str] = {},
     overwrite: bool = True,
     chunk_size: int = 1024,
     use_cache=False,
@@ -202,7 +203,10 @@ def write_images_to_zarr(
             ]
 
         active = True if name in visible_channels else False
-        window = default_window_recipe(arr)
+
+        window = channel_windows.get(name, None)
+        if window is None:
+            window = default_window_recipe(arr)
         color = color.removeprefix('#')
         ic = ImageChannel(
             arr, label=name, dtype=np.uint16, omero_attrs={'color': color, 'active': active, 'window': window}
