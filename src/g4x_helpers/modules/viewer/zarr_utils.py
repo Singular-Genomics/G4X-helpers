@@ -7,12 +7,49 @@ import shutil
 
 import zarr
 
-from ... import c, io
+from ... import constants as c
+from ... import io
 from ...schema.definition import ViewerZarr
 from ..workflow import PRESET_SOURCE, reroute_source
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_ZARR_NAME = c.FILE_VIEWER_ZARR
+
+
+def setup_viewer_zarr(
+    zarr_path: str,
+    overwrite: bool = True,
+) -> None:
+
+    zarr_path = io.pathval.validate_dir_parent(zarr_path)
+
+    mode = 'w' if overwrite else 'a'
+    root_group = zarr.open_group(zarr_path, mode=mode, zarr_version=2)
+
+    img_group = root_group.create_group('images', overwrite=overwrite)
+    img_group.attrs['axes'] = {'unit': 'micrometer', 'pixel_per_um': c.PIXEL_PER_MICRON}
+
+    img_group.create_group('multiplex', overwrite=overwrite)
+    img_group.create_group('h_and_e', overwrite=overwrite)
+
+    tx_group = root_group.create_group('transcripts', overwrite=overwrite)
+    tx_group.attrs['gene_order'] = []
+    tx_group.attrs['gene_colors'] = {}
+    tx_group.attrs['layer_config'] = {
+        'layers': 1,
+        'tile_size': 1,
+        'layer_height': 1,
+        'layer_width': 1,
+        'coordinate_order': ['default_x', 'default_y'],
+    }
+
+    cell_group = root_group.create_group('cells', overwrite=overwrite)
+    cell_group.attrs['segmentation_sources'] = {}
+    cell_group.attrs['segmentation_order'] = []
+
+    (zarr_path / 'misc').mkdir(parents=True, exist_ok=True)
+
+    return root_group
 
 
 def init_viewer_zarr(
