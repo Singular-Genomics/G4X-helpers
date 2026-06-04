@@ -22,7 +22,6 @@ LOGGER = logging.getLogger(__name__)
 
 
 # region main function
-# @g4x_workflow
 def aggregate_cell_data(
     smp: 'G4Xoutput',
     segmentation_mask: str = PRESET_SOURCE,
@@ -190,43 +189,49 @@ def create_cell_metadata(
 
 
 def create_cell_x_gene(
-    smp: 'G4Xoutput',
     tx_table: pl.LazyFrame,
-    segmentation_mask: str | np.ndarray = PRESET_SOURCE,
-    gene_labels: str | np.ndarray = PRESET_SOURCE,
-    return_lazy: bool = True,
+    segmentation_mask: np.ndarray,
+    included_genes: list | None = None,
+    return_tx_table: bool = False,
     logger: logging.Logger | None = None,
-) -> tuple[pl.DataFrame, pl.DataFrame]:
+) -> pl.LazyFrame:
 
-    # log = logger or LOGGER
+    log = logger or LOGGER
 
     tx_table = intersect_tx_with_cells(tx_table, segmentation_mask)
-    cell_frame = _cell_frame(segmentation_mask)
+    all_cells = _cell_frame(segmentation_mask, lazy=True)
 
-    if gene_labels == PRESET_SOURCE:
-        gene_labels = smp.genes
+    existing_gene_ids = tx_table.select(c.GENE_ID_NAME).unique().sort(c.GENE_ID_NAME).collect().to_series().to_list()
+
+    if included_genes is None:
+        included_genes = existing_gene_ids
+
+    if not set(existing_gene_ids).issubset(set(included_genes)):
+        not_covered = set(existing_gene_ids) - set(included_genes)
+        log.warning(
+            f'Requested gene_ids do not cover all genes present in the data! {len(not_covered)} genes will be missing from the output'
+        )
 
     cell_by_gene = (
         tx_table.filter(pl.col(c.CELL_ID_NAME) != 0)
         .group_by(c.CELL_ID_NAME, c.GENE_ID_NAME)
         .agg(pl.len().alias('counts'))
         .sort(c.GENE_ID_NAME)
-        .pivot(on=c.GENE_ID_NAME, values='counts', index=c.CELL_ID_NAME, on_columns=gene_labels)
+        .pivot(on=c.GENE_ID_NAME, values='counts', index=c.CELL_ID_NAME, on_columns=included_genes)
     )
 
     # Adding missing cells with zero counts
-    cell_by_gene = cell_frame.join(cell_by_gene.lazy(), on=c.CELL_ID_NAME, how='left')
+    cell_by_gene = all_cells.join(cell_by_gene, on=c.CELL_ID_NAME, how='left').sort(c.CELL_ID_NAME)
 
-    existing = cell_by_gene.collect_schema().names()
-    if not set(existing[1:]) == set(gene_labels):
-        raise ValueError('Mismatch between cell_by_gene columns and gene_labels')
+    # ensure final table order mathes the gene order in the input table
+    cell_by_gene = cell_by_gene.select([c.CELL_ID_NAME] + included_genes)
 
-    cell_by_gene = cell_by_gene.select([c.CELL_ID_NAME] + gene_labels)
-    cell_by_gene = cell_by_gene.fill_null(0).sort(c.CELL_ID_NAME)
-
-    if return_lazy:
+    # fill missing values with zeros (i.e. genes not detected in a cell)
+    cell_by_gene = cell_by_gene.fill_null(0)
+    if return_tx_table:
         return cell_by_gene, tx_table
-    return cell_by_gene.collect(), tx_table.collect()
+
+    return cell_by_gene
 
 
 def create_cell_x_signal(
@@ -327,7 +332,11 @@ def extract_cell_props(
         c.CELL_AREA_NAME: pl.Float32,
     }
     mask_props = pl.LazyFrame(prop_dict, schema=schema).sort(c.CELL_ID_NAME)
-    return mask_props
+    if mask_name:
+        mask_props = mask_props.rename(
+            {col: col.replace('cell', mask_name) for col in schema.keys() if col.startswith('cell_')}
+        )
+    return mask_props.sort(c.CELL_ID_NAME)
 
 
 def add_nuclei_properties(smp, cell_metadata, show_progress=True):
@@ -356,10 +365,10 @@ def add_nuclei_properties(smp, cell_metadata, show_progress=True):
 
 
 def intersect_tx_with_cells(
-    tx_table: pl.DataFrame | pl.LazyFrame, mask: np.ndarray, column_name: str = c.CELL_ID_NAME
-) -> pl.DataFrame:
+    tx_table: pl.LazyFrame, mask: np.ndarray, column_name: str = c.CELL_ID_NAME
+) -> pl.LazyFrame:
     coord_order = ['y_pixel_coordinate', 'x_pixel_coordinate']
-    tx_coords = tx_table.select(coord_order).to_numpy().astype(int)
+    tx_coords = tx_table.select(coord_order).collect().to_numpy().astype(int)
     cell_ids = mask[tx_coords[:, 0], tx_coords[:, 1]]
     tx_table = tx_table.with_columns(pl.lit(cell_ids).alias(column_name))
     return tx_table
@@ -481,3 +490,43 @@ def _add_artifically_large_beads(beads, sq_size=500):
     # set center block to True
     beads[center_row - half : center_row + half, center_col - half : center_col + half] = True
     return beads
+
+
+# def create_cell_x_gene(
+#     smp: 'G4Xoutput',
+#     tx_table: pl.LazyFrame,
+#     segmentation_mask: str | np.ndarray = PRESET_SOURCE,
+#     gene_labels: str | np.ndarray = PRESET_SOURCE,
+#     return_lazy: bool = True,
+#     logger: logging.Logger | None = None,
+# ) -> tuple[pl.DataFrame, pl.DataFrame]:
+
+#     # log = logger or LOGGER
+
+#     tx_table = intersect_tx_with_cells(tx_table, segmentation_mask)
+#     cell_frame = _cell_frame(segmentation_mask)
+
+#     if gene_labels == PRESET_SOURCE:
+#         gene_labels = smp.genes
+
+#     cell_by_gene = (
+#         tx_table.filter(pl.col(c.CELL_ID_NAME) != 0)
+#         .group_by(c.CELL_ID_NAME, c.GENE_ID_NAME)
+#         .agg(pl.len().alias('counts'))
+#         .sort(c.GENE_ID_NAME)
+#         .pivot(on=c.GENE_ID_NAME, values='counts', index=c.CELL_ID_NAME, on_columns=gene_labels)
+#     )
+
+#     # Adding missing cells with zero counts
+#     cell_by_gene = cell_frame.join(cell_by_gene.lazy(), on=c.CELL_ID_NAME, how='left')
+
+#     existing = cell_by_gene.collect_schema().names()
+#     if not set(existing[1:]) == set(gene_labels):
+#         raise ValueError('Mismatch between cell_by_gene columns and gene_labels')
+
+#     cell_by_gene = cell_by_gene.select([c.CELL_ID_NAME] + gene_labels)
+#     cell_by_gene = cell_by_gene.fill_null(0).sort(c.CELL_ID_NAME)
+
+#     if return_lazy:
+#         return cell_by_gene, tx_table
+#     return cell_by_gene.collect(), tx_table.collect()
