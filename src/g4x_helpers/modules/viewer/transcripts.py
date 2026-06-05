@@ -1,31 +1,30 @@
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import polars as pl
 import zarr
 from numcodecs import Blosc
 
-from ... import c
+from ... import constants as c
+from ... import io
 from ... import logging_utils as logut
-from ...schema.definition import Dgex, Manifest, TxTable
-from ..workflow import PRESET_SOURCE, collect_input
 from . import zarr_utils as utils
 
 if TYPE_CHECKING:
     from zarr.hierarchy import Group as zGroup
 
-    from ...g4x_output import G4Xoutput
 
 LOGGER = logging.getLogger(__name__)
 
 
-def write_transcripts(
-    smp: 'G4Xoutput',
-    *,
-    tx_table: str = PRESET_SOURCE,
-    manifest: str = PRESET_SOURCE,
-    dgex: str = PRESET_SOURCE,
+def write_transcripts_to_zarr(
+    zarr_path: str,
+    tx_table: pl.DataFrame,
+    manifest: pl.DataFrame,
+    data_shape: tuple[int, int],
+    dgex: pl.DataFrame,
+    aggregation_level: Literal['probe', 'gene'] = 'gene',
     overwrite: bool = True,
     logger: logging.Logger | None = None,
 ) -> None:
@@ -33,28 +32,29 @@ def write_transcripts(
     log = logger or LOGGER
     log.info('Preparing transcript data')
 
-    tx_group = zarr.open_group(smp.out.ViewerZarr.p / 'transcripts', mode='r+')
+    zarr_path = io.pathval.validate_dir_path(zarr_path)
+
+    tx_group = zarr.open_group(zarr_path / 'transcripts', mode='r+')
 
     # 1: load inputs
-    txtable_in = collect_input(smp, tx_table, validator=TxTable, logger=log)
-    gene_metadata = get_gene_metadata(smp, manifest=manifest, dgex=dgex, logger=log)
+    gene_colors = get_gene_colors_dgex(manifest=manifest, dgex=dgex)
 
     # 2: load tx table and filter to relevant columns
-    aggregation_level = c.GENE_ID_NAME
-    keep_cols = ['x_pixel_coordinate', 'y_pixel_coordinate', c.CELL_ID_NAME, aggregation_level]
-    df = txtable_in.load(lazy=False).select(keep_cols)
+    agg_col = c.PROBE_ID_NAME if aggregation_level == 'probe' else c.GENE_ID_NAME
+    keep_cols = ['x_pixel_coordinate', 'y_pixel_coordinate', c.CELL_ID_NAME, agg_col]
+    tx_table = tx_table.select(keep_cols)
 
     # 3: check that all genes in tx table have metadata
-    gene_list = df[c.GENE_ID_NAME].unique().sort().to_list()
+    gene_list = tx_table[agg_col].unique().sort().to_list()
 
-    unavailable_genes = [g for g in gene_list if g not in gene_metadata]
+    unavailable_genes = [g for g in gene_list if g not in gene_colors]
     if unavailable_genes:
         raise ValueError(f'The following genes are missing from the gene metadata: {unavailable_genes}')
 
     # 4: construct pyramid
     pyramid, tile_specs = build_tx_pyramid(
-        image_resolution=smp.shape,
-        total_points=df.height,
+        image_resolution=data_shape,
+        total_points=tx_table.height,
         target_points_per_tile=5000,
         min_tile_size=256,
     )
@@ -66,7 +66,7 @@ def write_transcripts(
     logut.log_msg_wrapped('Tile specs:', msg, logger=log, level='debug')
 
     # 5: assign tiles to tx and construct tile dataframes
-    pyramid = construct_tile_dfs(df, pyramid)
+    pyramid = construct_tile_dfs(tx_table, pyramid)
 
     # 6: populate attrs
     log.info('Writing transcript data')
@@ -74,12 +74,12 @@ def write_transcripts(
     layer_config = {
         'layers': len(pyramid) - 1,
         'tile_size': pyramid[len(pyramid) - 1]['tile_size'],
-        'layer_height': smp.shape[0],
-        'layer_width': smp.shape[1],
+        'layer_height': data_shape[0],
+        'layer_width': data_shape[1],
         'coordinate_order': ['x_pixel_coordinate', 'y_pixel_coordinate'],
     }
 
-    gene_colors = {k: v['color'] for k, v in gene_metadata.items()}
+    gene_colors = {k: v['color'] for k, v in gene_colors.items()}
 
     tx_group.attrs['gene_order'] = list(gene_colors.keys())
     tx_group.attrs['gene_colors'] = gene_colors
@@ -201,44 +201,37 @@ def write_tx_zarr(
                 utils.create_array(tile_group, key, data=arr, compressor=compressor)
 
 
-def get_gene_metadata(smp, manifest, dgex, logger: logging.Logger | None = None):
-    log = logger or LOGGER
+def get_gene_colors_dgex(manifest, dgex):
 
-    manifest_in = collect_input(smp, manifest, validator=Manifest, logger=log)
-    dgex_in = collect_input(smp, dgex, validator=Dgex, validate=False, logger=log)
+    leiden_result = (
+        dgex.unique(['leiden_res', 'cluster_id'])
+        .group_by(['leiden_res'])
+        .agg(pl.len())
+        .sort('len')
+        .head(1)['leiden_res']
+        .item()
+    )
 
-    tx_panel = manifest_in.parse()
+    dgex = dgex.filter(pl.col('leiden_res') == leiden_result)
+    dgex_fil = dgex.filter(pl.col('score') > 0)
 
-    if dgex_in.is_valid:
-        dgex = dgex_in.load()
+    assignments = assign_colors_to_clusters(dgex_fil)
+    colors = complete_panel_colors(tx_panel=manifest, assignments=assignments)
 
-        leiden_result = (
-            dgex.unique(['leiden_res', 'cluster_id'])
-            .group_by(['leiden_res'])
-            .agg(pl.len())
-            .sort('len')
-            .head(1)['leiden_res']
-            .item()
-        )
+    gene_colors = {}
+    for g in colors.iter_rows(named=True):
+        gene_colors[g['gene_id']] = {'color': utils.hex_to_rgb(g['hex'])}
 
-        dgex = dgex.filter(pl.col('leiden_res') == leiden_result)
-        dgex_fil = dgex.filter(pl.col('score') > 0)
+    return gene_colors
 
-        assignments = assign_colors_to_clusters(dgex_fil)
-        colors = complete_panel_colors(tx_panel=tx_panel, assignments=assignments)
 
-        gene_metadata = {}
-        for g in colors.iter_rows(named=True):
-            gene_metadata[g['gene_id']] = {'color': utils.hex_to_rgb(g['hex'])}
-    else:
-        gene_list = tx_panel['gene_name'].unique().sort().to_list()
+def get_gene_colors_simple(manifest):
+    gene_list = manifest['gene_name'].unique().sort().to_list()
 
-        N = len(gene_list)  # number of colors
-        colors = np.random.randint(0, 256, size=(N, 3), dtype=np.uint8)
-        gene_metadata = {g: {'color': tuple(c.tolist())} for g, c in zip(gene_list, colors)}
-        gene_metadata
-
-    return gene_metadata
+    N = len(gene_list)  # number of colors
+    colors = np.random.randint(0, 256, size=(N, 3), dtype=np.uint8)
+    gene_colors = {g: {'color': tuple(c.tolist())} for g, c in zip(gene_list, colors)}
+    return gene_colors
 
 
 # region colors
@@ -333,3 +326,71 @@ def complete_panel_colors(tx_panel, assignments):
         .alias('hex')
     )
     return colors
+
+
+# def write_transcripts(
+#     smp: 'G4Xoutput',
+#     *,
+#     tx_table: str = PRESET_SOURCE,
+#     manifest: str = PRESET_SOURCE,
+#     dgex: str = PRESET_SOURCE,
+#     overwrite: bool = True,
+#     logger: logging.Logger | None = None,
+# ) -> None:
+
+#     log = logger or LOGGER
+#     log.info('Preparing transcript data')
+
+#     tx_group = zarr.open_group(smp.out.ViewerZarr.p / 'transcripts', mode='r+')
+
+#     # 1: load inputs
+#     txtable_in = collect_input(smp, tx_table, validator=TxTable, logger=log)
+#     gene_metadata = get_gene_metadata(smp, manifest=manifest, dgex=dgex, logger=log)
+
+#     # 2: load tx table and filter to relevant columns
+#     aggregation_level = c.GENE_ID_NAME
+#     keep_cols = ['x_pixel_coordinate', 'y_pixel_coordinate', c.CELL_ID_NAME, aggregation_level]
+#     df = txtable_in.load(lazy=False).select(keep_cols)
+
+#     # 3: check that all genes in tx table have metadata
+#     gene_list = df[c.GENE_ID_NAME].unique().sort().to_list()
+
+#     unavailable_genes = [g for g in gene_list if g not in gene_metadata]
+#     if unavailable_genes:
+#         raise ValueError(f'The following genes are missing from the gene metadata: {unavailable_genes}')
+
+#     # 4: construct pyramid
+#     pyramid, tile_specs = build_tx_pyramid(
+#         image_resolution=smp.shape,
+#         total_points=df.height,
+#         target_points_per_tile=5000,
+#         min_tile_size=256,
+#     )
+
+#     msg = f'\n{tile_specs}\n'
+#     for level, specs in pyramid.items():
+#         msg += f'Level {level}: tile_size: {specs["tile_size"]} - scale: {specs["scale_fct"]}\n'
+
+#     logut.log_msg_wrapped('Tile specs:', msg, logger=log, level='debug')
+
+#     # 5: assign tiles to tx and construct tile dataframes
+#     pyramid = construct_tile_dfs(df, pyramid)
+
+#     # 6: populate attrs
+#     log.info('Writing transcript data')
+
+#     layer_config = {
+#         'layers': len(pyramid) - 1,
+#         'tile_size': pyramid[len(pyramid) - 1]['tile_size'],
+#         'layer_height': smp.shape[0],
+#         'layer_width': smp.shape[1],
+#         'coordinate_order': ['x_pixel_coordinate', 'y_pixel_coordinate'],
+#     }
+
+#     gene_colors = {k: v['color'] for k, v in gene_metadata.items()}
+
+#     tx_group.attrs['gene_order'] = list(gene_colors.keys())
+#     tx_group.attrs['gene_colors'] = gene_colors
+#     tx_group.attrs['layer_config'] = layer_config
+
+#     write_tx_zarr(tx_group, pyramid, overwrite=overwrite, logger=log)

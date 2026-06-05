@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+import traceback
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import polars as pl
 import scanpy as sc
 from anndata import AnnData
+from scipy.sparse import csr_matrix
 
 from ... import c, io
-from ... import logging_utils as logut
+from ...schema import definition as sd
+from . import sc_utils
+from .filter_panel import FilterPanel, _get_default_filter_panel
 
 if TYPE_CHECKING:
     from anndata import AnnData
@@ -20,7 +24,174 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_CLUSTERINGS = {'leiden_coarse': (6, 0.25), 'leiden_fine': (12, 0.5)}
 
 
-# region higher-level functions
+def default_sc_pipeline(
+    adata: 'AnnData',
+    *,
+    n_neighbors: int = 15,
+    clusterings: dict[str, tuple[int, float]] = DEFAULT_CLUSTERINGS,
+    cluster_attempts: int = 10,
+    rnd_st: int = 111,
+    backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
+    logger: logging.Logger | None = None,
+) -> tuple['AnnData', str]:
+    log = logger or LOGGER
+    backend = io.get_backend(which=backend)
+
+    # 1. Filter AnnData object
+    adata_init = adata.copy()
+
+    try:
+        adata, _, _ = filter_adata(adata=adata)
+    except Exception as e:
+        log.warning(f'Filtering failed: {e}')
+        return adata_init, 'filter_not_passed'
+
+    del adata_init
+
+    # 2. Pre-Processings (CPU/GPU) split path
+    try:
+        adata = pre_process_adata(adata=adata, n_neighbors=n_neighbors, compute_backend=backend, rnd_st=rnd_st)
+    except Exception as e:
+        log.warning(f'Preprocessing failed: {e}')
+        return adata, 'preprocessing_failed'
+
+    # 3. Optimize Leiden clusters (CPU/GPU) split path
+    success_clusterings = []
+    for k, (target_clusters, init_res) in clusterings.items():
+        try:
+            adata = optimize_leiden_clusters(
+                adata,
+                cluster_name=k,
+                target_clusters=target_clusters,
+                init_res=init_res,
+                max_attempts=cluster_attempts,
+                compute_backend=backend,
+                rnd_st=rnd_st,
+                logger=log,
+            )
+            success_clusterings.append(k)
+
+        except Exception as e:
+            log.warning(f'Failed to optimize clusters for {k}: {e}')
+
+    if success_clusterings == []:
+        log.warning('No successful clusterings to run differential gene expression analysis.')
+        return adata, 'clustering_failed'
+
+    # Move AnnData object to CPU for downstream processing
+    if backend.use_gpu:
+        backend.rsc.get.anndata_to_CPU(adata)
+
+    return adata, 'success'
+
+
+def init_adata(
+    manifest: pl.DataFrame,
+    cell_metadata: pl.DataFrame,
+    cell_x_gene: pl.DataFrame,
+    cell_x_protein: pl.DataFrame | None = None,
+    logger: logging.Logger | None = None,
+) -> 'AnnData':
+
+    log = logger or LOGGER
+
+    cell_metadata = cell_metadata.sort(c.CELL_ID_NAME)
+    cell_metadata = cell_metadata.sort(c.CELL_ID_NAME)
+
+    sanitize_cols = [
+        'n_genes_by_counts',
+        'log1p_n_genes_by_counts',
+        'total_counts',
+        'log1p_total_counts',
+        'total_counts_ctrl',
+        'log1p_total_counts_ctrl',
+        'pct_counts_ctrl',
+    ]
+    for col in sanitize_cols:
+        if col in cell_metadata.columns:
+            cell_metadata = cell_metadata.drop(col)
+
+    # 3: Ensure that cell IDs match between metadata and expression/protein matrices
+    sc_utils._validate_cell_ids(cell_metadata, cell_x_gene, 'CellMetadata', 'CellxGene')
+
+    if cell_x_protein is not None:
+        cell_x_protein = cell_x_protein.sort(c.CELL_ID_NAME)
+        sc_utils._validate_cell_ids(cell_metadata, cell_x_protein, 'CellMetadata', 'CellxProt')
+        cell_x_protein = cell_x_protein.drop(c.CELL_ID_NAME)
+
+    # 3: Set up AnnData object
+    log.info('Setting up AnnData components')
+    log.debug('Converting cell x gene matrix to sparse format')
+    X = cell_x_gene.drop(c.CELL_ID_NAME).to_numpy().astype(np.uint16)
+    X = csr_matrix(X)
+
+    log.info('Processing metadata for cells and genes')
+    obs_df = cell_metadata.to_pandas().set_index(c.CELL_ID_NAME)
+    obs_df.index = obs_df.index.astype(str)
+
+    gene_ids = pl.Series(name=c.GENE_ID_NAME, values=cell_x_gene.columns[1:])
+    var_df = pl.DataFrame(gene_ids).with_columns(pl.lit('tx').alias('modality'))
+
+    log.debug('Processing panel type information')
+    probe_type = manifest.unique('gene_name').select('gene_name', 'probe_type').rename({'gene_name': c.GENE_ID_NAME})
+
+    var_df = (
+        var_df.join(
+            probe_type,
+            on=c.GENE_ID_NAME,
+            how='left',
+        )
+        .to_pandas()
+        .set_index(c.GENE_ID_NAME)
+    )
+    var_df['probe_type'] = var_df['probe_type'].str.lower()
+    var_df.index = var_df.index.astype(str)
+
+    # 4: bring it all together
+    log.debug('Initializing AnnData object')
+    adata = AnnData(X=X, obs=obs_df, var=var_df)
+
+    if cell_x_protein is not None:
+        log.debug('Adding protein data to AnnData object')
+        adata.uns['protein_names'] = [col.removesuffix(c.IMG_INTENSITY_HANDLE) for col in cell_x_protein.columns]
+        adata.obsm['protein'] = cell_x_protein.to_numpy()
+
+    # 5: Calculate QC metrics
+    log.info('Calculating QC metrics')
+    adata.var['ctrl'] = adata.var['probe_type'] != 'targeting'
+    sc.pp.calculate_qc_metrics(adata, qc_vars=['ctrl'], inplace=True, percent_top=None)
+    adata.var.drop(columns=['ctrl'], inplace=True)
+
+    adata = sc_utils._sanitize_categorical_columns(adata, threshold=10)
+    return adata.copy()
+
+
+def filter_adata(
+    adata: 'AnnData',
+    filter_panel: 'FilterPanel' | None = None,
+    *,
+    logger: logging.Logger | None = None,
+):
+    log = logger or LOGGER
+    log.info('Filtering adata')
+
+    if filter_panel is None:
+        filter_panel = _get_default_filter_panel()
+
+    obs_total, var_total = adata.n_obs, sum(adata.var['probe_type'] == 'targeting')  # adata.n_vars
+    cell_summary, gene_summary = filter_panel.filter(adata, apply=True)
+
+    if adata.n_obs == 0 or adata.n_vars == 0:
+        raise ValueError('No cells or genes remaining after filtering')
+
+    for df, name, n_total in [(cell_summary, 'cells', obs_total), (gene_summary, 'targeting genes', var_total)]:
+        n_retained = df.filter(pl.all_horizontal(pl.col('^.*_ok$'))).select('n_total').item()
+        retained = n_retained / n_total
+        log.info('Retained {:,} ({:.2%}) {} after filtering'.format(n_retained, retained, name))
+
+    return adata, cell_summary, gene_summary
+
+
 def pre_process_adata(
     adata: 'AnnData',
     *,
@@ -82,15 +253,162 @@ def pre_process_adata(
     return adata
 
 
-# region core functions
-def write_dummy_clustering_outputs(
-    smp,
+def optimize_leiden_clusters(
+    adata: 'AnnData',
     *,
+    cluster_name='leiden_clusters',
+    cluster_prefix='C',
+    target_clusters=6,
+    init_res=0.5,
+    max_attempts=15,
+    rnd_st=777,
+    compute_backend: io.ComputeBackend,
+    logger: logging.Logger | None = None,
+):
+    log = logger or LOGGER
+
+    backend_proxy = 'rapids (GPU)' if compute_backend.use_gpu else 'scanpy (CPU)'
+    log.info('Optimizing Leiden clusters for: %s', cluster_name)
+
+    results = {}
+
+    low_res, high_res = None, None
+    res = init_res
+
+    for i in range(max_attempts):
+        if compute_backend.use_gpu:
+            compute_backend.rsc.tl.leiden(adata, resolution=res, key_added='tmp_leiden', random_state=rnd_st)
+        else:
+            sc.tl.leiden(
+                adata,
+                resolution=res,
+                key_added='tmp_leiden',
+                flavor='igraph',
+                n_iterations=-1,
+                objective_function='modularity',
+                random_state=rnd_st,
+            )
+        assignment = adata.obs['tmp_leiden'].copy()
+        n_clusters = len(assignment.cat.categories)
+        delta = n_clusters - target_clusters
+
+        log.debug(f'resolution: {res:.4f}, n-clusters: {n_clusters}, d-ideal: {delta}')
+
+        results[i] = {
+            'resolution': res,
+            'n_clusters': n_clusters,
+            'delta_ideal': delta,
+            'assignment': assignment,
+        }
+
+        if delta == 0:
+            break
+
+        if delta < 0:
+            # too few clusters -> need higher resolution
+            low_res = res
+            if high_res is None:
+                res *= 2
+            else:
+                res = (res + high_res) / 2
+        else:
+            # too many clusters -> need lower resolution
+            high_res = res
+            if low_res is None:
+                res /= 2
+            else:
+                res = (low_res + res) / 2
+
+        res = max(res, 1e-6)
+
+    adata.obs.drop(columns=['tmp_leiden'], inplace=True, errors='ignore')
+
+    best_key = min(
+        results,
+        key=lambda k: (
+            abs(results[k]['delta_ideal']),
+            abs(results[k]['resolution'] - init_res),
+        ),
+    )
+
+    column = results[best_key].pop('assignment')
+    adata.obs[cluster_name] = column
+
+    results[best_key]['random_state'] = rnd_st
+    results[best_key]['n_iterations'] = adata.uns['tmp_leiden']['params']['n_iterations']
+    del adata.uns['tmp_leiden']
+
+    adata.uns[cluster_name] = {'params': results[best_key]}
+
+    adata.obs = sc_utils._reorder_clusters_by_size(adata.obs, key=cluster_name, prefix=cluster_prefix)
+
+    adata.uns['clustering_method'] = backend_proxy
+    adata.uns['is_gpu'] = compute_backend.use_gpu
+    return adata
+
+
+def run_dgex(
+    adata: 'AnnData',
+    cluster_keys: list[str] = ['leiden'],
+    downsample: int = 1000,
+    logger: logging.Logger | None = None,
+) -> pl.DataFrame:
+    log = logger or LOGGER
+
+    dfList = []
+    for leiden in cluster_keys:
+        log.info('Running dgex on: %s', leiden)
+        adata_downsample = sc_utils._subset_adata_by_key(adata, key=leiden, n_per_group=downsample)
+        try:
+            sc.tl.rank_genes_groups(
+                adata_downsample,
+                groupby=leiden,
+                use_raw=False,
+                method='wilcoxon',
+                pts=True,
+                key_added=f'{leiden}_rank_genes_groups',
+            )
+            for g in adata_downsample.obs[leiden].unique():
+                tmp = sc.get.rank_genes_groups_df(adata_downsample, group=str(g), key=f'{leiden}_rank_genes_groups')
+                tmp['group'] = g
+                tmp['leiden_res'] = leiden
+                dfList.append(pl.from_pandas(tmp))
+
+        except Exception as e:
+            log.warning(f'DGEX failed for {leiden}: {e}')
+            log.debug(traceback.format_exc())
+
+    dgex = pl.DataFrame()
+    if len(dfList) > 0:
+        dgex = pl.concat(dfList).rename(
+            {
+                'names': c.GENE_ID_NAME,
+                'group': 'cluster_id',
+                'scores': 'score',
+                'logfoldchanges': 'logfoldchange',
+                'pvals': 'pval',
+                'pvals_adj': 'pval_adj',
+            }
+        )
+        first_cols = ['leiden_res', 'cluster_id']
+        last_cols = [c for c in dgex.columns if c not in first_cols]
+        dgex = dgex.select(first_cols + last_cols)
+
+    return dgex
+
+
+def dummy_dgex_output(failure_code):
+    dummy_dgex = pl.DataFrame(schema=sd.Dgex.SCHEMA)
+    null_row = pl.DataFrame({col: pl.Series([None], dtype=dummy_dgex.schema[col]) for col in dummy_dgex.columns})
+    dummy_dgex = dummy_dgex.vstack(null_row).with_columns(failure_code=pl.lit(failure_code))
+    return dummy_dgex
+
+
+def dummy_clustering_output(
     adata,
-    # success_clusterings: list[str] = [],
     failure_code: str = 'failed',
     logger: logging.Logger | None = None,
-) -> None:
+) -> pl.DataFrame:
 
     log = logger or LOGGER
     log.info('Filling missing outputs with placeholders due to failure code: %s', failure_code)
@@ -124,151 +442,4 @@ def write_dummy_clustering_outputs(
     col_select = [c.CELL_ID_NAME] + clusters + ['UMAP1', 'UMAP2', 'failure_code']
     dummy_clust = dummy_clust.select(col_select)
 
-    # 2: Dgex table <- this is the last step in the pipeline. so when the previous steps fail, we still need to create a placeholder
-    dummy_dgex = pl.DataFrame(schema=smp.src.Dgex.SCHEMA)
-    null_row = pl.DataFrame({col: pl.Series([None], dtype=dummy_dgex.schema[col]) for col in dummy_dgex.columns})
-    dummy_dgex = dummy_dgex.vstack(null_row).with_columns(failure_code=pl.lit(failure_code))
-
-    msg = str(smp.out.ClusteringUmap.p) + '\n'
-    msg += str(smp.out.Dgex.p) + '\n'
-    msg += str(smp.out.AdataH5.p)
-
-    logut.log_msg_wrapped(header='Writing clustering outputs with placeholders', msg=msg, prefix=logut.PGAP, logger=log)
-    dummy_clust.write_csv(smp.out.ClusteringUmap.p, compression='gzip')
-    dummy_dgex.write_csv(smp.out.Dgex.p, compression='gzip')
-    adata.write(smp.out.AdataH5.p)
-
-
-# polars implementation
-# def reorder_clusters_by_size(clust_umap, key: str, prefix='C') -> pl.DataFrame:
-#     clust_sorted = clust_umap.group_by(key).agg(pl.len()).sort('len', descending=True)
-#     size_order = clust_sorted[key].to_list()
-#     numeric_order = np.arange(len(size_order)).astype(str).tolist()
-
-#     numeric_order = [prefix + str(uid) for uid in numeric_order]
-#     order_map = dict(zip(size_order, numeric_order))
-
-#     new_umap = clust_umap.with_columns(pl.col(key).replace(order_map)).sort('seg_cell_id')
-#     return new_umap
-
-# region main functions
-# def process_sc_output(
-#     smp: 'G4Xoutput',
-#     adata: 'AnnData' | None = None,
-#     out_dir: str = PRESET_SOURCE,
-#     *,
-#     overwrite: bool = True,
-#     filter_panel: 'FilterPanel' = _get_default_filter_panel(),
-#     init_only: bool = False,
-#     n_neighbors: int = 15,
-#     cluster_attempts: int = 10,
-#     rnd_st: int = 111,
-#     compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
-#     omit_correlation: bool = False,
-#     logger: logging.Logger | None = None,
-# ):
-#     log = logger or LOGGER
-#     backend = io.get_backend(which=compute_backend)
-
-#     if adata is None:
-#         log.info('Initializing AnnData object from raw data')
-#         adata = init_adata(smp, logger=log)
-#     else:
-#         log.info('Using provided AnnData object with %d cells and %d genes', adata.n_obs, adata.n_vars)
-
-#     # Validate and prepare output, set up reusable functions
-#     out_dir = smp.smp_dir if out_dir == PRESET_SOURCE else io.pathval.validate_dir_path(out_dir)
-#     prep_out = partial(reroute_source, smp, out_dir, overwrite=overwrite, logger=log)
-#     log_with_path = partial(logut.log_with_path, logger=log, level='info')
-#     write_dummys = partial(write_dummy_clustering_outputs, smp=smp, logger=log)
-
-#     prep_out(validator=AdataH5)
-#     prep_out(validator=Dgex)
-#     prep_out(validator=ClusteringUmap)
-#     prep_out(validator=CellMetadata, overwrite=True)
-
-#     # 1: Befor we modify the adata object, we write cell metadata with QC metrics
-#     logut.log_with_path(f'Writing {smp.out.CellMetadata.name} table:', smp.out.CellMetadata.p, level='info', logger=log)
-#     sc_meta = pl.from_pandas(adata.obs, include_index=True).cast({c.CELL_ID_NAME: pl.UInt64})
-#     sc_meta.write_csv(smp.out.CellMetadata.p, compression='gzip')
-
-#     # 1. Filter AnnData object
-#     adata_init = adata.copy()
-
-#     if init_only:
-#         log.warning(
-#             'init_only = True. Finishing after adata initialization. No filtering or downstream analyses will be performed.'
-#         )
-#         write_dummys(adata=adata_init, failure_code='SKIPPED_PROCESSING')
-#         return
-
-#     adata, cell_summary, gene_summary = filter_adata(adata=adata, filter_panel=filter_panel, logger=log)
-
-#     if adata.n_obs == 0 or adata.n_vars == 0:
-#         log.warning('No cells or genes passed the filtering criteria.')
-#         write_dummys(adata=adata_init, failure_code='filter_not_passed')
-#         return
-#     del adata_init
-
-#     if smp.src.pr_detected and not omit_correlation:
-#         pr_corr_df, rna_pr_corr_df = run_correlation_analysis(adata, logger=log)
-#         pr_corr_df.to_csv(smp.out.AdataH5.p.parent / 'protein_sc_correlation.csv')
-#         rna_pr_corr_df.to_csv(smp.out.AdataH5.p.parent / 'rna_protein_sc_correlation.csv')
-
-#     # 2. Pre-Processings (CPU/GPU) split path
-#     try:
-#         adata = pre_process_adata(
-#             adata=adata, n_neighbors=n_neighbors, compute_backend=backend, rnd_st=rnd_st, logger=log
-#         )
-#     except Exception as e:
-#         log.warning(f'Preprocessing failed: {e}')
-#         write_dummys(adata=adata, failure_code='preprocessing_failed')
-#         return
-
-#     # 3. Optimize Leiden clusters (CPU/GPU) split path
-#     success_clusterings = []
-#     for k, (target_clusters, init_res) in DEFAULT_CLUSTERINGS.items():
-#         try:
-#             adata = optimize_leiden_clusters(
-#                 adata,
-#                 cluster_name=k,
-#                 target_clusters=target_clusters,
-#                 init_res=init_res,
-#                 max_attempts=cluster_attempts,
-#                 compute_backend=backend,
-#                 rnd_st=rnd_st,
-#                 logger=log,
-#             )
-#             success_clusterings.append(k)
-
-#         except Exception as e:
-#             log.warning(f'Failed to optimize clusters for {k}: {e}')
-
-#     if success_clusterings == []:
-#         log.warning('No successful clusterings to run differential gene expression analysis.')
-#         write_dummys(adata=adata, failure_code='clustering_failed')
-#         return
-
-#     # Move AnnData object to CPU for downstream processing
-#     if backend.use_gpu:
-#         backend.rsc.get.anndata_to_CPU(adata)
-
-#     # 4. Generate UMAP and clustering dataframes
-#     umap_df = pl.from_numpy(adata.obsm['X_umap'], schema={'UMAP1': pl.Float32, 'UMAP2': pl.Float32})
-#     leiden_df = pl.from_pandas(adata.obs[success_clusterings], include_index=True)
-#     clustering_umap = leiden_df.hstack(umap_df)
-
-#     log_with_path(f'Writing {smp.out.ClusteringUmap.name} table:', smp.out.ClusteringUmap.p)
-#     clustering_umap.write_csv(smp.out.ClusteringUmap.p, compression='gzip')
-
-#     # 5. Run differential gene expression analysis
-#     try:
-#         dgex = run_dgex(adata, cluster_keys=success_clusterings, downsample=1000, logger=log)
-#         log_with_path(f'Writing {smp.out.Dgex.name} table:', smp.out.Dgex.p)
-#         dgex.write_csv(smp.out.Dgex.p, compression='gzip')
-#     except Exception as e:
-#         log.warning(f'Failed to run differential gene expression analysis: {e}')
-#         write_dummys(adata=adata, failure_code='dgex_failed')
-
-#     log_with_path(f'Writing {smp.out.AdataH5.name} h5ad:', smp.out.AdataH5.p)
-#     adata.write(smp.out.AdataH5.p)
+    return dummy_clust

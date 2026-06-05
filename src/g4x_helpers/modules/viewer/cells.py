@@ -1,21 +1,15 @@
 import logging
-from functools import partial
-from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 import polars as pl
 import zarr
 from numcodecs import Blosc
+from scipy.sparse import csr_matrix
 from shapely import to_ragged_array
 
 from ... import c, io
-from ...schema.definition import CellMetadata, CellxGene, CellxProt, ClusteringUmap, Segmentation
-from ..workflow import PRESET_SOURCE, collect_input
 from . import zarr_utils as utils
-
-if TYPE_CHECKING:
-    from ...g4x_output import G4Xoutput
 
 LOGGER = logging.getLogger(__name__)
 UNASSIGNED_CELL = 'unassigned'
@@ -23,31 +17,55 @@ UNASSIGNED_CELL = 'unassigned'
 COMPRESSOR = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
 
 
-def write_cells(
-    smp: 'G4Xoutput',
+def write_cells_to_zarr(
+    zarr_path: str,
+    segmentation_mask: np.ndarray,
+    cell_metadata: pl.DataFrame,
+    cell_x_gene: pl.DataFrame,
+    clustering_umap: pl.DataFrame,
+    cell_x_protein: pl.DataFrame | None = None,
     seg_name: str = 'g4x-default',
-    components: tuple | None = None,
     overwrite: bool = True,
+    show_progress: bool = False,
     logger: logging.Logger | None = None,
+    **kwargs,
 ):
     log = logger or LOGGER
-    log.info('Preparing cell data')
 
-    # mode = 'w' if overwrite else 'a'
-    cell_group = zarr.open_group(smp.out.ViewerZarr.p / 'cells', mode='r+')
+    zarr_path = io.pathval.validate_dir_path(zarr_path)
+
+    cell_group = zarr.open_group(zarr_path / 'cells', mode='r+')
 
     log.debug('Setting up cell data group')
     seg_path = _add_segmentation_attrs(cell_group, seg_name)
     seg_group = cell_group.create_group(seg_path, overwrite=overwrite)
 
-    if components is None:
-        log.debug('No components provided, processing cell data from source')
-        components = process_cell_data(smp, logger=log)
-    else:
-        log.debug('Using provided components to select data')
+    polygons = extract_polygons(segmentation_mask, show_progress=show_progress, **kwargs)
+    cell_x_gene = cell_x_gene.sort(c.CELL_ID_NAME)
+    cell_metadata = cell_metadata.sort(c.CELL_ID_NAME)
+    clustering_umap = clustering_umap.sort(c.CELL_ID_NAME)
 
-    metadata, gex, gene_names, verts_xy, offsets = components
+    if not cell_metadata[c.CELL_ID_NAME].equals(cell_x_gene[c.CELL_ID_NAME]):
+        raise ValueError('Cell IDs in metadata and gene expression matrix do not match')
 
+    if not all(cell_metadata[c.CELL_ID_NAME].to_numpy() == polygons[c.CELL_ID_NAME].array):
+        raise ValueError('Cell IDs in metadata and polygons do not match')
+
+    if cell_x_protein is not None:
+        cell_x_protein = cell_x_protein.sort(c.CELL_ID_NAME)
+        if not cell_metadata[c.CELL_ID_NAME].equals(cell_x_protein[c.CELL_ID_NAME]):
+            raise ValueError('Cell IDs in metadata and protein table do not match')
+
+        cell_metadata = cell_metadata.join(cell_x_protein, on=c.CELL_ID_NAME)
+
+    gex, gene_names = _cellxgene_to_csr(cell_x_gene)
+
+    cell_metadata = cell_metadata.cast({c.CELL_ID_NAME: pl.UInt32})
+    clustering_umap = clustering_umap.cast({c.CELL_ID_NAME: pl.UInt32})
+    metadata = cell_metadata.join(clustering_umap, on=c.CELL_ID_NAME, how='left')
+    metadata = metadata.with_columns(pl.col('^leiden.*$').fill_null(UNASSIGNED_CELL))
+
+    ################################
     clusterings = [c for c in metadata.columns if c.startswith('leiden')]
     clusterings_order = get_sorted_clusterings(metadata, clusterings)
 
@@ -72,11 +90,23 @@ def write_cells(
     gene_name_array = np.array(gene_names).astype('U')
     prot_name_array = np.array(protein_names).astype('U')
     utils.create_array(
-        seg_group, 'gene_names', data=gene_name_array, compressor=COMPRESSOR, chunks=gene_name_array.shape
+        seg_group,
+        'gene_names',
+        data=gene_name_array,
+        compressor=COMPRESSOR,
+        chunks=gene_name_array.shape,
     )
     utils.create_array(
-        seg_group, 'protein_names', data=prot_name_array, compressor=COMPRESSOR, chunks=prot_name_array.shape
+        seg_group,
+        'protein_names',
+        data=prot_name_array,
+        compressor=COMPRESSOR,
+        chunks=prot_name_array.shape,
     )
+
+    for column in ['total_counts', 'n_genes_by_counts']:
+        if column not in metadata.columns:
+            metadata = metadata.with_columns(pl.lit(None).cast(pl.UInt16).alias(column))
 
     ################## preparing to write arrays
     meta_columns = {
@@ -97,6 +127,8 @@ def write_cells(
     write_metadata_arrays(seg_group, meta_columns)
 
     log.info('Writing cell polygon arrays')
+    ragged = to_ragged_array(polygons.geometry, include_z=False, include_m=False)
+    verts_xy, offsets = ragged[1], ragged[2][0]
     for array, name in zip([offsets, verts_xy], ['polygon_offsets', 'polygon_vertices_xy']):
         chunks = utils.calculate_chunks(array, target_mb=4)
         utils.create_array(seg_group, name, data=array, compressor=COMPRESSOR, chunks=chunks)
@@ -128,79 +160,6 @@ def prepare_metadata_for_tiling(metadata, tile_size, img_res):
     ).sort('tile_y', 'tile_x')
 
     return metadata
-
-
-def process_cell_data(
-    smp,
-    segmentation_mask: str = PRESET_SOURCE,
-    cell_metadata: str = PRESET_SOURCE,
-    cell_x_gene: str = PRESET_SOURCE,
-    cell_x_protein: str = PRESET_SOURCE,
-    clustering_umap: str = PRESET_SOURCE,
-    logger: logging.Logger | None = None,
-):
-    from scipy.sparse import csr_matrix
-
-    log = logger or LOGGER
-
-    collect_in_partial = partial(collect_input, smp, validate=True, logger=log)
-    segment_in = collect_in_partial(segmentation_mask, Segmentation, validate=False)
-    cellmet_in = collect_in_partial(cell_metadata, CellMetadata)
-    cellxgene_in = collect_in_partial(cell_x_gene, CellxGene)
-    clustumap_in = collect_in_partial(clustering_umap, ClusteringUmap)
-
-    cell_metadata = cellmet_in.load()
-
-    # process cell by gene
-    cell_x_gene = cellxgene_in.load()
-
-    if not cell_metadata[c.CELL_ID_NAME].equals(cell_x_gene[c.CELL_ID_NAME]):
-        raise ValueError('Cell IDs in metadata and gene expression matrix do not match')
-
-    cell_x_gene = cell_x_gene.drop(c.CELL_ID_NAME)
-    gene_names = np.array(cell_x_gene.columns)
-
-    gex = cell_x_gene.to_numpy().astype(np.uint16)
-    gex = csr_matrix(gex)
-
-    # in case of protein only runs, this will be the case and we need to create empty arrays for the gex to avoid issues downstream
-    if len(gex.data) == 0:
-        log.warning('Gene expression matrix is empty, creating empty arrays for gex')
-        fill = len(gex.indptr)
-        gex.data = np.zeros(fill, dtype='uint16')
-        gex.indices = np.zeros(fill, dtype='int32')
-
-    del cell_x_gene
-
-    # process cell by protein (optional)
-    if smp.src.pr_detected:
-        cellxprot_in = collect_in_partial(cell_x_protein, CellxProt)
-        cell_x_protein = cellxprot_in.load()
-
-        if not cell_metadata[c.CELL_ID_NAME].equals(cell_x_protein[c.CELL_ID_NAME]):
-            raise ValueError('Cell IDs in metadata and protein table do not match')
-
-        cell_metadata = cell_metadata.join(cell_x_protein, on=c.CELL_ID_NAME)
-        del cell_x_protein
-
-    # 2: extract cell vertices
-    log.info('Extracting cell vertices from segmentation')
-    gdf = extract_vertices(segment_in.load(), show_progress=False)
-
-    assert all(cell_metadata[c.CELL_ID_NAME].to_pandas() == gdf[c.CELL_ID_NAME].array)
-
-    ragged = to_ragged_array(gdf.geometry_simplified, include_z=False, include_m=False)
-    verts_xy, offsets = ragged[1], ragged[2][0]
-
-    clust_umap = clustumap_in.load()
-
-    cell_metadata = cell_metadata.cast({c.CELL_ID_NAME: pl.UInt64})
-    clust_umap = clust_umap.cast({c.CELL_ID_NAME: pl.UInt64})
-
-    cell_metadata = cell_metadata.join(clust_umap, on=c.CELL_ID_NAME, how='left')
-    cell_metadata = cell_metadata.with_columns(pl.col('^leiden.*$').fill_null(UNASSIGNED_CELL))
-
-    return cell_metadata, gex, gene_names, verts_xy, offsets
 
 
 def get_sorted_clusterings(df, cluster_keys: list[str]):
@@ -248,29 +207,43 @@ def generate_cluster_palette(ordered_unique_clusters: list, max_colors: int = 25
     return cluster_palette
 
 
-def extract_vertices(mask, show_progress: bool = False):
-    gdf = io.convert.ndarray_to_gdf(mask, show_progress=show_progress)
+def _cellxgene_to_csr(cell_x_gene: pl.DataFrame) -> tuple[csr_matrix, np.ndarray]:
+
+    cell_x_gene = cell_x_gene.drop(c.CELL_ID_NAME)
+    gene_names = np.array(cell_x_gene.columns)
+
+    gex = cell_x_gene.to_numpy().astype(np.uint16)
+    gex = csr_matrix(gex)
+    return gex, gene_names
+
+
+def extract_polygons(mask, buffer: float = 4.0, simplify_tolerance: float = 1.0, show_progress: bool = False):
+    polygons = io.convert.ndarray_to_gdf(mask, show_progress=show_progress)
 
     # Keep only largest polygon per label
-    gdf['_area'] = gdf.geometry.area
-    gdf = (
-        gdf.sort_values('_area', ascending=False)
+    polygons['_area'] = polygons.geometry.area
+    polygons = (
+        polygons.sort_values('_area', ascending=False)
         .drop_duplicates(subset=c.CELL_ID_NAME, keep='first')
         .drop(columns='_area')
         .reset_index(drop=True)
-    ).sort_values(c.CELL_ID_NAME)
+    )
 
     # Alternative way to keep largest polygon per label
     # idx = gdf.groupby(CELL_ID_NAME)["_area"].idxmax()
     # gdf = gdf.loc[idx].drop(columns="_area").reset_index(drop=True)
 
     # Simplify geometries
-    gdf['geometry_simplified'] = gdf.geometry.buffer(4).buffer(-4)
-    gdf['geometry_simplified'] = gdf.geometry_simplified.simplify(tolerance=1, preserve_topology=True)
-    # gdf['geometry_simplified'] = gdf.geometry.simplify(tolerance=1.5, preserve_topology=True)
-    # gdf['geometry_simplified'] = gdf['geometry_simplified'].buffer(0)
+    polygons['geometry_simplified'] = polygons.geometry.buffer(buffer).buffer(-buffer)
+    if simplify_tolerance > 0:
+        polygons['geometry_simplified'] = polygons.geometry_simplified.simplify(
+            tolerance=simplify_tolerance, preserve_topology=True
+        )
 
-    return gdf
+    polygons['geometry'] = polygons.geometry_simplified
+    polygons = polygons.drop(columns='geometry_simplified')
+
+    return polygons.sort_values(c.CELL_ID_NAME)
 
 
 def _sanitize_path_component(s, replacement='_'):
@@ -422,3 +395,137 @@ def apply_viewer_metadata(seg_group, new_data):
     }
 
     write_metadata_arrays(seg_group, meta_columns)
+
+
+# def process_cell_data(
+#     segmentation_mask: np.ndarray,
+#     cell_metadata: pl.DataFrame,
+#     cell_x_gene: pl.DataFrame,
+#     clustering_umap: pl.DataFrame,
+#     cell_x_protein: pl.DataFrame | None = None,
+#     logger: logging.Logger | None = None,
+# ):
+#     from scipy.sparse import csr_matrix
+
+#     log = logger or LOGGER
+
+#     if not cell_metadata[c.CELL_ID_NAME].equals(cell_x_gene[c.CELL_ID_NAME]):
+#         raise ValueError('Cell IDs in metadata and gene expression matrix do not match')
+
+#     cell_x_gene = cell_x_gene.drop(c.CELL_ID_NAME)
+#     gene_names = np.array(cell_x_gene.columns)
+
+#     gex = cell_x_gene.to_numpy().astype(np.uint16)
+#     gex = csr_matrix(gex)
+
+#     # in case of protein only runs, this will be the case and we need to create empty arrays for the gex to avoid issues downstream
+#     if len(gex.data) == 0:
+#         log.warning('Gene expression matrix is empty, creating empty arrays for gex')
+#         fill = len(gex.indptr)
+#         gex.data = np.zeros(fill, dtype='uint16')
+#         gex.indices = np.zeros(fill, dtype='int32')
+
+#     del cell_x_gene
+
+#     # process cell by protein (optional)
+#     if cell_x_protein is not None:
+#         if not cell_metadata[c.CELL_ID_NAME].equals(cell_x_protein[c.CELL_ID_NAME]):
+#             raise ValueError('Cell IDs in metadata and protein table do not match')
+
+#         cell_metadata = cell_metadata.join(cell_x_protein, on=c.CELL_ID_NAME)
+#         del cell_x_protein
+
+#     # 2: extract cell vertices
+#     log.info('Extracting cell vertices from segmentation')
+#     gdf = extract_vertices(segmentation_mask, show_progress=False)
+
+#     assert all(cell_metadata[c.CELL_ID_NAME].to_pandas() == gdf[c.CELL_ID_NAME].array)
+
+#     ragged = to_ragged_array(gdf.geometry_simplified, include_z=False, include_m=False)
+#     verts_xy, offsets = ragged[1], ragged[2][0]
+
+#     cell_metadata = cell_metadata.cast({c.CELL_ID_NAME: pl.UInt64})
+#     clustering_umap = clustering_umap.cast({c.CELL_ID_NAME: pl.UInt64})
+
+#     cell_metadata = cell_metadata.join(clustering_umap, on=c.CELL_ID_NAME, how='left')
+#     cell_metadata = cell_metadata.with_columns(pl.col('^leiden.*$').fill_null(UNASSIGNED_CELL))
+
+#     return cell_metadata, gex, gene_names, verts_xy, offsets
+
+# def write_cells(
+#     smp: 'G4Xoutput',
+#     seg_name: str = 'g4x-default',
+#     components: tuple | None = None,
+#     overwrite: bool = True,
+#     logger: logging.Logger | None = None,
+# ):
+#     log = logger or LOGGER
+#     log.info('Preparing cell data')
+
+#     # mode = 'w' if overwrite else 'a'
+#     cell_group = zarr.open_group(smp.out.ViewerZarr.p / 'cells', mode='r+')
+
+#     log.debug('Setting up cell data group')
+#     seg_path = _add_segmentation_attrs(cell_group, seg_name)
+#     seg_group = cell_group.create_group(seg_path, overwrite=overwrite)
+
+#     if components is None:
+#         log.debug('No components provided, processing cell data from source')
+#         components = process_cell_data(smp, logger=log)
+#     else:
+#         log.debug('Using provided components to select data')
+
+#     metadata, gex, gene_names, verts_xy, offsets = components
+
+#     clusterings = [c for c in metadata.columns if c.startswith('leiden')]
+#     clusterings_order = get_sorted_clusterings(metadata, clusterings)
+
+#     protein_columns = [col for col in metadata.columns if c.IMG_INTENSITY_HANDLE in col]
+#     protein_names = [s.removesuffix(c.IMG_INTENSITY_HANDLE) for s in protein_columns]
+
+#     cluster_labels_meta = {}
+#     for i, key in enumerate(clusterings_order):
+#         sorted_cluster_ids = get_sorted_cluster_ids(metadata, cluster_key=key)
+#         cluster_color_map = generate_cluster_palette(sorted_cluster_ids)
+
+#         cluster_labels_meta[key] = {
+#             'index': i,
+#             'clusterID_order': list(cluster_color_map.keys()),
+#             'clusterID_colors': cluster_color_map,
+#         }
+
+#     seg_group.attrs['cluster_labels'] = cluster_labels_meta
+#     seg_group.attrs['cluster_labels_order'] = clusterings_order
+#     seg_group.attrs['genes_shape'] = gex.shape
+
+#     gene_name_array = np.array(gene_names).astype('U')
+#     prot_name_array = np.array(protein_names).astype('U')
+#     utils.create_array(
+#         seg_group, 'gene_names', data=gene_name_array, compressor=COMPRESSOR, chunks=gene_name_array.shape
+#     )
+#     utils.create_array(
+#         seg_group, 'protein_names', data=prot_name_array, compressor=COMPRESSOR, chunks=prot_name_array.shape
+#     )
+
+#     ################## preparing to write arrays
+#     meta_columns = {
+#         'cell_id': (metadata[c.CELL_ID_NAME], 'uint32'),
+#         'area': (metadata[c.CELL_AREA_NAME], 'uint16'),
+#         'position': (metadata.select([c.CELL_COORD_X, c.CELL_COORD_Y]), 'float16'),
+#         'cluster_id': (metadata.select(clusterings_order), 'U'),
+#         'total_counts': (metadata['total_counts'], 'uint16'),
+#         'total_genes': (metadata['n_genes_by_counts'], 'uint16'),
+#         'protein_values': (metadata.select(protein_columns).fill_null(np.nan), 'float16'),
+#         'umap': (metadata.select(['UMAP1', 'UMAP2']).fill_null(np.nan), 'float16'),
+#         'gene_counts': (gex.data, 'uint16'),
+#         'gene_indices': (gex.indices, 'int32'),
+#         'gene_indptr': (gex.indptr, 'int32'),
+#     }
+
+#     log.info('Writing cell metadata arrays')
+#     write_metadata_arrays(seg_group, meta_columns)
+
+#     log.info('Writing cell polygon arrays')
+#     for array, name in zip([offsets, verts_xy], ['polygon_offsets', 'polygon_vertices_xy']):
+#         chunks = utils.calculate_chunks(array, target_mb=4)
+#         utils.create_array(seg_group, name, data=array, compressor=COMPRESSOR, chunks=chunks)

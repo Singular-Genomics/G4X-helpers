@@ -10,7 +10,6 @@ from numcodecs import Blosc
 from ome_zarr import scale as oz_scale
 from ome_zarr import writer as oz_writer
 
-from ... import constants as c
 from ... import io
 from ...utils import get_image_shape
 
@@ -68,98 +67,6 @@ OMERO_DEFAULT = {
 }
 
 
-def write_multiplex_img(
-    smp,
-    protein_list: list[str] | None = None,
-    overwrite: bool = True,
-    chunk_size: int = 1024,
-    logger: logging.Logger | None = None,
-):
-    log = logger or LOGGER
-    log.debug('Preparing multiplex image')
-
-    mode = 'w' if overwrite else 'a'
-    img_group = zarr.open_group(smp.out.ViewerZarr.p / 'images' / 'multiplex', mode=mode)
-
-    if protein_list is not None:
-        smp.set_proteins(protein_list)
-
-    channel_arrays = []
-    # Prepare dask arrays for each channel
-    if smp.src.pr_detected:
-        for ch in smp.proteins:
-            arr = smp.load_protein_image(protein=ch, dask=True, use_cache=False)
-            channel_arrays.append(arr)
-
-    for ch in reversed(smp.stains):
-        if ch == c.CYTOPLASMIC_STAIN:
-            arr = smp.load_cytoplasmic_image(dask=True, use_cache=False)
-        elif ch == c.NUCLEAR_STAIN:
-            arr = smp.load_nuclear_image(dask=True, use_cache=False)
-        else:
-            log.warning(f'Unknown stain type: {ch}, skipping.')
-            continue
-
-        channel_arrays.append(arr)
-
-    for i, arr in enumerate(channel_arrays):
-        if arr.ndim == 2:
-            channel_arrays[i] = arr[None, ...]  # add Z
-
-    # build the channels and their metadata
-    channel_order = smp.proteins + list(reversed(smp.stains))
-
-    if smp.src.pr_detected:
-        visible_channels = _determine_visible_channels(channel_order)
-    else:
-        visible_channels = [c.NUCLEAR_STAIN]
-
-    channels = []
-    for arr, name in zip(channel_arrays, channel_order):
-        log.debug(f'Processing channel: {name}')
-        if name in channel_color_map:
-            color = saturated_colors[channel_color_map[name]]
-        else:
-            color = saturated_colors[list(saturated_colors.keys())[channel_order.index(name) % len(saturated_colors)]]
-
-        active = True if name in visible_channels else False
-        window = default_window_recipe(arr)
-        color = color.removeprefix('#')
-        ic = ImageChannel(
-            arr, label=name, dtype=np.uint16, omero_attrs={'color': color, 'active': active, 'window': window}
-        )
-        channels.append(ic)
-
-    log.info('Writing multiplex image')
-    write_channel_stack(img_group, channels, chunk_size=chunk_size)
-
-
-def write_he_img(smp, overwrite: bool = True, chunk_size: int = 1024, logger: logging.Logger | None = None):
-
-    log = logger or LOGGER
-    log.debug('Preparing fH&E image')
-
-    mode = 'w' if overwrite else 'a'
-    img_group = zarr.open_group(smp.out.ViewerZarr.p / 'images' / 'h_and_e', mode=mode)
-
-    image = smp.load_he_image(dask=True, use_cache=False)
-    # image = _add_rgb_astronaut_to_img(image)
-
-    if image.ndim == 3 and image.shape[-1] == 3:
-        image = da.moveaxis(image, -1, 0)
-    elif image.ndim == 3 and image.shape[0] == 3:
-        pass
-    else:
-        raise ValueError(f'Unexpected H&E image shape: {image.shape}')
-
-    c1 = ImageChannel(image[0], label='R', omero_attrs={'color': 'FF0000', 'active': True})
-    c2 = ImageChannel(image[1], label='G', omero_attrs={'color': '00FF00', 'active': True})
-    c3 = ImageChannel(image[2], label='B', omero_attrs={'color': '0000FF', 'active': True})
-
-    log.info('Writing fH&E image')
-    write_channel_stack(img_group, [c1, c2, c3], chunk_size=chunk_size)
-
-
 def write_images_to_zarr(
     zarr_path: str,
     images: dict[str, str],
@@ -168,7 +75,7 @@ def write_images_to_zarr(
     channel_windows: dict[str, str] = {},
     overwrite: bool = True,
     chunk_size: int = 1024,
-    use_cache=False,
+    use_cache: bool = False,
     logger: logging.Logger | None = None,
 ):
     log = logger or LOGGER
@@ -176,8 +83,7 @@ def write_images_to_zarr(
 
     zarr_path = io.pathval.validate_dir_path(zarr_path)
 
-    mode = 'w' if overwrite else 'a'
-    img_group = zarr.open_group(zarr_path / 'images' / 'multiplex', mode=mode)
+    img_group = zarr.open_group(zarr_path / 'images' / 'multiplex', mode='r+')
 
     # Prepare dask arrays for each channel
     for name, path in images.items():
@@ -213,18 +119,33 @@ def write_images_to_zarr(
         )
         channels.append(ic)
 
-    log.info('Writing multiplex image')
     write_channel_stack(img_group, channels, chunk_size=chunk_size)
 
 
-def write_rgb_img(image, img_group, logger: logging.Logger | None = None):
-    log = LOGGER or logger
-    log.debug('Preparing RGB image')
+def write_rgb_img(
+    zarr_path: str,
+    image_name: str,
+    image_path: str,
+    dtype: np.dtype = np.uint8,
+    overwrite: bool = True,
+    chunk_size: int = 1024,
+    use_cache: bool = False,
+    logger: logging.Logger | None = None,
+):
+    log = logger or LOGGER
+
+    zarr_path = io.pathval.validate_dir_path(zarr_path)
+
+    img_group = zarr.open_group(zarr_path / 'images' / 'h_and_e', mode='r+')
+
+    shape = get_image_shape(image_path)
+    image = io.import_image_dask(image_path, shape=shape, dtype=dtype, use_cache=use_cache)
 
     if image.ndim == 3 and image.shape[-1] == 3:
+        log.debug('Image in YXC format, moving channel axis to front')
         image = da.moveaxis(image, -1, 0)
     elif image.ndim == 3 and image.shape[0] == 3:
-        pass
+        log.debug('Image already in CYX format')
     else:
         raise ValueError(f'Unexpected RGB image shape: {image.shape}')
 
@@ -232,8 +153,7 @@ def write_rgb_img(image, img_group, logger: logging.Logger | None = None):
     c2 = ImageChannel(image[1], label='G', omero_attrs={'color': '00FF00', 'active': True})
     c3 = ImageChannel(image[2], label='B', omero_attrs={'color': '0000FF', 'active': True})
 
-    log.info('Writing RGB image')
-    write_channel_stack(img_group, [c1, c2, c3])
+    write_channel_stack(img_group, [c1, c2, c3], chunk_size=chunk_size)
 
 
 def write_channel_stack(
@@ -297,22 +217,6 @@ def _write_image_withouth_storage_warning(*args, **kwargs):
         return oz_writer.write_image(*args, **kwargs)
 
 
-def _determine_visible_channels(channel_order: list[str] = None) -> list[str]:
-    num_def = len(DEFAULT_VISIBLE_CHANNELS)
-    channel_order_copy = channel_order.copy()
-    visible_channels = []
-    for channel in channel_order_copy:
-        if channel in DEFAULT_VISIBLE_CHANNELS:
-            channel_order_copy.remove(channel)
-            visible_channels.append(channel)
-        if len(visible_channels) >= num_def:
-            break
-
-    if len(visible_channels) < len(DEFAULT_VISIBLE_CHANNELS):
-        visible_channels.extend(channel_order_copy[: (len(DEFAULT_VISIBLE_CHANNELS) - len(visible_channels))])
-    return visible_channels
-
-
 # region testing
 def _add_rgb_astronaut_to_img(data):
     ### Add rgb image to bottom left corner
@@ -335,3 +239,85 @@ def _add_rgb_astronaut_to_img(data):
     out[row0:row1, col0:col1, :] = da.from_array(np_img2, chunks=(h, w, 3))
 
     return out
+
+
+def _determine_visible_channels(channel_order: list[str] = None) -> list[str]:
+    num_def = len(DEFAULT_VISIBLE_CHANNELS)
+    channel_order_copy = channel_order.copy()
+    visible_channels = []
+    for channel in channel_order_copy:
+        if channel in DEFAULT_VISIBLE_CHANNELS:
+            channel_order_copy.remove(channel)
+            visible_channels.append(channel)
+        if len(visible_channels) >= num_def:
+            break
+
+    if len(visible_channels) < len(DEFAULT_VISIBLE_CHANNELS):
+        visible_channels.extend(channel_order_copy[: (len(DEFAULT_VISIBLE_CHANNELS) - len(visible_channels))])
+    return visible_channels
+
+
+# def write_multiplex_img(
+#     smp,
+#     protein_list: list[str] | None = None,
+#     overwrite: bool = True,
+#     chunk_size: int = 1024,
+#     logger: logging.Logger | None = None,
+# ):
+#     log = logger or LOGGER
+#     log.debug('Preparing multiplex image')
+
+#     mode = 'w' if overwrite else 'a'
+#     img_group = zarr.open_group(smp.out.ViewerZarr.p / 'images' / 'multiplex', mode=mode)
+
+#     if protein_list is not None:
+#         smp.set_proteins(protein_list)
+
+#     channel_arrays = []
+#     # Prepare dask arrays for each channel
+#     if smp.src.pr_detected:
+#         for ch in smp.proteins:
+#             arr = smp.load_protein_image(protein=ch, dask=True, use_cache=False)
+#             channel_arrays.append(arr)
+
+#     for ch in reversed(smp.stains):
+#         if ch == c.CYTOPLASMIC_STAIN:
+#             arr = smp.load_cytoplasmic_image(dask=True, use_cache=False)
+#         elif ch == c.NUCLEAR_STAIN:
+#             arr = smp.load_nuclear_image(dask=True, use_cache=False)
+#         else:
+#             log.warning(f'Unknown stain type: {ch}, skipping.')
+#             continue
+
+#         channel_arrays.append(arr)
+
+#     for i, arr in enumerate(channel_arrays):
+#         if arr.ndim == 2:
+#             channel_arrays[i] = arr[None, ...]  # add Z
+
+#     # build the channels and their metadata
+#     channel_order = smp.proteins + list(reversed(smp.stains))
+
+#     if smp.src.pr_detected:
+#         visible_channels = _determine_visible_channels(channel_order)
+#     else:
+#         visible_channels = [c.NUCLEAR_STAIN]
+
+#     channels = []
+#     for arr, name in zip(channel_arrays, channel_order):
+#         log.debug(f'Processing channel: {name}')
+#         if name in channel_color_map:
+#             color = saturated_colors[channel_color_map[name]]
+#         else:
+#             color = saturated_colors[list(saturated_colors.keys())[channel_order.index(name) % len(saturated_colors)]]
+
+#         active = True if name in visible_channels else False
+#         window = default_window_recipe(arr)
+#         color = color.removeprefix('#')
+#         ic = ImageChannel(
+#             arr, label=name, dtype=np.uint16, omero_attrs={'color': color, 'active': active, 'window': window}
+#         )
+#         channels.append(ic)
+
+#     log.info('Writing multiplex image')
+#     write_channel_stack(img_group, channels, chunk_size=chunk_size)

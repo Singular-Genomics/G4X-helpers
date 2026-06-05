@@ -6,9 +6,8 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 import pandas as pd
 import polars as pl
-from anndata import AnnData
 
-from ... import c
+from ... import constants as c
 
 if TYPE_CHECKING:
     from anndata import AnnData
@@ -27,31 +26,44 @@ DEFAULT_FILTER_CONFIG = [
 ]
 
 
-def filter_adata(
-    adata: 'AnnData',
-    filter_panel: 'FilterPanel' | None = None,
-    *,
-    logger: logging.Logger | None = None,
-):
-    log = logger or LOGGER
-    log.info('Filtering adata')
+class FilterPanel:
+    def __init__(self, filters: list[FilterMethod]):
+        self.filters = filters
 
-    if filter_panel is None:
-        filter_panel = _get_default_filter_panel()
+    def _summarize_filtering(self, n_total: int, results: dict) -> pl.DataFrame:
+        series = [pl.Series(name, values) for name, values in results.items()]
+        df = pl.DataFrame(series).with_row_index()
 
-    obs_total, var_total = adata.n_obs, sum(adata.var['probe_type'] == 'targeting')  # adata.n_vars
-    cell_summary, gene_summary = filter_panel.filter(adata, apply=True)
+        df = df.group_by(results.keys()).agg(pl.len().alias('n_total')).sort('n_total', descending=True)
+        df = df.with_columns(((pl.col('n_total') / n_total) * 100).alias('pct'))
+        return df
 
-    if adata.n_obs == 0 or adata.n_vars == 0:
-        log.warning('No cells or genes remaining after filtering. Returning empty AnnData object.')
-        return adata, cell_summary, gene_summary
+    def filter(self, adata: 'AnnData', return_masks: bool = False, apply: bool = False):
+        cell_summary = pl.DataFrame()
+        gene_summary = pl.DataFrame()
+        cell_results = {}
+        gene_results = {}
+        for mth in self.filters:
+            if mth.filter_type == 'cells':
+                cell_results[f'{mth.alias}_ok'] = mth.filter(adata, apply=False)
+                all_passed_cell = np.logical_and.reduce(list(cell_results.values()))
+            else:
+                gene_results[f'{mth.alias}_ok'] = mth.filter(adata, apply=False)
+                all_passed_gene = np.logical_and.reduce(list(gene_results.values()))
 
-    for df, name, n_total in [(cell_summary, 'cells', obs_total), (gene_summary, 'targeting genes', var_total)]:
-        n_retained = df.filter(pl.all_horizontal(pl.col('^.*_ok$'))).select('n_total').item()
-        retained = n_retained / n_total
-        log.info('Retained {:,} ({:.2%}) {} after filtering'.format(n_retained, retained, name))
+        if cell_results:
+            cell_summary = self._summarize_filtering(adata.n_obs, cell_results)
+        if gene_results:
+            gene_summary = self._summarize_filtering(adata.n_vars, gene_results)
 
-    return adata, cell_summary, gene_summary
+        if apply:
+            adata._inplace_subset_obs(all_passed_cell)
+            adata._inplace_subset_var(all_passed_gene)
+
+        if return_masks:
+            return (all_passed_cell, cell_summary), (all_passed_gene, gene_summary)
+
+        return cell_summary, gene_summary
 
 
 class FilterMethod:
@@ -97,7 +109,7 @@ class FilterMethod:
 
     def _filter_axis(
         self,
-        adata,
+        adata: 'AnnData',
         axis: str,
         key: str,
         val_min: float | None = None,
@@ -140,7 +152,7 @@ class FilterMethod:
 
         return v_min, v_max
 
-    def filter(self, adata, apply: bool = False):
+    def filter(self, adata: 'AnnData', apply: bool = False):
         df = adata.obs if self.filter_type == 'cells' else adata.var
 
         # if self.subset is not None:
@@ -159,46 +171,6 @@ class FilterMethod:
 
         v_min, v_max = self.resolve_thresholds(df)
         return self._filter_axis(adata, axis=self.axis, key=self.key, val_min=v_min, val_max=v_max, apply=apply)
-
-
-class FilterPanel:
-    def __init__(self, filters: list[FilterMethod]):
-        self.filters = filters
-
-    def _summarize_filtering(self, n_total: int, results: dict) -> pl.DataFrame:
-        series = [pl.Series(name, values) for name, values in results.items()]
-        df = pl.DataFrame(series).with_row_index()
-
-        df = df.group_by(results.keys()).agg(pl.len().alias('n_total')).sort('n_total', descending=True)
-        df = df.with_columns(((pl.col('n_total') / n_total) * 100).alias('pct'))
-        return df
-
-    def filter(self, adata, return_masks: bool = False, apply: bool = False):
-        cell_summary = pl.DataFrame()
-        gene_summary = pl.DataFrame()
-        cell_results = {}
-        gene_results = {}
-        for mth in self.filters:
-            if mth.filter_type == 'cells':
-                cell_results[f'{mth.alias}_ok'] = mth.filter(adata, apply=False)
-                all_passed_cell = np.logical_and.reduce(list(cell_results.values()))
-            else:
-                gene_results[f'{mth.alias}_ok'] = mth.filter(adata, apply=False)
-                all_passed_gene = np.logical_and.reduce(list(gene_results.values()))
-
-        if cell_results:
-            cell_summary = self._summarize_filtering(adata.n_obs, cell_results)
-        if gene_results:
-            gene_summary = self._summarize_filtering(adata.n_vars, gene_results)
-
-        if apply:
-            adata._inplace_subset_obs(all_passed_cell)
-            adata._inplace_subset_var(all_passed_gene)
-
-        if return_masks:
-            return (all_passed_cell, cell_summary), (all_passed_gene, gene_summary)
-
-        return cell_summary, gene_summary
 
 
 def _get_default_filter_panel():

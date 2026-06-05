@@ -6,7 +6,8 @@ from anndata import AnnData
 from scipy.stats import rankdata
 
 from ... import constants as c
-from .filtering import FilterMethod
+from . import sc_utils
+from .filter_panel import FilterMethod
 
 ## RNA-protein pairs
 PAIRS = {
@@ -54,7 +55,7 @@ def run_correlation_analysis(
         )
 
     if downsample is not None:
-        adata = downsample_adata(adata, downsample=downsample, logger=logger)
+        adata = sc_utils.downsample_adata(adata, downsample=downsample, logger=logger)
 
     pr_corr_df = protein_protein(adata, logger)
     _, rna_pr_corr_df = protein_rna(adata, logger)
@@ -62,7 +63,7 @@ def run_correlation_analysis(
 
 
 def protein_protein(adata: AnnData, logger: logging.Logger = LOGGER) -> None:
-    prot_df = _get_protein_df(adata)
+    prot_df = sc_utils._get_protein_df(adata)
     prot_df = _drop_zero_variance_proteins(prot_df, logger)
 
     if not check_correlation_feasibility(prot_df, 'proteins', logger):
@@ -76,7 +77,7 @@ def protein_protein(adata: AnnData, logger: logging.Logger = LOGGER) -> None:
 
 
 def protein_rna(adata: AnnData, logger: logging.Logger = LOGGER) -> None:
-    prot_df = _get_protein_df(adata)
+    prot_df = sc_utils._get_protein_df(adata)
     prot_df = _drop_zero_variance_proteins(prot_df, logger)
 
     if not check_correlation_feasibility(prot_df, 'proteins', logger):
@@ -160,14 +161,6 @@ def _drop_zeros_mask(arr):
     return np.asarray(arr.sum(axis=1)).ravel() > 0
 
 
-def _get_protein_df(adata):
-    if 'protein' not in adata.obsm:
-        raise ValueError('Protein data not found in adata.obsm["protein"]')
-    names_handle = [n + c.IMG_INTENSITY_HANDLE for n in adata.uns['protein_names']]
-    prot_df = pd.DataFrame(adata.obsm['protein'], columns=names_handle, index=adata.obs_names)
-    return prot_df
-
-
 def _drop_zero_variance_proteins(prot_df, logger: logging.Logger = LOGGER) -> None:
     # Constant columns = 0 variance = nan correlation
     col_var = np.var(prot_df, axis=0)
@@ -187,13 +180,3 @@ def _drop_zero_count_genes(rna_df, logger: logging.Logger = LOGGER) -> None:
         logger.warning(f'Genes total 0 counts in sampled cells: {zero_count_genes}')
 
     return rna_df.loc[:, non_zero_counts]
-
-
-def downsample_adata(adata: AnnData, downsample: int, logger: logging.Logger = LOGGER):
-    if adata.n_obs > downsample:
-        idx = np.random.choice(adata.n_obs, size=downsample, replace=False)
-        logger.debug(f'Protein correlation data subsampled to {downsample} cells.')
-        return adata[idx, :].copy()
-    else:
-        logger.debug(f'Protein correlation data has {adata.shape[0]} cells, no subsampling applied.')
-        return adata
