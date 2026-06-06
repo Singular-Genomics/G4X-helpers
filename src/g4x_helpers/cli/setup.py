@@ -21,7 +21,7 @@ click.rich_click.STYLE_METAVAR = 'bold red'
 click.rich_click.STYLE_METAVAR_SEPARATOR = 'dim'
 click.rich_click.STYLE_USAGE = 'bold yellow'
 click.rich_click.STYLE_USAGE_COMMAND = 'bold'
-click.rich_click.STYLE_HELPTEXT_FIRST_LINE = ''
+click.rich_click.STYLE_HELPTEXT_FIRST_LINE = 'bold'
 click.rich_click.STYLE_HELPTEXT = 'dim'
 click.rich_click.STYLE_OPTION_DEFAULT = 'dim'
 click.rich_click.STYLE_REQUIRED_SHORT = 'bold yellow'
@@ -136,18 +136,18 @@ def branch_opt(cmd_name: str = ''):
         type=str,
         default=None,
         help=(
-            f'Branch of processed data to use. If not specified, a branch named '
-            f'"g4x-helpers/{cmd_name}" will be created or reused automatically. '
-            f'Set to "main" to use the main branch and edit the original data in-place.'
+            f'Branch of processed data to use\n\n'
+            f'If not specified, a branch named "g4x-helpers/{cmd_name}" will be created or reused automatically.\n\n'
+            f'Set "_src_" to edit the original data in-place.'
         ),
     )
 
 
 def out_dir_from_branch(g4x_data, branch):
-    from .features.general_group import _create_branch
+    from .features import _create_branch
 
     if branch is not None:
-        if branch == 'main':
+        if branch == '_src_':
             out_dir = g4x_data
         else:
             out_dir = _create_branch(g4x_data, branch)

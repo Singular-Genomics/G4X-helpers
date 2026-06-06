@@ -2,13 +2,14 @@ import functools
 import logging
 from typing import Literal
 
-from ... import __version__, io
-from ... import constants as c
-from ... import logging_utils as logut
-from ... import utils as ut
-from ...g4x_output import G4Xoutput
+from .. import __version__, io
+from .. import constants as c
+from .. import logging_utils as logut
+from .. import sample_ops as ops
+from .. import utils as ut
+from ..g4x_output import G4Xoutput
 
-LOGGER = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 
 def _create_branch(sample_dir: str, name: str):
@@ -32,7 +33,7 @@ def _base_command(func):
         out_dir: str | None = None,
         verbose: int = 1,
         downstream: bool = True,
-        compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
+        backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
         logger: logging.Logger | None = None,
         **kwargs,
     ):
@@ -53,9 +54,9 @@ def _base_command(func):
                 level=lvl, file_log=True, out_dir=log_dir, append_time=True, file_mode='w'
             )
 
-        backend = io.get_backend(compute_backend)
-        compute_eng = f'{backend.kind}'
-        compute_eng += ' (auto-detected)' if compute_backend == 'auto' else ''
+        compute_backend = io.get_backend(backend)
+        compute_eng = f'{compute_backend.kind}'
+        compute_eng += ' (auto-detected)' if backend == 'auto' else ''
 
         d = {
             'sample_dir': f'{smp_dir}',
@@ -68,15 +69,14 @@ def _base_command(func):
 
         header = f'Initializing G4X-helpers [{func.__name__}]\n'
         msg = ut.pretty_dict_str(d)
-        logut.log_msg_wrapped(header=header, msg=msg, prefix='  ', logger=logger)
+        logut.log_msg_wrapped(header=header, msg=msg, prefix='  ')
 
         try:
             result = func(
                 smp_dir=smp_dir,
                 out_dir=out_dir,
                 downstream=downstream,
-                compute_backend=backend.kind,
-                logger=logger,
+                backend=compute_backend.kind,
                 **kwargs,
             )
             logger.info(f'Completed: [{func.__name__}]\n')
@@ -99,38 +99,20 @@ def redemux(
     overwrite: bool = True,
     downstream: bool = True,
     show_progress: bool = False,
-    compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
+    backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
     **kwargs,
 ):
-    from ...modules import aggregate, demux, single_cell, viewer
 
-    log = kwargs.get('logger', LOGGER)
     smp = G4Xoutput(smp_dir, alt_source=out_dir)
 
-    demux.demux_raw_features(
-        smp,
-        manifest=manifest,
-        out_dir=out_dir,
-        overwrite=overwrite,
-        batch_size=batch_size,
-        show_progress=show_progress,
-        logger=log,
+    ops.demux(
+        smp, manifest=manifest, out_dir=out_dir, overwrite=overwrite, batch_size=batch_size, show_progress=show_progress
     )
 
     if downstream:
-        aggregate.aggregate_cell_data(
-            smp,
-            out_dir=out_dir,
-            overwrite=overwrite,
-            compute_backend=compute_backend,
-            show_progress=show_progress,
-            logger=log,
-        )
-        single_cell.process_sc_output(
-            smp, out_dir=out_dir, compute_backend=compute_backend, overwrite=overwrite, logger=log
-        )
-
-        viewer.create_default_viewer(smp, overwrite=overwrite, logger=log)
+        ops.aggregate(smp, out_dir=out_dir, overwrite=overwrite, backend=backend, show_progress=show_progress)
+        ops.sc_process(smp, out_dir=out_dir, backend=backend, overwrite=overwrite)
+        ops.viewer_zarr(smp, out_dir=out_dir, overwrite=overwrite)
 
     return smp
 
@@ -145,31 +127,24 @@ def resegment(
     overwrite: bool = True,
     downstream: bool = True,
     show_progress: bool = False,
-    compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
+    backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
     **kwargs,
 ):
-    from ...modules import aggregate, single_cell, viewer
-
-    log = kwargs.get('logger', LOGGER)
 
     smp = G4Xoutput(smp_dir, alt_source=out_dir)
-    aggregate.aggregate_cell_data(
+    ops.aggregate(
         smp,
         segmentation_mask=segmentation_mask,
         mask_key=mask_key,
         out_dir=out_dir,
         overwrite=overwrite,
-        compute_backend=compute_backend,
+        backend=backend,
         show_progress=show_progress,
-        logger=log,
     )
 
     if downstream:
-        single_cell.process_sc_output(
-            smp, out_dir=out_dir, compute_backend=compute_backend, overwrite=overwrite, logger=log
-        )
-
-        viewer.create_default_viewer(smp, overwrite=overwrite, logger=log)
+        ops.sc_process(smp, out_dir=out_dir, backend=backend, overwrite=overwrite)
+        ops.viewer_zarr(smp, out_dir=out_dir, overwrite=overwrite)
 
     return smp
 
@@ -183,22 +158,42 @@ def migrate(
     downstream: bool = True,
     **kwargs,
 ) -> None:
-    from ...modules import migrate
+    from ..modules import migrate
 
-    migrate.migrate_sample(sample_dir=smp_dir, out_dir=out_dir, roi_coords=roi_coords, downstream=downstream, **kwargs)
+    migrate.migrate_sample(
+        sample_dir=smp_dir,
+        out_dir=out_dir,
+        roi_coords=roi_coords,
+        downstream=downstream,
+        **kwargs,
+    )
 
 
 def migrate_check(smp_dir: str) -> None:
-    from ...modules import migrate
+    from ..modules import migrate
 
     migrate.status(sample_dir=smp_dir)
 
 
-# @_base_command
 def validate(smp_dir: str, **kwargs):
 
-    from ...schema import FileTree
+    from ..schema import FileTree
 
     ft = FileTree(smp_dir)
     report = ft.validation_report(raise_exception=False)
     print(report)
+
+
+def cell_metadata(viewer_zarr, import_metadata, export_metadata, segmentation):
+    from ..modules.viewer import cells
+
+    if import_metadata is not None and export_metadata is not None:
+        raise ValueError('--import-metadata and --export-metadata cannot be used together.')
+
+    seg_group = cells.get_seg_group(viewer_zarr, segmentation)
+
+    if export_metadata is not None:
+        meta = cells.get_cell_metadata(seg_group)
+        meta.write_csv(export_metadata)
+    if import_metadata is not None:
+        cells.apply_viewer_metadata(seg_group, import_metadata)

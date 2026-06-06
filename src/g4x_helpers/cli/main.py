@@ -5,8 +5,6 @@ from .. import __version__
 from .. import constants as c
 from . import help_messages as hm
 from . import setup
-from .features import general_group as gfeats
-from .features import viewer_group as vfeats
 from .setup import click
 
 
@@ -85,10 +83,12 @@ def redemux(ctx, g4x_data, manifest, batch_size, branch, no_downstream):
     func_name = inspect.currentframe().f_code.co_name
 
     try:
-        # with setup._spinner(f'Running {func_name} process...'):
+        with setup._spinner(f'Running {func_name} process...'):
+            from .features import redemux as redemux_feature
+
         out_dir = setup.out_dir_from_branch(g4x_data, branch)
 
-        gfeats.redemux(
+        redemux_feature(
             smp_dir=g4x_data,
             out_dir=out_dir,
             manifest=manifest,
@@ -127,10 +127,12 @@ def resegment(ctx, g4x_data, cell_labels, labels_key, branch, no_downstream):
     func_name = inspect.currentframe().f_code.co_name
 
     try:
-        # with setup._spinner(f'Initializing {func_name} process...'):
+        with setup._spinner(f'Running {func_name} process...'):
+            from .features import resegment as resegment_feature
+
         out_dir = setup.out_dir_from_branch(g4x_data, branch)
 
-        gfeats.resegment(
+        resegment_feature(
             smp_dir=g4x_data,
             out_dir=out_dir,
             segmentation_mask=cell_labels,
@@ -178,14 +180,15 @@ def migrate(ctx, g4x_data, out_dir, check, roi, no_downstream):
     func_name = inspect.currentframe().f_code.co_name
 
     try:
-        # with setup._spinner(f'Initializing {func_name} process...'):
-        #     from .features.general_group import migrate
+        with setup._spinner(f'Running {func_name} process...'):
+            from .features import migrate as migrate_feature
+            from .features import migrate_check as migrate_check_feature
 
         if check:
-            gfeats.migrate_check(smp_dir=g4x_data)
+            migrate_check_feature(smp_dir=g4x_data)
             return
 
-        gfeats.migrate(
+        migrate_feature(
             smp_dir=g4x_data,
             out_dir=out_dir,
             roi_coords=roi,
@@ -205,10 +208,10 @@ def validate(ctx, g4x_data):
     func_name = inspect.currentframe().f_code.co_name
 
     try:
-        # with setup._spinner(f'Initializing {func_name} process...'):
-        #     from .features.general_group import validate
+        with setup._spinner(f'Running {func_name} process...'):
+            from .features import validate as validate_feature
 
-        gfeats.validate(
+        validate_feature(
             smp_dir=g4x_data,
             verbose=ctx.obj['verbose'],
         )
@@ -275,9 +278,11 @@ def cells(ctx, import_metadata, export_metadata, segmentation):
     if not import_metadata and not export_metadata:
         click.echo('Please provide one of --import-metadata or --export-metadata options')
         ctx.exit(0)
-    
+
     try:
-        vfeats.cell_metadata(ctx.obj['viewer_zarr'], import_metadata, export_metadata, segmentation)
+        with setup._spinner(f'Running {func_name} process...'):
+            from .features import cell_metadata as cell_metadata_feature
+        cell_metadata_feature(ctx.obj['viewer_zarr'], import_metadata, export_metadata, segmentation)
 
     except Exception as e:
         setup._fail_message(func_name, e)
