@@ -50,7 +50,7 @@ def write_transcripts(
         raise ValueError(f'The following genes are missing from the gene metadata: {unavailable_genes}')
 
     # 4: construct pyramid
-    pyramid, tile_specs = build_tx_pyramid(
+    pyramid, tile_specs = _build_tx_pyramid(
         image_resolution=data_shape,
         total_points=tx_table.height,
         target_points_per_tile=5000,
@@ -64,7 +64,7 @@ def write_transcripts(
     logut.log_msg_wrapped('Tile specs:', msg, level='debug')
 
     # 5: assign tiles to tx and construct tile dataframes
-    pyramid = construct_tile_dfs(tx_table, pyramid)
+    pyramid = _construct_tile_dfs(tx_table, pyramid)
 
     # 6: populate attrs
     log.info('Writing transcript data')
@@ -83,15 +83,15 @@ def write_transcripts(
     tx_group.attrs['gene_colors'] = gene_colors
     tx_group.attrs['layer_config'] = layer_config
 
-    write_tx_zarr(tx_group, pyramid, overwrite=overwrite)
+    _write_tx_zarr(tx_group, pyramid, overwrite=overwrite)
 
 
-def build_tx_pyramid(
+def _build_tx_pyramid(
     image_resolution: tuple[int, int], total_points: int, target_points_per_tile: int = 5000, min_tile_size: int = 256
 ) -> dict[int, dict[str, Any]]:
 
     # TODO there is not really any reason to have this function separate from the tile spec function (same parameters)
-    tile_specs = choose_square_tiling(
+    tile_specs = _choose_square_tiling(
         image_resolution_hw=image_resolution,
         total_points=total_points,
         target_points_per_tile=target_points_per_tile,
@@ -113,7 +113,7 @@ def build_tx_pyramid(
     return pyramid, tile_specs
 
 
-def choose_square_tiling(
+def _choose_square_tiling(
     image_resolution_hw: tuple[int, int], total_points: int, target_points_per_tile: int, min_tile_size=64
 ):
     tiles_needed = np.ceil(total_points / target_points_per_tile).astype(int)
@@ -142,7 +142,7 @@ def choose_square_tiling(
     return res
 
 
-def construct_tile_dfs(df: pl.DataFrame, pyramid: dict[int, dict[str, Any]]) -> dict[int, dict[str, Any]]:
+def _construct_tile_dfs(df: pl.DataFrame, pyramid: dict[int, dict[str, Any]]) -> dict[int, dict[str, Any]]:
     for level, specs in pyramid.items():
         tile_size, _, sampling_fct = specs.values()
 
@@ -162,7 +162,7 @@ def construct_tile_dfs(df: pl.DataFrame, pyramid: dict[int, dict[str, Any]]) -> 
     return pyramid
 
 
-def write_tx_zarr(tx_group: 'zGroup', pyramid: dict[int, dict[str, Any]], overwrite: bool = False):
+def _write_tx_zarr(tx_group: 'zGroup', pyramid: dict[int, dict[str, Any]], overwrite: bool = False):
 
     compressor = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
 

@@ -65,15 +65,15 @@ def write_cells(
 
     ################################
     clusterings = [c for c in metadata.columns if c.startswith('leiden')]
-    clusterings_order = get_sorted_clusterings(metadata, clusterings)
+    clusterings_order = _get_sorted_clusterings(metadata, clusterings)
 
     protein_columns = [col for col in metadata.columns if c.IMG_INTENSITY_HANDLE in col]
     protein_names = [s.removesuffix(c.IMG_INTENSITY_HANDLE) for s in protein_columns]
 
     cluster_labels_meta = {}
     for i, key in enumerate(clusterings_order):
-        sorted_cluster_ids = get_sorted_cluster_ids(metadata, cluster_key=key)
-        cluster_color_map = generate_cluster_palette(sorted_cluster_ids)
+        sorted_cluster_ids = _get_sorted_cluster_ids(metadata, cluster_key=key)
+        cluster_color_map = _generate_cluster_palette(sorted_cluster_ids)
 
         cluster_labels_meta[key] = {
             'index': i,
@@ -122,7 +122,7 @@ def write_cells(
     }
 
     log.info('Writing cell metadata arrays')
-    write_metadata_arrays(seg_group, meta_columns)
+    _write_metadata_arrays(seg_group, meta_columns)
 
     log.info('Writing cell polygon arrays')
     ragged = to_ragged_array(polygons.geometry, include_z=False, include_m=False)
@@ -132,7 +132,7 @@ def write_cells(
         utils.create_array(seg_group, name, data=array, compressor=COMPRESSOR, chunks=chunks)
 
 
-def write_metadata_arrays(seg_group, meta_columns):
+def _write_metadata_arrays(seg_group, meta_columns):
     for key, (arr, dtype) in meta_columns.items():
         if key in seg_group:
             del seg_group[key]
@@ -144,23 +144,7 @@ def write_metadata_arrays(seg_group, meta_columns):
         utils.create_array(seg_group, key, data=array, compressor=COMPRESSOR, chunks=chunks)
 
 
-def prepare_metadata_for_tiling(metadata, tile_size, img_res):
-    metadata = metadata.with_row_index()
-
-    image_resolution_hw = img_res
-    n_tiles_w = image_resolution_hw[1] // tile_size
-    n_tiles_h = image_resolution_hw[0] // tile_size
-    n_tiles_w, n_tiles_h
-
-    metadata = metadata.with_columns(
-        (pl.col('cell_x') / tile_size).cast(pl.Int32).alias('tile_x'),
-        (pl.col('cell_y') / tile_size).cast(pl.Int32).alias('tile_y'),
-    ).sort('tile_y', 'tile_x')
-
-    return metadata
-
-
-def get_sorted_clusterings(df, cluster_keys: list[str]):
+def _get_sorted_clusterings(df, cluster_keys: list[str]):
     clusterings_order = (
         df.select(cluster_keys)
         .unpivot(cluster_keys)
@@ -172,7 +156,7 @@ def get_sorted_clusterings(df, cluster_keys: list[str]):
     return clusterings_order
 
 
-def get_sorted_cluster_ids(df, cluster_key: str):
+def _get_sorted_cluster_ids(df, cluster_key: str):
     cluster_ids_order = (
         df.select(cluster_key).group_by(cluster_key).agg(pl.len()).sort('len', descending=True)[cluster_key].to_list()
     )
@@ -184,7 +168,7 @@ def get_sorted_cluster_ids(df, cluster_key: str):
     return cluster_ids_order
 
 
-def generate_cluster_palette(ordered_unique_clusters: list, max_colors: int = 256) -> dict:
+def _generate_cluster_palette(ordered_unique_clusters: list, max_colors: int = 256) -> dict:
 
     n_clusters = len(ordered_unique_clusters)
 
@@ -265,7 +249,24 @@ def _add_segmentation_attrs(cell_group, seg_name):
     return seg_path
 
 
-def map_categories(mask: np.ndarray, labels: np.ndarray, categories: np.ndarray, missing_val=-1):
+# NOTE unused
+def _prepare_metadata_for_tiling(metadata, tile_size, img_res):
+    metadata = metadata.with_row_index()
+
+    image_resolution_hw = img_res
+    n_tiles_w = image_resolution_hw[1] // tile_size
+    n_tiles_h = image_resolution_hw[0] // tile_size
+    n_tiles_w, n_tiles_h
+
+    metadata = metadata.with_columns(
+        (pl.col('cell_x') / tile_size).cast(pl.Int32).alias('tile_x'),
+        (pl.col('cell_y') / tile_size).cast(pl.Int32).alias('tile_y'),
+    ).sort('tile_y', 'tile_x')
+
+    return metadata
+
+
+def _map_categories(mask: np.ndarray, labels: np.ndarray, categories: np.ndarray, missing_val=-1):
     flat_mask = mask.ravel()
 
     idx = pd.Index(labels)
@@ -280,7 +281,7 @@ def map_categories(mask: np.ndarray, labels: np.ndarray, categories: np.ndarray,
     return out_flat.reshape(mask.shape)
 
 
-def map_clusters_to_mask(meta: pl.DataFrame, cluster_key: str, mask: np.ndarray):
+def _map_clusters_to_mask(meta: pl.DataFrame, cluster_key: str, mask: np.ndarray):
     cluster_cat = pd.Categorical(meta[cluster_key])
 
     if 'unassigned' not in cluster_cat.categories:
@@ -291,7 +292,7 @@ def map_clusters_to_mask(meta: pl.DataFrame, cluster_key: str, mask: np.ndarray)
     cluster_cat = cluster_cat.reorder_categories(cats)
 
     cluster_codes = cluster_cat.codes  # integers 0..n-1
-    p_mask = map_categories(mask=mask, labels=meta['cell_id'].to_numpy(), categories=cluster_codes)
+    p_mask = _map_categories(mask=mask, labels=meta['cell_id'].to_numpy(), categories=cluster_codes)
 
     pal = [c.UNASSIGNED_COLOR] + c.SG_PALETTE
     pal = np.array([utils.hex_to_rgb(c, normalized=False) for c in pal])
@@ -312,13 +313,13 @@ def get_user_cluster_metadata(new_data: pl.DataFrame) -> dict[str, dict]:
         if not col.endswith('_color')
     }
 
-    clusterings_order = get_sorted_clusterings(new_data, clusterings_dict.keys())
+    clusterings_order = _get_sorted_clusterings(new_data, clusterings_dict.keys())
 
     cluster_labels_meta = {}
     for i, key in enumerate(clusterings_order):
-        sorted_cluster_ids = get_sorted_cluster_ids(new_data, key)
+        sorted_cluster_ids = _get_sorted_cluster_ids(new_data, key)
         if clusterings_dict[key] is None:
-            cluster_color_map = generate_cluster_palette(sorted_cluster_ids)
+            cluster_color_map = _generate_cluster_palette(sorted_cluster_ids)
         else:
             color_map = (
                 new_data.select([key, clusterings_dict[key]])
@@ -392,4 +393,4 @@ def apply_viewer_metadata(seg_group, new_data):
         'umap': (new_data_df.select(['UMAP1', 'UMAP2']).fill_null(np.nan), 'float16'),
     }
 
-    write_metadata_arrays(seg_group, meta_columns)
+    _write_metadata_arrays(seg_group, meta_columns)

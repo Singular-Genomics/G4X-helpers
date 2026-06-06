@@ -38,7 +38,7 @@ def migrate_sample(
         x0, x1, y0, y1 = roi.extent
         log.info(f'Roi provided with xlims={x0, x1}, ylims={y0, y1}, size in um: {roi_sz_um}')
 
-    basic_migrators, roi_migrators = gather_migrators(sample_dir)
+    basic_migrators, roi_migrators = _gather_migrators(sample_dir)
 
     if not all(m.is_migratable for m in basic_migrators + roi_migrators):
         log.error('Not all migrators are migratable. Aborting migration.')
@@ -63,7 +63,23 @@ def migrate_sample(
     logut.log_msg_wrapped(header='Migration completed. Migrated data is available at\n', msg=smp, level='INFO')
 
 
-def gather_migrators(sample_dir):
+def status(
+    sample_dir,
+) -> None:
+
+    basic_migrators, roi_migrators = _gather_migrators(sample_dir)
+    migrators = basic_migrators + roi_migrators
+
+    res = {}
+    for m in migrators:
+        icon = '✓' if m.is_migratable else '✗'
+        status = 'is migratable' if m.is_migratable else 'can not be migrated'
+        res[f'{icon} {m._name}'] = status
+
+    print(ut.pretty_dict_str(res, separator=' '))
+
+
+def _gather_migrators(sample_dir):
     sg4x = mig.SampleG4X_Migrator(root=sample_dir)
     basic_migrators = [sg4x]
     roi_migrators = []
@@ -90,19 +106,3 @@ def gather_migrators(sample_dir):
         roi_migrators.append(mig.Protein_Migrator(root=sample_dir))
 
     return basic_migrators, roi_migrators
-
-
-def status(
-    sample_dir,
-) -> None:
-
-    basic_migrators, roi_migrators = gather_migrators(sample_dir)
-    migrators = basic_migrators + roi_migrators
-
-    res = {}
-    for m in migrators:
-        icon = '✓' if m.is_migratable else '✗'
-        status = 'is migratable' if m.is_migratable else 'can not be migrated'
-        res[f'{icon} {m._name}'] = status
-
-    print(ut.pretty_dict_str(res, separator=' '))
