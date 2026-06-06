@@ -7,13 +7,12 @@ from skimage.measure import regionprops
 from tqdm import tqdm
 
 from .. import c, io
-from .. import logging_utils as logut
 
-LOGGER = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 
 # region high-level functions
-def create_cell_metadata(
+def cell_metadata(
     segmentation_mask: np.ndarray,
     nuclei_mask: np.ndarray | None = None,
     static_columns: dict = {'sample_id': 'not-specified'},
@@ -43,23 +42,20 @@ def create_cell_metadata(
     return cell_meta
 
 
-def create_cell_x_gene(
+def cell_x_gene(
     tx_table: pl.LazyFrame,
     segmentation_mask: np.ndarray,
     included_cells: list | None = None,
     included_genes: list | None = None,
     return_tx_table: bool = False,
-    logger: logging.Logger | None = None,
 ) -> pl.LazyFrame:
 
-    log = logger or LOGGER
-
-    tx_table = intersect_tx_with_cells(tx_table, segmentation_mask)
+    tx_table = intersect_cells_with_tx(tx_table, segmentation_mask)
 
     existing_gene_ids = tx_table.select(c.GENE_ID_NAME).unique().sort(c.GENE_ID_NAME).collect().to_series().to_list()
 
     if included_genes is not None:
-        _report_comparison(requested=included_genes, existing=existing_gene_ids, data_type='genes', logger=log)
+        _report_comparison(requested=included_genes, existing=existing_gene_ids, data_type='genes')
     else:
         included_genes = existing_gene_ids
 
@@ -77,7 +73,7 @@ def create_cell_x_gene(
             cell_by_gene.select(c.CELL_ID_NAME).unique().sort(c.CELL_ID_NAME).collect().to_series().to_list()
         )
 
-        _report_comparison(requested=included_cells, existing=existing_cell_ids, data_type='cells', logger=log)
+        _report_comparison(requested=included_cells, existing=existing_cell_ids, data_type='cells')
 
         all_cells = pl.LazyFrame(included_cells, schema={c.CELL_ID_NAME: pl.UInt32})
         cell_by_gene = all_cells.join(cell_by_gene, on=c.CELL_ID_NAME, how='left')
@@ -94,7 +90,7 @@ def create_cell_x_gene(
     return cell_by_gene
 
 
-def create_cell_x_signal(
+def cell_x_signal(
     images: dict,
     segmentation_mask: np.ndarray,
     *,
@@ -103,10 +99,8 @@ def create_cell_x_signal(
     suffix: str = c.IMG_INTENSITY_HANDLE,
     show_progress: bool = False,
     backend: io.ComputeBackend = io.get_backend(which='auto'),
-    logger: logging.Logger | None = None,
 ) -> pl.LazyFrame:
 
-    log = logger or LOGGER
     signal_list = list(images.keys())
     log.debug('Intersecting cells with signals: %s', signal_list)
 
@@ -124,7 +118,7 @@ def create_cell_x_signal(
 
         ch_label = f'{signal_name}{suffix}'
 
-        intensity_df = image_intensity_extraction(
+        intensity_df = intersect_cells_with_img(
             signal_img, mask_flat=mask_flat, bead_mask_flat=bead_mask_flat, ch_label=ch_label, backend=backend
         )
         if signal_name == signal_list[0]:
@@ -136,7 +130,7 @@ def create_cell_x_signal(
         existing_cell_ids = (
             channel_df.select(c.CELL_ID_NAME).unique().sort(c.CELL_ID_NAME).collect().to_series().to_list()
         )
-        _report_comparison(requested=included_cells, existing=existing_cell_ids, data_type='cells', logger=log)
+        _report_comparison(requested=included_cells, existing=existing_cell_ids, data_type='cells')
 
         all_cells = pl.LazyFrame(included_cells, schema={c.CELL_ID_NAME: pl.UInt32})
         channel_df = all_cells.join(channel_df, on=c.CELL_ID_NAME, how='left')
@@ -190,32 +184,7 @@ def extract_cell_props(
     return mask_props.sort(c.CELL_ID_NAME)
 
 
-def add_nuclei_properties(smp, cell_metadata, show_progress=True):
-    segmentation_mask = smp.load_segmentation(expanded=False)
-    mask_props_nuc = extract_cell_props(mask=segmentation_mask, mask_name='nuclei', show_progress=show_progress)
-    mask_props_nuc = mask_props_nuc.rename({c.CELL_AREA_NAME: c.NUC_AREA_NAME})
-
-    cell_metadata = cell_metadata.drop([c.CELL_COORD_X, c.CELL_COORD_Y]).join(
-        mask_props_nuc, on=c.CELL_ID_NAME, how='left'
-    )
-
-    col_order = [
-        c.CELL_ID_NAME,
-        'sample_id',
-        'tissue_type',
-        'block',
-        'seg_source',
-        c.CELL_COORD_X,
-        c.CELL_COORD_Y,
-        c.NUC_AREA_NAME,
-        c.CELL_AREA_NAME,
-        c.NUC_STAIN_INTENSITY,
-        c.CYT_STAIN_INTENSITY,
-    ]
-    return cell_metadata.select(col_order).sort('cell_id')
-
-
-def intersect_tx_with_cells(
+def intersect_cells_with_tx(
     tx_table: pl.LazyFrame, mask: np.ndarray, column_name: str = c.CELL_ID_NAME
 ) -> pl.LazyFrame:
     coord_order = ['y_pixel_coordinate', 'x_pixel_coordinate']
@@ -225,13 +194,13 @@ def intersect_tx_with_cells(
     return tx_table
 
 
-def image_intensity_extraction(
+def intersect_cells_with_img(
     img: np.ndarray,
     mask_flat: np.ndarray,
     bead_mask_flat: np.ndarray | None = None,
     ch_label: str = 'img_mean',
     backend: io.ComputeBackend = io.get_backend(which='auto'),
-) -> tuple[np.ndarray, np.ndarray]:
+) -> pl.LazyFrame:
 
     if backend.use_gpu:
         unique_labels, means = _image_intensity_extraction_gpu(img, mask_flat, bead_mask_flat, gpu_backend=backend)
@@ -326,16 +295,16 @@ def _image_intensity_extraction_gpu(
     return cp.asnumpy(all_labels), cp.asnumpy(means)
 
 
-def _report_comparison(requested: list, existing: list, data_type: str = 'genes', logger: logging.Logger = LOGGER):
+def _report_comparison(requested: list, existing: list, data_type: str = 'genes'):
     missing_in_reference = set(existing) - set(requested)
     missing_in_data = set(requested) - set(existing)
 
     if missing_in_data:
-        logger.warning(
+        log.warning(
             f'{len(missing_in_data)} {data_type} were requested but are missing in the data. They will be filled with zeros.'
         )
     if missing_in_reference:
-        logger.warning(
+        log.warning(
             f'{len(missing_in_reference)} {data_type} are in the data but were not requested. They will be missing from the final output.'
         )
 
@@ -373,265 +342,3 @@ def _add_artifically_large_beads(beads, sq_size=500):
 #     cell_labels = cell_labels[cell_labels != 0]
 #     lf = pl.LazyFrame(cell_labels, schema={c.CELL_ID_NAME: pl.Int32}).sort(c.CELL_ID_NAME)
 #     return lf if lazy else lf.collect()
-
-
-# def create_cell_x_gene(
-#     smp: 'G4Xoutput',
-#     tx_table: pl.LazyFrame,
-#     segmentation_mask: str | np.ndarray = PRESET_SOURCE,
-#     gene_labels: str | np.ndarray = PRESET_SOURCE,
-#     return_lazy: bool = True,
-#     logger: logging.Logger | None = None,
-# ) -> tuple[pl.DataFrame, pl.DataFrame]:
-
-#     # log = logger or LOGGER
-
-#     tx_table = intersect_tx_with_cells(tx_table, segmentation_mask)
-#     cell_frame = _cell_frame(segmentation_mask)
-
-#     if gene_labels == PRESET_SOURCE:
-#         gene_labels = smp.genes
-
-#     cell_by_gene = (
-#         tx_table.filter(pl.col(c.CELL_ID_NAME) != 0)
-#         .group_by(c.CELL_ID_NAME, c.GENE_ID_NAME)
-#         .agg(pl.len().alias('counts'))
-#         .sort(c.GENE_ID_NAME)
-#         .pivot(on=c.GENE_ID_NAME, values='counts', index=c.CELL_ID_NAME, on_columns=gene_labels)
-#     )
-
-#     # Adding missing cells with zero counts
-#     cell_by_gene = cell_frame.join(cell_by_gene.lazy(), on=c.CELL_ID_NAME, how='left')
-
-#     existing = cell_by_gene.collect_schema().names()
-#     if not set(existing[1:]) == set(gene_labels):
-#         raise ValueError('Mismatch between cell_by_gene columns and gene_labels')
-
-#     cell_by_gene = cell_by_gene.select([c.CELL_ID_NAME] + gene_labels)
-#     cell_by_gene = cell_by_gene.fill_null(0).sort(c.CELL_ID_NAME)
-
-#     if return_lazy:
-#         return cell_by_gene, tx_table
-#     return cell_by_gene.collect(), tx_table.collect()
-
-# def create_cell_metadata(
-#     smp: 'G4Xoutput',
-#     segmentation_mask: np.ndarray,
-#     *,
-#     cell_frame: pl.DataFrame | None = None,
-#     show_progress: bool | None = None,
-#     return_lazy: bool = True,
-#     seg_source: str = 'g4x-default',
-#     backend: io.ComputeBackend = io.get_backend(which='auto'),
-#     logger: logging.Logger | None = None,
-# ):
-#     # log = logger or LOGGER
-
-#     cell_frame = _cell_frame(segmentation_mask)
-
-#     cell_meta = cell_frame.with_columns(
-#         pl.lit(smp.sample_id).alias('sample_id'),
-#         pl.lit(smp.tissue_type).alias('tissue_type'),
-#         pl.lit(smp.block).alias('block'),
-#         pl.lit(seg_source).alias('seg_source'),
-#     )  # .collect()
-
-#     mask_props = extract_cell_props(segmentation_mask, show_progress=show_progress)
-
-#     stain_intensities = create_cell_x_signal(
-#         smp=smp,
-#         mask=segmentation_mask,
-#         signal_list=smp.stains,
-#         show_progress=show_progress,
-#         backend=backend,
-#         logger=logger,
-#     )
-
-#     del segmentation_mask
-
-#     mask_props = mask_props.join(stain_intensities, on=c.CELL_ID_NAME, how='left')
-
-#     mask_cells = mask_props.select(c.CELL_ID_NAME).collect()
-#     cell_meta_cells = cell_meta.select(c.CELL_ID_NAME).collect()
-#     if mask_cells.equals(cell_meta_cells):
-#         cell_meta = cell_meta.join(mask_props, on=c.CELL_ID_NAME, how='left')
-#     else:
-#         raise ValueError('The CELL_ID columns in cell_meta and mask_props do not match.')
-
-#     cell_meta = cell_meta.sort(c.CELL_ID_NAME)
-
-#     if return_lazy:
-#         return cell_meta
-#     return cell_meta.collect()
-
-# def create_cell_x_signal(
-#     smp: 'G4Xoutput',
-#     mask: np.ndarray,
-#     *,
-#     signal_list: list[str],
-#     suffix: str = c.IMG_INTENSITY_HANDLE,
-#     show_progress: bool | None = None,
-#     return_lazy: bool = True,
-#     backend: io.ComputeBackend = io.get_backend(which='auto'),
-#     logger: logging.Logger | None = None,
-#     **kwargs,
-# ) -> pl.LazyFrame:
-
-#     log = logger or LOGGER
-#     log.debug('Intersecting cells with signals: %s', signal_list)
-
-#     bead_mask = smp.load_bead_mask()
-#     # bead_mask = _add_artifically_large_beads(bead_mask)
-#     if bead_mask is not None:
-#         bead_mask_flat = bead_mask.ravel()
-#     else:
-#         log.warning('Bead mask not found. Proceeding without excluding beads from signal extraction.')
-#         bead_mask_flat = None
-
-#     mask_flat = mask.ravel()
-
-#     channel_df = _cell_frame(mask)
-
-#     if show_progress is None:
-#         show_progress = sys.stderr.isatty()
-
-#     for signal_name in tqdm(signal_list, desc='Extracting image signals', disable=not show_progress):
-#         log.debug('Processing signal: %s', signal_name)
-#         if signal_name == c.NUCLEAR_STAIN:
-#             signal_img = smp.load_nuclear_image()
-#             signal_name += 'stain'
-#         elif signal_name == c.CYTOPLASMIC_STAIN:
-#             signal_img = smp.load_cytoplasmic_image()
-#             signal_name += 'stain'
-#         else:
-#             signal_img = smp.load_protein_image(protein=signal_name)
-
-#         ch_label = f'{signal_name}{suffix}'
-
-#         intensity_df = image_intensity_extraction(
-#             signal_img,
-#             mask_flat=mask_flat,
-#             bead_mask_flat=bead_mask_flat,
-#             ch_label=ch_label,
-#             backend=backend,
-#             **kwargs,
-#         )
-#         channel_df = channel_df.join(intensity_df, on=c.CELL_ID_NAME, how='left')
-
-#     channel_df = channel_df.sort(c.CELL_ID_NAME)
-#     if return_lazy:
-#         return channel_df
-#     return channel_df.collect()
-
-# def aggregate_cell_data(
-#     smp: 'G4Xoutput',
-#     segmentation_mask: str = PRESET_SOURCE,
-#     mask_key: str | None = DEFAULT_MASK_KEY,
-#     *,
-#     out_dir: str = PRESET_SOURCE,
-#     tx_table: str = PRESET_SOURCE,
-#     overwrite: bool = True,
-#     gene_list: list[str] = PRESET_SOURCE,
-#     protein_list: list[str] = PRESET_SOURCE,
-#     show_progress: bool | None = None,
-#     compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
-#     logger: logging.Logger | None = None,
-# ) -> None:
-
-#     log = logger or LOGGER
-#     backend = io.get_backend(which=compute_backend)
-
-#     seg_source = 'g4x-default' if segmentation_mask == PRESET_SOURCE else 'custom'
-#     log.info('Using %s segmentation source', seg_source)
-
-#     # 1: Validate and collect input
-#     log.debug('Validating input and preparing output paths')
-#     txtable_in = collect_input(smp, tx_table, TxTable, logger=log)
-#     segment_in = collect_input(smp, segmentation_mask, Segmentation, validate=False, logger=log)
-
-#     # 2: Import segmentation mask (keys will be validated here)
-#     mask = io.import_segmentation(segment_in.p, labels_key=mask_key, expected_shape=smp.shape)
-
-#     # 3: Validate and prepare output
-#     out_dir = smp.smp_dir if out_dir == PRESET_SOURCE else io.pathval.validate_dir_path(out_dir)
-
-#     log_with_path = partial(logut.log_with_path, logger=log, level='info')
-#     route_out = partial(reroute_source, smp, out_dir, overwrite=overwrite, logger=log)
-
-#     route_out(validator=CellMetadata)
-#     route_out(validator=CellxGene)
-
-#     # overwrite_segmentation = True if segmentation_mask == PRESET_SOURCE else overwrite
-#     # route_out(validator=Segmentation, overwrite=overwrite_segmentation)
-
-#     # 4: Create cell metadata
-#     log.info('Creating cell metadata')
-#     cell_metadata = create_cell_metadata(
-#         smp,
-#         segmentation_mask=mask,
-#         seg_source=seg_source,
-#         show_progress=show_progress,
-#         backend=backend,
-#         logger=log,
-#     )
-
-#     # 5: Create cell x gene matrix
-#     log.info('Creating cell x gene matrix')
-#     cell_x_gene, tx_table_intersected = create_cell_x_gene(
-#         smp=smp,
-#         tx_table=txtable_in.load(),
-#         segmentation_mask=mask,
-#         gene_labels=gene_list,
-#         logger=log,
-#     )
-
-#     if segmentation_mask == PRESET_SOURCE:
-#         log.debug('Adding nuclei properties to cell metadata and tx-table')
-#         cell_metadata = add_nuclei_properties(smp, cell_metadata, show_progress=show_progress)
-#         tx_table_intersected = intersect_tx_with_cells(
-#             tx_table_intersected, smp.load_segmentation(expanded=False), column_name='in_nucleus'
-#         )
-
-#     # 6: Create cell x protein matrix (optional)
-#     if smp.src.pr_detected:
-#         log.info('Creating cell x protein matrix')
-
-#         route_out(validator=CellxProt)
-
-#         if protein_list != PRESET_SOURCE:
-#             smp.set_proteins(protein_list)
-
-#         cell_x_protein = create_cell_x_signal(
-#             smp=smp,
-#             mask=mask,
-#             signal_list=smp.proteins,
-#             show_progress=show_progress,
-#             backend=backend,
-#             logger=log,
-#         )
-
-#         log_with_path(f'Writing {smp.out.CellxProt.name} table:', smp.out.CellxProt.p)
-#         cell_x_protein.sink_csv(smp.out.CellxProt.p, compression='gzip')
-
-#     # 7: Write the demuxed transcript table
-#     overwrite_txtable = True if tx_table == PRESET_SOURCE else overwrite
-#     route_out(validator=TxTable, overwrite=overwrite_txtable)
-#     log_with_path(f'Writing {smp.out.TxTable.name} table:', smp.out.TxTable.p)
-#     tx_table_intersected.write_csv(smp.out.TxTable.p, compression='gzip')
-
-#     # 8: Write the cell x gene matrix
-#     log_with_path(f'Writing {smp.out.CellxGene.name} table:', smp.out.CellxGene.p)
-#     cell_x_gene.sink_csv(smp.out.CellxGene.p, compression='gzip')
-
-#     # 9: Write the cell metadata table
-#     log_with_path(f'Writing {smp.out.CellMetadata.name} table:', smp.out.CellMetadata.p)
-#     cell_metadata.sink_csv(smp.out.CellMetadata.p, compression='gzip')
-
-#     # 10: Write the segmentation mask (if using custom)
-#     if segmentation_mask != PRESET_SOURCE:
-#         route_out(validator=Segmentation, overwrite=overwrite)
-#         log_with_path(f'Writing {smp.out.Segmentation.name} mask:', smp.out.Segmentation.p)
-#         mask_key = 'custom' if mask_key is None else mask_key
-#         mask_data = {mask_key: mask}
-#         smp.out.Segmentation.main_key = mask_key
-#         np.savez(smp.out.Segmentation.p, **mask_data)

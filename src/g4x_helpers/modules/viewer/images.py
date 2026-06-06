@@ -13,7 +13,7 @@ from ome_zarr import writer as oz_writer
 from ... import io
 from ...utils import get_image_shape
 
-LOGGER = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 saturated_colors = {
     'red': '#FF0000',
@@ -67,7 +67,7 @@ OMERO_DEFAULT = {
 }
 
 
-def write_images_to_zarr(
+def write_images(
     zarr_path: str,
     images: dict[str, str],
     visible_channels: list[str] | None = None,
@@ -76,14 +76,14 @@ def write_images_to_zarr(
     overwrite: bool = True,
     chunk_size: int = 1024,
     use_cache: bool = False,
-    logger: logging.Logger | None = None,
 ):
-    log = logger or LOGGER
+
     log.debug('Preparing multiplex image')
 
     zarr_path = io.pathval.validate_dir_path(zarr_path)
 
-    img_group = zarr.open_group(zarr_path / 'images' / 'multiplex', mode='r+')
+    mode = 'w' if overwrite else 'r+'
+    img_group = zarr.open_group(zarr_path / 'images' / 'multiplex', mode=mode)
 
     # Prepare dask arrays for each channel
     for name, path in images.items():
@@ -122,7 +122,7 @@ def write_images_to_zarr(
     write_channel_stack(img_group, channels, chunk_size=chunk_size)
 
 
-def write_rgb_img(
+def write_rgb_image(
     zarr_path: str,
     image_name: str,
     image_path: str,
@@ -130,13 +130,12 @@ def write_rgb_img(
     overwrite: bool = True,
     chunk_size: int = 1024,
     use_cache: bool = False,
-    logger: logging.Logger | None = None,
 ):
-    log = logger or LOGGER
 
     zarr_path = io.pathval.validate_dir_path(zarr_path)
 
-    img_group = zarr.open_group(zarr_path / 'images' / 'h_and_e', mode='r+')
+    mode = 'w' if overwrite else 'r+'
+    img_group = zarr.open_group(zarr_path / 'images' / 'h_and_e', mode=mode)
 
     shape = get_image_shape(image_path)
     image = io.import_image_dask(image_path, shape=shape, dtype=dtype, use_cache=use_cache)
@@ -255,69 +254,3 @@ def _determine_visible_channels(channel_order: list[str] = None) -> list[str]:
     if len(visible_channels) < len(DEFAULT_VISIBLE_CHANNELS):
         visible_channels.extend(channel_order_copy[: (len(DEFAULT_VISIBLE_CHANNELS) - len(visible_channels))])
     return visible_channels
-
-
-# def write_multiplex_img(
-#     smp,
-#     protein_list: list[str] | None = None,
-#     overwrite: bool = True,
-#     chunk_size: int = 1024,
-#     logger: logging.Logger | None = None,
-# ):
-#     log = logger or LOGGER
-#     log.debug('Preparing multiplex image')
-
-#     mode = 'w' if overwrite else 'a'
-#     img_group = zarr.open_group(smp.out.ViewerZarr.p / 'images' / 'multiplex', mode=mode)
-
-#     if protein_list is not None:
-#         smp.set_proteins(protein_list)
-
-#     channel_arrays = []
-#     # Prepare dask arrays for each channel
-#     if smp.src.pr_detected:
-#         for ch in smp.proteins:
-#             arr = smp.load_protein_image(protein=ch, dask=True, use_cache=False)
-#             channel_arrays.append(arr)
-
-#     for ch in reversed(smp.stains):
-#         if ch == c.CYTOPLASMIC_STAIN:
-#             arr = smp.load_cytoplasmic_image(dask=True, use_cache=False)
-#         elif ch == c.NUCLEAR_STAIN:
-#             arr = smp.load_nuclear_image(dask=True, use_cache=False)
-#         else:
-#             log.warning(f'Unknown stain type: {ch}, skipping.')
-#             continue
-
-#         channel_arrays.append(arr)
-
-#     for i, arr in enumerate(channel_arrays):
-#         if arr.ndim == 2:
-#             channel_arrays[i] = arr[None, ...]  # add Z
-
-#     # build the channels and their metadata
-#     channel_order = smp.proteins + list(reversed(smp.stains))
-
-#     if smp.src.pr_detected:
-#         visible_channels = _determine_visible_channels(channel_order)
-#     else:
-#         visible_channels = [c.NUCLEAR_STAIN]
-
-#     channels = []
-#     for arr, name in zip(channel_arrays, channel_order):
-#         log.debug(f'Processing channel: {name}')
-#         if name in channel_color_map:
-#             color = saturated_colors[channel_color_map[name]]
-#         else:
-#             color = saturated_colors[list(saturated_colors.keys())[channel_order.index(name) % len(saturated_colors)]]
-
-#         active = True if name in visible_channels else False
-#         window = default_window_recipe(arr)
-#         color = color.removeprefix('#')
-#         ic = ImageChannel(
-#             arr, label=name, dtype=np.uint16, omero_attrs={'color': color, 'active': active, 'window': window}
-#         )
-#         channels.append(ic)
-
-#     log.info('Writing multiplex image')
-#     write_channel_stack(img_group, channels, chunk_size=chunk_size)

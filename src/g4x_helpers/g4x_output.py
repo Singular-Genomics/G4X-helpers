@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from polars import DataFrame as plDF
     from polars import LazyFrame as plLF
 
-LOGGER = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 
 class G4Xoutput:
@@ -286,14 +286,7 @@ class G4Xoutput:
             proteins = proteins + ['Isotype']
         return proteins
 
-    def reroute_source(
-        self,
-        validator,
-        out_dir: str,
-        overwrite: bool = False,
-        logger: logging.Logger | None = None,
-    ) -> bool:
-        log = logger or LOGGER
+    def reroute_source(self, validator, out_dir: str, overwrite: bool = False) -> bool:
 
         out_obj = getattr(self.src, validator.__name__)
         out_obj.root = Path(out_dir)
@@ -305,6 +298,4 @@ class G4Xoutput:
             )
 
         suffix = 'overriding existing file' if out_obj.path_exists() else 'creating new file'
-        logut.log_with_path(
-            f'Using the following path for {validator.__name__} output ({suffix}):', out_obj.p, logger=log
-        )
+        logut.log_with_path(f'Using the following path for {validator.__name__} output ({suffix}):', out_obj.p)

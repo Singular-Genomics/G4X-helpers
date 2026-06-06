@@ -11,7 +11,7 @@ from .. import utils
 from ..validator import DirectoryValidator
 from .datamigrator import DataMigrator
 
-LOGGER = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 
 class SampleG4X_Migrator(DataMigrator, sd.SampleG4X):
@@ -299,7 +299,7 @@ class RawFeatures_Migrator(DataMigrator, sd.RawFeatures):
             return self.load(lazy=True)
 
     def _migrate_method(self, out_path: str, roi=None, **kwargs):
-        log = kwargs.get('logger', LOGGER)
+
         file_out = io.pathval.ensure_parent_dir(out_path / self.DEFAULT_TARGET_PATH)
 
         if 'current' in self.valid_versions:
@@ -350,7 +350,7 @@ class TxTable_Migrator(DataMigrator, sd.TxTable):
 
         drop_cols = ['cell_id', 'in_nucleus']
 
-        def convert(self, logger: logging.Logger = LOGGER):
+        def convert(self):
             lf = self.load(lazy=True)
             schema = lf.collect_schema().names()
             col_rename = self.col_rename.copy()
@@ -363,7 +363,7 @@ class TxTable_Migrator(DataMigrator, sd.TxTable):
                     lf = lf.drop(col)
 
             if schema == self.requires_flip:
-                logger.debug(f'Flipping xy-coordinates for {type(self).__name__}')
+                log.debug(f'Flipping xy-coordinates for {type(self).__name__}')
                 col_rename.update(self.flip_coords)
 
             lf = lf.rename(col_rename)
@@ -371,13 +371,12 @@ class TxTable_Migrator(DataMigrator, sd.TxTable):
             return lf
 
     def _migrate_method(self, out_path: str, roi=None, **kwargs):
-        log = kwargs.get('logger', LOGGER)
         file_out = io.pathval.ensure_parent_dir(out_path / self.DEFAULT_TARGET_PATH)
 
         if 'current' in self.valid_versions:
             df = self.load(lazy=True)
         else:
-            df = self.migrator.convert(logger=log)
+            df = self.migrator.convert()
 
         if roi is not None:
             df = utils.crop_tx_features(df, roi)
@@ -399,7 +398,6 @@ class HnEDir_Migrator(DataMigrator, sd.HnEDir):
         }
 
     def _migrate_method(self, out_path: str, roi=None, **kwargs):
-        log = kwargs.get('logger', LOGGER)
         out_dir = io.pathval.ensure_dir(out_path / self.DEFAULT_TARGET_PATH)
 
         for img in self.migrator.mapped_files.keys():
@@ -435,7 +433,7 @@ class Protein_Migrator(DataMigrator, sd.ProteinDir):
         EXPECTED_DIRS = {}
 
     def _migrate_method(self, out_path: str, protein_subset: list = None, roi=None, **kwargs):
-        log = kwargs.get('logger', LOGGER)
+
         out_dir = io.pathval.ensure_dir(out_path / self.DEFAULT_TARGET_PATH)
 
         migrator = self.migrator

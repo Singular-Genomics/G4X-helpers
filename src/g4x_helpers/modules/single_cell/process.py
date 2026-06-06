@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import traceback
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import numpy as np
 import polars as pl
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from anndata import AnnData
 
 
-LOGGER = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 DEFAULT_CLUSTERINGS = {'leiden_coarse': (6, 0.25), 'leiden_fine': (12, 0.5)}
 
@@ -31,11 +31,8 @@ def default_sc_pipeline(
     clusterings: dict[str, tuple[int, float]] = DEFAULT_CLUSTERINGS,
     cluster_attempts: int = 10,
     rnd_st: int = 111,
-    backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
-    logger: logging.Logger | None = None,
+    compute_backend: io.ComputeBackend = io.get_backend(which='auto'),
 ) -> tuple['AnnData', str]:
-    log = logger or LOGGER
-    backend = io.get_backend(which=backend)
 
     # 1. Filter AnnData object
     adata_init = adata.copy()
@@ -50,7 +47,7 @@ def default_sc_pipeline(
 
     # 2. Pre-Processings (CPU/GPU) split path
     try:
-        adata = pre_process_adata(adata=adata, n_neighbors=n_neighbors, compute_backend=backend, rnd_st=rnd_st)
+        adata = pre_process_adata(adata=adata, n_neighbors=n_neighbors, compute_backend=compute_backend, rnd_st=rnd_st)
     except Exception as e:
         log.warning(f'Preprocessing failed: {e}')
         return adata, 'preprocessing_failed'
@@ -59,15 +56,14 @@ def default_sc_pipeline(
     success_clusterings = []
     for k, (target_clusters, init_res) in clusterings.items():
         try:
-            adata = optimize_leiden_clusters(
+            adata = optimized_clustering(
                 adata,
                 cluster_name=k,
                 target_clusters=target_clusters,
                 init_res=init_res,
                 max_attempts=cluster_attempts,
-                compute_backend=backend,
+                compute_backend=compute_backend,
                 rnd_st=rnd_st,
-                logger=log,
             )
             success_clusterings.append(k)
 
@@ -79,8 +75,8 @@ def default_sc_pipeline(
         return adata, 'clustering_failed'
 
     # Move AnnData object to CPU for downstream processing
-    if backend.use_gpu:
-        backend.rsc.get.anndata_to_CPU(adata)
+    if compute_backend.use_gpu:
+        compute_backend.rsc.get.anndata_to_CPU(adata)
 
     return adata, 'success'
 
@@ -90,10 +86,7 @@ def init_adata(
     cell_metadata: pl.DataFrame,
     cell_x_gene: pl.DataFrame,
     cell_x_protein: pl.DataFrame | None = None,
-    logger: logging.Logger | None = None,
 ) -> 'AnnData':
-
-    log = logger or LOGGER
 
     cell_metadata = cell_metadata.sort(c.CELL_ID_NAME)
     cell_metadata = cell_metadata.sort(c.CELL_ID_NAME)
@@ -169,10 +162,8 @@ def init_adata(
 def filter_adata(
     adata: 'AnnData',
     filter_panel: 'FilterPanel' | None = None,
-    *,
-    logger: logging.Logger | None = None,
-):
-    log = logger or LOGGER
+) -> tuple['AnnData', pl.DataFrame, pl.DataFrame]:
+
     log.info('Filtering adata')
 
     if filter_panel is None:
@@ -201,11 +192,9 @@ def pre_process_adata(
     umap_key: str = 'X_umap',
     umap_min_dist: float = 0.15,
     rnd_st=777,
-    compute_backend: io.ComputeBackend,
-    logger: logging.Logger | None = None,
+    compute_backend: io.ComputeBackend = io.get_backend(which='auto'),
 ):
 
-    log = logger or LOGGER
     backend_proxy = 'rapids (GPU)' if compute_backend.use_gpu else 'scanpy (CPU)'
 
     log.info('Pre-processing AnnData object using %s', backend_proxy)
@@ -253,7 +242,7 @@ def pre_process_adata(
     return adata
 
 
-def optimize_leiden_clusters(
+def optimized_clustering(
     adata: 'AnnData',
     *,
     cluster_name='leiden_clusters',
@@ -262,10 +251,8 @@ def optimize_leiden_clusters(
     init_res=0.5,
     max_attempts=15,
     rnd_st=777,
-    compute_backend: io.ComputeBackend,
-    logger: logging.Logger | None = None,
+    compute_backend: io.ComputeBackend = io.get_backend(which='auto'),
 ):
-    log = logger or LOGGER
 
     backend_proxy = 'rapids (GPU)' if compute_backend.use_gpu else 'scanpy (CPU)'
     log.info('Optimizing Leiden clusters for: %s', cluster_name)
@@ -347,13 +334,7 @@ def optimize_leiden_clusters(
     return adata
 
 
-def run_dgex(
-    adata: 'AnnData',
-    cluster_keys: list[str] = ['leiden'],
-    downsample: int = 1000,
-    logger: logging.Logger | None = None,
-) -> pl.DataFrame:
-    log = logger or LOGGER
+def run_dgex(adata: 'AnnData', cluster_keys: list[str] = ['leiden'], downsample: int = 1000) -> pl.DataFrame:
 
     dfList = []
     for leiden in cluster_keys:
@@ -404,13 +385,8 @@ def dummy_dgex_output(failure_code):
     return dummy_dgex
 
 
-def dummy_clustering_output(
-    adata,
-    failure_code: str = 'failed',
-    logger: logging.Logger | None = None,
-) -> pl.DataFrame:
+def dummy_clustering_output(adata, failure_code: str = 'failed') -> pl.DataFrame:
 
-    log = logger or LOGGER
     log.info('Filling missing outputs with placeholders due to failure code: %s', failure_code)
 
     # 1: Clustering / UMAP table

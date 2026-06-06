@@ -3,13 +3,13 @@ from typing import Literal
 
 from .. import io, schema
 from .. import logging_utils as logut
+from .. import sample_ops as ops
 from .. import utils as ut
 from ..g4x_output import G4Xoutput
 from ..roi import Roi
 from ..schema.legacy import migrators as mig
-from . import aggregate, single_cell, viewer
 
-LOGGER = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 
 def migrate_sample(
@@ -18,10 +18,9 @@ def migrate_sample(
     roi_coords: tuple | None = None,
     protein_subset: list | None = None,
     downstream: bool = True,
-    compute_backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
-    logger: logging.Logger | None = None,
+    backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
 ) -> None:
-    log = logger or LOGGER
+
     sample_dir = io.pathval.validate_dir_path(sample_dir)
     out_dir = io.pathval.validate_dir_path(out_dir)
 
@@ -30,7 +29,7 @@ def migrate_sample(
             'Output directory already contains a sample.g4x file. Aborting migration to prevent overwriting existing data.'
         )
 
-    logut.log_with_path('Starting migration for:', sample_dir, logger=log, level='INFO')
+    logut.log_with_path('Starting migration for:', sample_dir, level='INFO')
 
     roi = None
     if roi_coords is not None:
@@ -47,23 +46,21 @@ def migrate_sample(
         return
 
     for m in basic_migrators:
-        m.migrate(out_dir, logger=log)
+        m.migrate(out_dir)
 
     for m in roi_migrators:
-        m.migrate(out_dir, roi=roi, protein_subset=protein_subset, logger=log)
+        m.migrate(out_dir, roi=roi, protein_subset=protein_subset)
 
     log.info('All migrators completed migration. Starting post-processing...')
 
     smp = G4Xoutput(smp_dir=out_dir)
 
     if downstream:
-        aggregate.aggregate_cell_data(smp, overwrite=True, compute_backend=compute_backend, logger=log)
-        single_cell.process_sc_output(smp, overwrite=True, compute_backend=compute_backend, logger=log)
-        viewer.create_default_viewer(smp, overwrite=True, logger=log)
+        ops.aggregate(smp, out_dir=out_dir, overwrite=True, backend=backend)
+        ops.sc_process(smp, out_dir=out_dir, overwrite=True, backend=backend)
+        ops.viewer_zarr(smp, out_dir=out_dir, overwrite=True)
 
-    logut.log_msg_wrapped(
-        header='Migration completed. Migrated data is available at\n', msg=smp, level='INFO', logger=log
-    )
+    logut.log_msg_wrapped(header='Migration completed. Migrated data is available at\n', msg=smp, level='INFO')
 
 
 def gather_migrators(sample_dir):

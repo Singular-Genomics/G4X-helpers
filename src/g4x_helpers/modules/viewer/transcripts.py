@@ -15,10 +15,10 @@ if TYPE_CHECKING:
     from zarr.hierarchy import Group as zGroup
 
 
-LOGGER = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 
-def write_transcripts_to_zarr(
+def write_transcripts(
     zarr_path: str,
     tx_table: pl.DataFrame,
     manifest: pl.DataFrame,
@@ -26,10 +26,8 @@ def write_transcripts_to_zarr(
     dgex: pl.DataFrame,
     aggregation_level: Literal['probe', 'gene'] = 'gene',
     overwrite: bool = True,
-    logger: logging.Logger | None = None,
 ) -> None:
 
-    log = logger or LOGGER
     log.info('Preparing transcript data')
 
     zarr_path = io.pathval.validate_dir_path(zarr_path)
@@ -63,7 +61,7 @@ def write_transcripts_to_zarr(
     for level, specs in pyramid.items():
         msg += f'Level {level}: tile_size: {specs["tile_size"]} - scale: {specs["scale_fct"]}\n'
 
-    logut.log_msg_wrapped('Tile specs:', msg, logger=log, level='debug')
+    logut.log_msg_wrapped('Tile specs:', msg, level='debug')
 
     # 5: assign tiles to tx and construct tile dataframes
     pyramid = construct_tile_dfs(tx_table, pyramid)
@@ -85,7 +83,7 @@ def write_transcripts_to_zarr(
     tx_group.attrs['gene_colors'] = gene_colors
     tx_group.attrs['layer_config'] = layer_config
 
-    write_tx_zarr(tx_group, pyramid, overwrite=overwrite, logger=log)
+    write_tx_zarr(tx_group, pyramid, overwrite=overwrite)
 
 
 def build_tx_pyramid(
@@ -164,13 +162,8 @@ def construct_tile_dfs(df: pl.DataFrame, pyramid: dict[int, dict[str, Any]]) -> 
     return pyramid
 
 
-def write_tx_zarr(
-    tx_group: 'zGroup',
-    pyramid: dict[int, dict[str, Any]],
-    overwrite: bool = False,
-    logger: logging.Logger | None = None,
-):
-    log = logger or LOGGER
+def write_tx_zarr(tx_group: 'zGroup', pyramid: dict[int, dict[str, Any]], overwrite: bool = False):
+
     compressor = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
 
     for level in pyramid:
@@ -326,71 +319,3 @@ def complete_panel_colors(tx_panel, assignments):
         .alias('hex')
     )
     return colors
-
-
-# def write_transcripts(
-#     smp: 'G4Xoutput',
-#     *,
-#     tx_table: str = PRESET_SOURCE,
-#     manifest: str = PRESET_SOURCE,
-#     dgex: str = PRESET_SOURCE,
-#     overwrite: bool = True,
-#     logger: logging.Logger | None = None,
-# ) -> None:
-
-#     log = logger or LOGGER
-#     log.info('Preparing transcript data')
-
-#     tx_group = zarr.open_group(smp.out.ViewerZarr.p / 'transcripts', mode='r+')
-
-#     # 1: load inputs
-#     txtable_in = collect_input(smp, tx_table, validator=TxTable, logger=log)
-#     gene_metadata = get_gene_metadata(smp, manifest=manifest, dgex=dgex, logger=log)
-
-#     # 2: load tx table and filter to relevant columns
-#     aggregation_level = c.GENE_ID_NAME
-#     keep_cols = ['x_pixel_coordinate', 'y_pixel_coordinate', c.CELL_ID_NAME, aggregation_level]
-#     df = txtable_in.load(lazy=False).select(keep_cols)
-
-#     # 3: check that all genes in tx table have metadata
-#     gene_list = df[c.GENE_ID_NAME].unique().sort().to_list()
-
-#     unavailable_genes = [g for g in gene_list if g not in gene_metadata]
-#     if unavailable_genes:
-#         raise ValueError(f'The following genes are missing from the gene metadata: {unavailable_genes}')
-
-#     # 4: construct pyramid
-#     pyramid, tile_specs = build_tx_pyramid(
-#         image_resolution=smp.shape,
-#         total_points=df.height,
-#         target_points_per_tile=5000,
-#         min_tile_size=256,
-#     )
-
-#     msg = f'\n{tile_specs}\n'
-#     for level, specs in pyramid.items():
-#         msg += f'Level {level}: tile_size: {specs["tile_size"]} - scale: {specs["scale_fct"]}\n'
-
-#     logut.log_msg_wrapped('Tile specs:', msg, logger=log, level='debug')
-
-#     # 5: assign tiles to tx and construct tile dataframes
-#     pyramid = construct_tile_dfs(df, pyramid)
-
-#     # 6: populate attrs
-#     log.info('Writing transcript data')
-
-#     layer_config = {
-#         'layers': len(pyramid) - 1,
-#         'tile_size': pyramid[len(pyramid) - 1]['tile_size'],
-#         'layer_height': smp.shape[0],
-#         'layer_width': smp.shape[1],
-#         'coordinate_order': ['x_pixel_coordinate', 'y_pixel_coordinate'],
-#     }
-
-#     gene_colors = {k: v['color'] for k, v in gene_metadata.items()}
-
-#     tx_group.attrs['gene_order'] = list(gene_colors.keys())
-#     tx_group.attrs['gene_colors'] = gene_colors
-#     tx_group.attrs['layer_config'] = layer_config
-
-#     write_tx_zarr(tx_group, pyramid, overwrite=overwrite, logger=log)

@@ -1,6 +1,6 @@
 import logging
 import shutil
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import polars as pl
@@ -13,21 +13,18 @@ if TYPE_CHECKING:
     from .g4x_output import G4Xoutput
     from .schema.validator import BaseValidator
 
-LOGGER = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 
 def demux(
     smp: 'G4Xoutput',
     manifest: str | None = None,
     out_dir: str | None = None,
-    overwrite: bool = False,
-    logger: logging.Logger | None = None,
+    overwrite: bool = True,
     **kwargs,
 ) -> None:
 
     from .modules.demux import demux_raw_features
-
-    log = logger or LOGGER
 
     out_dir = smp.smp_dir if out_dir is None else io.pathval.validate_dir_path(out_dir)
 
@@ -36,7 +33,7 @@ def demux(
     raw_features_file = smp.src.RawFeatures
 
     tx_table = demux_raw_features(
-        raw_features=raw_features_file.load(lazy=True), manifest=manifest_file.parse(), logger=log, **kwargs
+        raw_features=raw_features_file.load(lazy=True), manifest=manifest_file.parse(), **kwargs
     )
 
     smp.reroute_source(sd.Manifest, out_dir, overwrite=overwrite)
@@ -53,13 +50,12 @@ def aggregate(
     mask_key: str | None = None,
     overwrite: bool = True,
     show_progress: bool = False,
-    compute_backend: io.ComputeBackend = io.get_backend(which='auto'),
-    logger: logging.Logger | None = None,
+    backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
 ) -> None:
 
-    from g4x_helpers.modules.aggregate import create_cell_metadata, create_cell_x_gene, create_cell_x_signal
+    from g4x_helpers.modules import aggregate
 
-    log = logger or LOGGER
+    compute_backend = io.get_backend(which=backend)
 
     out_dir = smp.smp_dir if out_dir is None else io.pathval.validate_dir_path(out_dir)
 
@@ -77,7 +73,7 @@ def aggregate(
         cell_mask = segmentation_file.load(key=segmentation_file.available_keys[0])
         nuclei_mask = None
 
-    cell_meta = create_cell_metadata(
+    cell_meta = aggregate.cell_metadata(
         segmentation_mask=cell_mask, nuclei_mask=nuclei_mask, static_columns=static_columns, show_progress=show_progress
     )
 
@@ -85,7 +81,7 @@ def aggregate(
     cell_ids = cell_meta.select('cell_id').collect()['cell_id'].to_list()
 
     tx_table = smp.src.TxTable.load(lazy=True)
-    cell_by_gene, tx_table = create_cell_x_gene(
+    cell_by_gene, tx_table = aggregate.cell_x_gene(
         tx_table=tx_table,
         segmentation_mask=cell_mask,
         included_cells=cell_ids,
@@ -102,7 +98,7 @@ def aggregate(
         images.update(smp.src.ProteinDir.mapped_files)
 
     bead_mask = smp.load_bead_mask()
-    cell_by_signal = create_cell_x_signal(
+    cell_by_signal = aggregate.cell_x_signal(
         images=images,
         segmentation_mask=cell_mask,
         bead_mask=bead_mask,
@@ -143,7 +139,7 @@ def sc_process(
     out_dir: str | None = None,
     overwrite: bool = True,
     omit_correlation: bool = False,
-    logger: logging.Logger | None = None,
+    backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
     **kwargs,
 ):
 
@@ -157,7 +153,7 @@ def sc_process(
         run_dgex,
     )
 
-    log = logger or LOGGER
+    compute_backend = io.get_backend(which=backend)
 
     out_dir = smp.smp_dir if out_dir is None else io.pathval.validate_dir_path(out_dir)
 
@@ -173,7 +169,7 @@ def sc_process(
     sc_meta = pl.from_pandas(adata.obs, include_index=True).cast({c.CELL_ID_NAME: pl.UInt32})
     sc_meta.write_csv(smp.src.CellMetadata.p, compression='gzip')
 
-    adata, status = default_sc_pipeline(adata)
+    adata, status = default_sc_pipeline(adata, compute_backend=compute_backend, **kwargs)
 
     success_clusterings = [k for k in adata.uns.keys() if k.startswith('leiden_')]
 
@@ -205,15 +201,24 @@ def sc_process(
         rna_pr_corr_df.to_csv(smp.src.AdataH5.p.parent / 'rna_protein_sc_correlation.csv')
 
 
-def init_viewer_zarr(
-    smp,
-    out_dir: str | None = None,
-    overwrite: bool = True,
-    logger: logging.Logger | None = None,
-) -> None:
-    from g4x_helpers.modules.viewer.zarr_utils import setup_viewer_zarr
+def viewer_zarr(smp: 'G4Xoutput', out_dir: str | None = None, overwrite: bool = True, symlink_images: bool = True):
+    from g4x_helpers.modules.viewer.zarr_utils import link_viewer_group
 
-    log = logger or LOGGER
+    out_dir = smp.smp_dir if out_dir is None else io.pathval.validate_dir_path(out_dir)
+
+    viewer_zarr_init(smp, out_dir=out_dir, overwrite=overwrite)
+
+    if out_dir != smp.smp_dir and symlink_images:
+        link_viewer_group(smp, group_name='images', overwrite=overwrite)
+    else:
+        viewer_zarr_images(smp, overwrite=overwrite)
+
+    viewer_zarr_transcripts(smp, overwrite=overwrite)
+    viewer_zarr_cells(smp, seg_name='g4x-default', overwrite=overwrite)
+
+
+def viewer_zarr_init(smp: 'G4Xoutput', out_dir: str | None = None, overwrite: bool = True) -> None:
+    from g4x_helpers.modules.viewer.zarr_utils import setup_viewer_zarr
 
     out_dir = smp.smp_dir if out_dir is None else io.pathval.validate_dir_path(out_dir)
 
@@ -231,16 +236,11 @@ def init_viewer_zarr(
         log.info('QCSummary file does not exist, skipping copy to ViewerZarr.')
 
 
-def write_viewer_images(
-    smp,
-    protein_list: list[str] | None = None,
-    overwrite: bool = True,
-    chunk_size: int = 1024,
-    logger: logging.Logger | None = None,
+def viewer_zarr_images(
+    smp: 'G4Xoutput', protein_list: list[str] | None = None, overwrite: bool = True, chunk_size: int = 1024
 ):
     from .modules.viewer import images as viewer_img
 
-    log = logger or LOGGER
     log.debug('Preparing multiplex image')
 
     images = {
@@ -267,38 +267,27 @@ def write_viewer_images(
         if name in viewer_img.channel_color_map
     }
 
-    viewer_img.write_images_to_zarr(
+    viewer_img.write_images(
         smp.src.ViewerZarr.p,
         images=images,
         overwrite=overwrite,
         visible_channels=visible_channels,
         channel_colors=channel_colors,
         chunk_size=chunk_size,
-        logger=log,
     )
 
     he_file = smp.src.HnEDir.mapped_files['h_and_e']
-    viewer_img.write_rgb_img(
-        smp.src.ViewerZarr.p,
-        image_name='h_and_e',
-        image_path=he_file,
-        overwrite=overwrite,
-        chunk_size=chunk_size,
-        logger=log,
+    viewer_img.write_rgb_image(
+        smp.src.ViewerZarr.p, image_name='h_and_e', image_path=he_file, overwrite=overwrite, chunk_size=chunk_size
     )
 
 
-def write_viewer_transcripts(
-    smp,
-    overwrite: bool = True,
-    logger: logging.Logger | None = None,
-):
-    from g4x_helpers.modules.viewer.transcripts import write_transcripts_to_zarr
+def viewer_zarr_transcripts(smp: 'G4Xoutput', overwrite: bool = True):
+    from .modules.viewer import transcripts as viewer_tx
 
-    log = logger or LOGGER
     log.debug('Preparing multiplex image')
 
-    write_transcripts_to_zarr(
+    viewer_tx.write_transcripts(
         smp.src.ViewerZarr.p,
         tx_table=smp.load_transcript_table(),
         manifest=smp.src.Manifest.parse(),
@@ -308,18 +297,12 @@ def write_viewer_transcripts(
     )
 
 
-def write_viewer_cells(
-    smp,
-    seg_name='g4x-default',
-    overwrite: bool = True,
-    logger: logging.Logger | None = None,
-):
-    from g4x_helpers.modules.viewer.cells import write_cells_to_zarr
+def viewer_zarr_cells(smp: 'G4Xoutput', seg_name='g4x-default', overwrite: bool = True):
+    from .modules.viewer import cells as viewer_cells
 
-    log = logger or LOGGER
     log.debug('Preparing cells')
 
-    write_cells_to_zarr(
+    viewer_cells.write_cells(
         smp.src.ViewerZarr.p,
         segmentation_mask=smp.src.Segmentation.load(),
         cell_metadata=smp.src.CellMetadata.load(),

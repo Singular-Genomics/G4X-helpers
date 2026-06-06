@@ -12,7 +12,7 @@ from tqdm import tqdm
 from .. import c, io
 from .. import logging_utils as logut
 
-LOGGER = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 
 # region main function
@@ -26,9 +26,7 @@ def demux_raw_features(
     batch_size: int = c.DEFAULT_BATCH_SIZE,
     batch_dir: Path | None = None,
     show_progress: bool = False,
-    logger: logging.Logger | None = None,
 ):
-    log = logger or LOGGER
 
     log.info('Starting batched demuxing of raw features')
 
@@ -38,7 +36,7 @@ def demux_raw_features(
         batch_dir = io.pathval.validate_dir_path(batch_dir)
         batch_dir = io.pathval.ensure_dir(batch_dir / 'demux_batches')
 
-    logut.log_with_path('Directory for temporary demux batches:', batch_dir, logger=log)
+    logut.log_with_path('Directory for temporary demux batches:', batch_dir)
     try:
         probe_dict = _build_probe_id_to_gene_name(manifest)
         seq_reads, manifest_by_read = _group_manifest_by_read(manifest)

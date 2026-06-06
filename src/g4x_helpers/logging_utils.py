@@ -4,9 +4,10 @@ from datetime import datetime
 from pathlib import Path
 
 PACKAGE_LOGGER_NAME = __package__ or __name__.split('.')[0]
-LOGGER = logging.getLogger(__name__)
 INDENT = 2 * ' '
 PGAP = INDENT + '> '
+
+log = logging.getLogger(__name__)
 
 
 def configure_g4x_logging(
@@ -76,11 +77,7 @@ class G4XFormatter(logging.Formatter):
         return super().format(record)
 
 
-def log_msg_wrapped(
-    header: str, msg: str, logger: logging.Logger | None = None, *, prefix: str = '    ', level: int = logging.INFO
-):
-    log = logger or LOGGER
-
+def log_msg_wrapped(header: str, msg: str, *, prefix: str = '    ', level: int = logging.INFO):
     if isinstance(level, str):
         level = getattr(logging, level.upper())
 
@@ -91,13 +88,10 @@ def log_msg_wrapped(
 def log_with_path(
     message: str,
     path: str | list,
-    logger: logging.Logger | None = None,
     *,
     after_path: str = '',
     level: int = logging.DEBUG,
 ):
-    log = logger or LOGGER
-
     if isinstance(level, str):
         level = getattr(logging, level.upper())
 

@@ -88,8 +88,8 @@ def ndarray_to_gdf(
 
     return gdf
 
-# TODO rename this function to something more general, e.g. convert_image_format
-def jp2_to_ometiff(
+
+def img_to_ometiff(
     in_file: str | Path,
     out_file: str | Path,
     img_type: Literal['rgb', 'grey', 'auto'] = 'auto',

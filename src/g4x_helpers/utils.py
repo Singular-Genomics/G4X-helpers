@@ -62,7 +62,7 @@ def pretty_dict_str(d, separator=' - '):
     return msg
 
 
-def peak(smp):
+def peek(smp):
     import spaceplot as sp
 
     axs = sp.montage_plot(3, panel_size=4.5, layout='compressed')

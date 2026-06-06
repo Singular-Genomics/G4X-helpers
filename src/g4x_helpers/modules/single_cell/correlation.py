@@ -34,12 +34,10 @@ PAIRS = {
     'UMOD': 'UMOD',
 }
 
-LOGGER = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 
-def run_correlation_analysis(
-    adata: AnnData, downsample: int = 25_000, logger: logging.Logger = LOGGER
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+def run_correlation_analysis(adata: AnnData, downsample: int = 25_000) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     n_obs_in = adata.n_obs
     fm = FilterMethod(filter_type='cells', key=c.NUC_STAIN_INTENSITY, subset='__notna__')
@@ -50,37 +48,37 @@ def run_correlation_analysis(
     adata = adata[mask_X & mask_protein].copy()
 
     if adata.n_obs < n_obs_in:
-        logger.warning(
+        log.warning(
             f'Filtered out {n_obs_in - adata.n_obs} ({(n_obs_in - adata.n_obs) / n_obs_in:.2%}) cells with no RNA or Protein data'
         )
 
     if downsample is not None:
-        adata = sc_utils.downsample_adata(adata, downsample=downsample, logger=logger)
+        adata = sc_utils.downsample_adata(adata, downsample=downsample)
 
-    pr_corr_df = protein_protein(adata, logger)
-    _, rna_pr_corr_df = protein_rna(adata, logger)
+    pr_corr_df = protein_protein(adata)
+    _, rna_pr_corr_df = protein_rna(adata)
     return pr_corr_df, rna_pr_corr_df
 
 
-def protein_protein(adata: AnnData, logger: logging.Logger = LOGGER) -> None:
+def protein_protein(adata: AnnData) -> None:
     prot_df = sc_utils._get_protein_df(adata)
-    prot_df = _drop_zero_variance_proteins(prot_df, logger)
+    prot_df = _drop_zero_variance_proteins(prot_df)
 
-    if not check_correlation_feasibility(prot_df, 'proteins', logger):
+    if not check_correlation_feasibility(prot_df, 'proteins'):
         return create_dummy_output()
 
     try:
         return _calculate_correlation(prot_df)
     except Exception as e:
-        logger.error(f'Error calculating protein-protein correlation: {e}')
+        log.error(f'Error calculating protein-protein correlation: {e}')
         return create_dummy_output()
 
 
-def protein_rna(adata: AnnData, logger: logging.Logger = LOGGER) -> None:
+def protein_rna(adata: AnnData) -> None:
     prot_df = sc_utils._get_protein_df(adata)
-    prot_df = _drop_zero_variance_proteins(prot_df, logger)
+    prot_df = _drop_zero_variance_proteins(prot_df)
 
-    if not check_correlation_feasibility(prot_df, 'proteins', logger):
+    if not check_correlation_feasibility(prot_df, 'proteins'):
         return create_dummy_output(), create_dummy_output()
 
     filtered_pairs = {}
@@ -88,21 +86,21 @@ def protein_rna(adata: AnnData, logger: logging.Logger = LOGGER) -> None:
         if k in adata.var_names and f'{v}{c.IMG_INTENSITY_HANDLE}' in prot_df.columns:
             filtered_pairs[k] = v
     if len(filtered_pairs) == 0:
-        logger.warning('No matching protein-RNA pairs in this data. Returning empty correlation matrices.')
+        log.warning('No matching protein-RNA pairs in this data. Returning empty correlation matrices.')
         return create_dummy_output(), create_dummy_output()
 
     ## get protein data for pairs
     prot_df = prot_df[[f'{x}{c.IMG_INTENSITY_HANDLE}' for x in filtered_pairs.values()]].copy()
-    if not check_correlation_feasibility(prot_df, 'proteins', logger):
+    if not check_correlation_feasibility(prot_df, 'proteins'):
         return create_dummy_output(), create_dummy_output()
 
     ## get RNA data
     rna_df = pd.DataFrame(
         adata[:, list(filtered_pairs.keys())].X.toarray(), index=adata.obs_names, columns=list(filtered_pairs.keys())
     )
-    rna_df = _drop_zero_count_genes(rna_df, logger)
+    rna_df = _drop_zero_count_genes(rna_df)
 
-    if not check_correlation_feasibility(rna_df, 'genes', logger):
+    if not check_correlation_feasibility(rna_df, 'genes'):
         return create_dummy_output(), create_dummy_output()
 
     try:
@@ -121,7 +119,7 @@ def protein_rna(adata: AnnData, logger: logging.Logger = LOGGER) -> None:
         ranked_final_df = rankdata(final_df.to_numpy(), axis=0)
         rna_pr_corr_df = _calculate_correlation(ranked_final_df, index=final_df.columns, columns=final_df.columns)
     except Exception as e:
-        logger.error(f'Error calculating protein-RNA correlation: {e}')
+        log.error(f'Error calculating protein-RNA correlation: {e}')
         return create_dummy_output(), create_dummy_output()
 
     return rna_corr_df, rna_pr_corr_df
@@ -140,9 +138,9 @@ def create_dummy_output():
     return df
 
 
-def check_correlation_feasibility(df, data_type: str, logger: logging.Logger = LOGGER) -> None:
+def check_correlation_feasibility(df, data_type: str) -> None:
     if df.shape[0] < 100 or df.shape[1] < 2:
-        logger.warning(
+        log.warning(
             f'Only {df.shape[0]} cells and {df.shape[1]} {data_type} left after filtering. Returning empty correlation matrix.'
         )
         return False
@@ -161,22 +159,22 @@ def _drop_zeros_mask(arr):
     return np.asarray(arr.sum(axis=1)).ravel() > 0
 
 
-def _drop_zero_variance_proteins(prot_df, logger: logging.Logger = LOGGER) -> None:
+def _drop_zero_variance_proteins(prot_df) -> None:
     # Constant columns = 0 variance = nan correlation
     col_var = np.var(prot_df, axis=0)
     zero_var_cols = col_var == 0
     zero_var_proteins = list(np.array(prot_df.columns)[zero_var_cols])
     if len(zero_var_proteins) > 0:
-        logger.warning(f'Proteins had zero variance in sampled Data Frame: {zero_var_proteins}')
+        log.warning(f'Proteins had zero variance in sampled Data Frame: {zero_var_proteins}')
 
     return prot_df.loc[:, ~zero_var_cols]
 
 
-def _drop_zero_count_genes(rna_df, logger: logging.Logger = LOGGER) -> None:
+def _drop_zero_count_genes(rna_df) -> None:
     non_zero_counts = rna_df.sum(axis=0) > 0
     zero_count_genes = list(np.array(rna_df.columns)[~non_zero_counts])
 
     if len(zero_count_genes) > 0:
-        logger.warning(f'Genes total 0 counts in sampled cells: {zero_count_genes}')
+        log.warning(f'Genes total 0 counts in sampled cells: {zero_count_genes}')
 
     return rna_df.loc[:, non_zero_counts]

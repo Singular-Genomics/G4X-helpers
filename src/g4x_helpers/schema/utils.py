@@ -29,7 +29,7 @@ def migrate_image(
     img_type='auto',
     roi: Roi | None = None,
 ) -> None:
-    io.convert.jp2_to_ometiff(
+    io.convert.img_to_ometiff(
         in_file=migrator.mapped_files[img_name],
         out_file=f'{out_dir}/{img_name}.ome.tiff',
         img_type=img_type,

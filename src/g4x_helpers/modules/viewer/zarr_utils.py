@@ -9,11 +9,8 @@ import zarr
 
 from ... import constants as c
 from ... import io
-from ...schema.definition import ViewerZarr
-from ..workflow import PRESET_SOURCE, reroute_source
 
 LOGGER = logging.getLogger(__name__)
-DEFAULT_ZARR_NAME = c.FILE_VIEWER_ZARR
 
 
 def setup_viewer_zarr(
@@ -52,64 +49,9 @@ def setup_viewer_zarr(
     return root_group
 
 
-def init_viewer_zarr(
-    smp,
-    *,
-    out_dir: str = PRESET_SOURCE,
-    overwrite: bool = True,
-    logger: logging.Logger | None = None,
-) -> None:
-    log = logger or LOGGER
-    log.info('Running init_viewer_zarr')
-
-    if out_dir == PRESET_SOURCE:
-        out_dir = smp.smp_dir if not smp.uses_branch else smp.alt_source
-    else:
-        out_dir = io.pathval.validate_dir_path(out_dir)
-
-    # out_dir = smp.smp_dir if out_dir == PRESET_SOURCE else io.pathval.validate_dir_path(out_dir)
-    reroute_source(smp, out_dir, validator=ViewerZarr, overwrite=overwrite, logger=log)
-
-    mode = 'w' if overwrite else 'a'
-    root_group = zarr.open_group(smp.out.ViewerZarr.p, mode=mode, zarr_version=2)
-
-    # write_metadata_defaults
-    root_group.attrs['run_metadata'] = {'Sample Information': smp.smp_meta}
-    root_group.attrs['smp_info_order'] = list(smp.smp_meta.keys())
-
-    img_group = root_group.create_group('images', overwrite=overwrite)
-    img_group.attrs['axes'] = {'unit': 'micrometer', 'pixel_per_um': c.PIXEL_PER_MICRON}
-
-    img_group.create_group('multiplex', overwrite=overwrite)
-    img_group.create_group('h_and_e', overwrite=overwrite)
-
-    tx_group = root_group.create_group('transcripts', overwrite=overwrite)
-    tx_group.attrs['gene_order'] = []
-    tx_group.attrs['gene_colors'] = {}
-    tx_group.attrs['layer_config'] = {
-        'layers': 1,
-        'tile_size': 1,
-        'layer_height': 1,
-        'layer_width': 1,
-        'coordinate_order': ['default_x', 'default_y'],
-    }
-
-    cell_group = root_group.create_group('cells', overwrite=overwrite)
-    cell_group.attrs['segmentation_sources'] = {}
-    cell_group.attrs['segmentation_order'] = []
-
-    (smp.out.ViewerZarr.p / 'misc').mkdir(parents=True, exist_ok=True)
-    if smp.src.QCSummary.path_exists():
-        shutil.copy(smp.src.QCSummary.p, smp.out.ViewerZarr.p / 'misc' / 'summary.html')
-    else:
-        log.info('QCSummary file does not exist, skipping copy to ViewerZarr.')
-
-    return root_group
-
-
 def link_viewer_group(smp, group_name: str, overwrite: bool = True):
-    target = smp.src.ViewerZarr.p / group_name
-    link = smp.out.ViewerZarr.p / group_name
+    target = smp.smp_dir / c.FILE_VIEWER_ZARR / group_name
+    link = smp.src.ViewerZarr.p / group_name
 
     # Compute target relative to the link's parent directory
     relative_target = os.path.relpath(target, start=link.parent)
