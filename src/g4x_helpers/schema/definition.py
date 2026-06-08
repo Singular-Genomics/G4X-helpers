@@ -117,7 +117,7 @@ class Manifest(TableValidator):
     SCHEMA = {'probe': pl.String}
 
     def parse(self):
-        return io.parse_input_manifest(self.target_path)
+        return io.parse_input_manifest(self.load())
 
 
 # region masks

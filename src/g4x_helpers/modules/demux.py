@@ -29,7 +29,9 @@ def demux_raw_features(
     show_progress: bool = False,
 ):
 
-    log.info('Starting batched demuxing of raw features')
+    log.info('Initializing batched demuxing of raw features')
+
+    manifest = io.parse_input_manifest(manifest)
 
     if batch_dir is None:
         log.debug('Creating temporary directory for demux batches')

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from functools import lru_cache, wraps
 from inspect import signature
 from pathlib import Path
@@ -18,6 +19,8 @@ from matplotlib.pyplot import imread
 
 from .. import constants as c
 from . import convert, pathval
+
+log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from pandas import DataFrame as pdDF
@@ -83,8 +86,7 @@ def parse_samplesheet(ss_path: str):
     return run_info_section, data_section
 
 
-def parse_input_manifest(file_path: str, verbose: bool = False):
-    manifest = pl.read_csv(file_path)
+def parse_input_manifest(manifest):
 
     for i, parsed_column in enumerate(['gene_name', 'sequence', 'primer']):
         if parsed_column not in manifest.columns:
@@ -94,20 +96,20 @@ def parse_input_manifest(file_path: str, verbose: bool = False):
 
     null_count = manifest.null_count()['sequence'][0]
     if null_count > 0:
-        if verbose:
-            print(f'{null_count} probes with invalid sequence format will be ignored:')
-            null_seqs = manifest.filter(pl.col('sequence').is_null())['probe'].to_list()
-            for ns in null_seqs:
-                print(f'- {ns}')
+        log.warning(f'{null_count} probes with invalid sequence format will be ignored:')
+        null_seqs = manifest.filter(pl.col('sequence').is_null())['probe'].to_list()
+        for ns in null_seqs:
+            log.warning(f'- {ns}')
 
     if 'read_num' not in manifest.columns:
         plist = manifest['primer'].unique().to_list()
         ign_primer = [p for p in plist if p not in c.primer_read_map]
+
         if len(ign_primer) > 0:
-            if verbose:
-                print('Warning: the following primer names are not known and will be ignored:')
-                for ip in ign_primer:
-                    print(f'- {ip}')
+            log.warning('Warning: the following primer names are not known and will be ignored:')
+            for ip in ign_primer:
+                log.warning(f'- {ip}')
+
         manifest = manifest.filter(pl.col('primer').is_in(c.primer_read_map.keys())).with_columns(
             pl.col('primer').replace(c.primer_read_map).cast(pl.Int8).alias('read_num')
         )
