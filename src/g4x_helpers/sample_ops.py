@@ -7,6 +7,7 @@ import polars as pl
 
 from . import constants as c
 from . import io
+from . import utils as ut
 from .schema import definition as sd
 
 if TYPE_CHECKING:
@@ -29,11 +30,12 @@ def demux(
     out_dir = smp.smp_dir if out_dir is None else io.pathval.validate_dir_path(out_dir)
 
     manifest_path = smp.src.Manifest.p if manifest is None else manifest
+
+    raw_features_file = _collect_input(smp.src.RawFeatures.p, sd.RawFeatures)
     manifest_file = _collect_input(manifest_path, sd.Manifest)
-    raw_features_file = smp.src.RawFeatures
 
     tx_table = demux_raw_features(
-        raw_features=raw_features_file.load(lazy=True), manifest=manifest_file.parse(), **kwargs
+        raw_features=raw_features_file.load(lazy=True), manifest=manifest_file.load(), **kwargs
     )
 
     smp.reroute_source(sd.Manifest, out_dir, overwrite=overwrite)
@@ -65,6 +67,7 @@ def aggregate(
 
     segmentation_path = smp.src.Segmentation.p if segmentation_mask is None else segmentation_mask
     segmentation_file = _collect_input(segmentation_path, sd.Segmentation)
+    tx_table_file = _collect_input(smp.src.TxTable.p, sd.TxTable)
 
     if mask_key is None and segmentation_mask is None:
         cell_mask = segmentation_file.load(key='nuclei_exp')
@@ -80,7 +83,7 @@ def aggregate(
     # cell_ids for the rest of the aggregation are extracted from the cell metadata to ensure consistency
     cell_ids = cell_meta.select('cell_id').collect()['cell_id'].to_list()
 
-    tx_table = smp.src.TxTable.load(lazy=True)
+    tx_table = tx_table_file.load(lazy=True)
     cell_by_gene, tx_table = aggregate.cell_x_gene(
         tx_table=tx_table,
         segmentation_mask=cell_mask,
@@ -322,6 +325,8 @@ def _collect_input(
 ):
     path_valid = io.pathval.validate_file_path(path)
     in_obj = validator(target_path=path_valid)
+
+    ut.log_with_path(f'Using the following file as input {validator.__name__}', in_obj.p, level='debug')
 
     if validate and not in_obj.is_valid:
         raise ValueError(f'Provided {validator.__name__} is not valid!\n{in_obj.report_validation()}')
