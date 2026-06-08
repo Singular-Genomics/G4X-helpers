@@ -32,7 +32,9 @@ def demux_raw_features(
     log.info('Starting batched demuxing of raw features')
 
     if batch_dir is None:
+        log.debug('Creating temporary directory for demux batches')
         batch_dir = io.pathval.validate_dir_path(tempfile.mkdtemp(prefix='g4x_demux_tmp_'))
+
     else:
         batch_dir = io.pathval.validate_dir_path(batch_dir)
         batch_dir = io.pathval.ensure_dir(batch_dir / 'demux_batches')
@@ -83,7 +85,7 @@ def demux_raw_features(
                     log.debug('Demuxing progress: %d%% (%d/%d batches)', next_progress_pct, i + 1, num_expected_batches)
                     next_progress_pct += 10
 
-            return _compile_demuxed_batches(batch_dir)
+        return _compile_demuxed_batches(batch_dir)
 
     finally:
         if batch_dir.exists():
@@ -91,11 +93,7 @@ def demux_raw_features(
             shutil.rmtree(batch_dir)
 
 
-def _compile_demuxed_batches(batch_dir: Path) -> pl.DataFrame:
-    tx_table = pl.scan_parquet(list(batch_dir.glob('*.parquet')))
-    return tx_table.filter(pl.col('demuxed')).drop('demuxed').collect()
-
-
+# region private functions
 def _demux_feature_batch(
     feature_batch: pl.DataFrame,
     *,
@@ -112,7 +110,7 @@ def _demux_feature_batch(
     manifest_read = manifest_by_read[seq_read]
 
     if len(feature_batch_read) == 0 or len(manifest_read) == 0:
-        return pl.DataFrame()
+        return _mark_as_undemuxed(feature_batch_read)
 
     seqs = feature_batch_read['sequence'].to_list()
     codes = manifest_read['sequence'].to_list()
@@ -134,11 +132,20 @@ def _demux_feature_batch(
     return feature_batch_read
 
 
-def _build_base_lut() -> np.ndarray:
-    lut = np.zeros((256, 4), dtype=np.float32)
-    for base, idx in zip(c.BASE_ORDER, range(4)):
-        lut[ord(base), idx] = 1.0
-    return lut
+def _mark_as_undemuxed(feature_batch_read: pl.DataFrame) -> pl.DataFrame:
+    return feature_batch_read.with_columns(
+        [
+            pl.lit('UNDETERMINED').alias('probe_name'),
+            pl.lit('UNDETERMINED').alias(c.GENE_ID_NAME),
+            pl.lit(False).alias('demuxed'),
+        ]
+    ).drop(['sequence', 'read_num'])
+
+
+def _build_probe_id_to_gene_name(manifest: pl.DataFrame) -> dict[str, str]:
+    mapping = dict(zip(manifest['probe_id'].to_list(), manifest['gene_name'].to_list()))
+    mapping['UNDETERMINED'] = 'UNDETERMINED'
+    return mapping
 
 
 def _group_manifest_by_read(manifest: pl.DataFrame) -> tuple[list[int], dict[int, pl.DataFrame]]:
@@ -148,10 +155,11 @@ def _group_manifest_by_read(manifest: pl.DataFrame) -> tuple[list[int], dict[int
     return seq_reads, manifest_by_read
 
 
-def _build_probe_id_to_gene_name(manifest: pl.DataFrame) -> dict[str, str]:
-    mapping = dict(zip(manifest['probe_id'].to_list(), manifest['gene_name'].to_list()))
-    mapping['UNDETERMINED'] = 'UNDETERMINED'
-    return mapping
+def _build_base_lut() -> np.ndarray:
+    lut = np.zeros((256, 4), dtype=np.float32)
+    for base, idx in zip(c.BASE_ORDER, range(4)):
+        lut[ord(base), idx] = 1.0
+    return lut
 
 
 def _iter_feature_batches(
@@ -167,6 +175,12 @@ def _iter_feature_batches(
             break
         yield batch
         offset += batch_size
+
+
+def _compile_demuxed_batches(batch_dir: Path) -> pl.DataFrame:
+    batch_paths = sorted(batch_dir.glob('batch_*.parquet'), key=lambda path: int(path.stem.split('_')[-1]))
+    tx_table = pl.scan_parquet(batch_paths)
+    return tx_table.filter(pl.col('demuxed')).drop('demuxed').collect()
 
 
 def _assign_probe_matches(
