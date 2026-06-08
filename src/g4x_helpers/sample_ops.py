@@ -85,6 +85,7 @@ def aggregate(
         tx_table=tx_table,
         segmentation_mask=cell_mask,
         included_cells=cell_ids,
+        included_genes=smp.genes,
         return_tx_table=True,
     )
 

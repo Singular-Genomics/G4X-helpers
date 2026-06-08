@@ -6,7 +6,8 @@ import polars as pl
 from skimage.measure import regionprops
 from tqdm import tqdm
 
-from .. import c, io
+from .. import constants as c
+from .. import io
 
 log = logging.getLogger(__name__)
 

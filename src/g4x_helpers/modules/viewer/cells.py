@@ -8,7 +8,8 @@ from numcodecs import Blosc
 from scipy.sparse import csr_matrix
 from shapely import to_ragged_array
 
-from ... import c, io
+from ... import constants as c
+from ... import io
 from . import zarr_utils as utils
 
 log = logging.getLogger(__name__)

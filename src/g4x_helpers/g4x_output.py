@@ -7,8 +7,9 @@ from typing import TYPE_CHECKING
 import numpy as np
 import polars as pl
 
-from . import c, io, schema, ut
-from . import logging_utils as logut
+from . import constants as c
+from . import io, schema
+from . import utils as ut
 
 if TYPE_CHECKING:
     from polars import DataFrame as plDF
@@ -294,8 +295,8 @@ class G4Xoutput:
 
         if out_obj.path_exists() and not overwrite:
             raise RuntimeError(
-                f'Operation aborted! {validator.__name__} already exists at:\n{logut.PGAP}{out_obj.p}\nUse overwrite=True to ignore this.',
+                f'Operation aborted! {validator.__name__} already exists at:\n{ut.PGAP}{out_obj.p}\nUse overwrite=True to ignore this.',
             )
 
         suffix = 'overriding existing file' if out_obj.path_exists() else 'creating new file'
-        logut.log_with_path(f'Using the following path for {validator.__name__} output ({suffix}):', out_obj.p)
+        ut.log_with_path(f'Using the following path for {validator.__name__} output ({suffix}):', out_obj.p)

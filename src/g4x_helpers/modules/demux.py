@@ -9,8 +9,9 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
-from .. import c, io
-from .. import logging_utils as logut
+from .. import constants as c
+from .. import io
+from .. import utils as ut
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ def demux_raw_features(
         batch_dir = io.pathval.validate_dir_path(batch_dir)
         batch_dir = io.pathval.ensure_dir(batch_dir / 'demux_batches')
 
-    logut.log_with_path('Directory for temporary demux batches:', batch_dir)
+    ut.log_with_path('Directory for temporary demux batches:', batch_dir)
     try:
         probe_dict = _build_probe_id_to_gene_name(manifest)
         seq_reads, manifest_by_read = _group_manifest_by_read(manifest)

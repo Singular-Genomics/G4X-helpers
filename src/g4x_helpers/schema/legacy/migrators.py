@@ -5,7 +5,8 @@ import shutil
 import numpy as np
 import polars as pl
 
-from ... import c, io
+from ... import constants as c
+from ... import io
 from .. import definition as sd
 from .. import utils
 from ..validator import DirectoryValidator

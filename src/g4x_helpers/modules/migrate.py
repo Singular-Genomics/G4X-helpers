@@ -2,7 +2,6 @@ import logging
 from typing import Literal
 
 from .. import io, schema
-from .. import logging_utils as logut
 from .. import sample_ops as ops
 from .. import utils as ut
 from ..g4x_output import G4Xoutput
@@ -29,7 +28,7 @@ def migrate_sample(
             'Output directory already contains a sample.g4x file. Aborting migration to prevent overwriting existing data.'
         )
 
-    logut.log_with_path('Starting migration for:', sample_dir, level='INFO')
+    ut.log_with_path('Starting migration for:', sample_dir, level='INFO')
 
     roi = None
     if roi_coords is not None:
@@ -60,7 +59,7 @@ def migrate_sample(
         ops.sc_process(smp, out_dir=out_dir, overwrite=True, backend=backend)
         ops.viewer_zarr(smp, out_dir=out_dir, overwrite=True)
 
-    logut.log_msg_wrapped(header='Migration completed. Migrated data is available at\n', msg=smp, level='INFO')
+    ut.log_msg_wrapped(header='Migration completed. Migrated data is available at\n', msg=smp, level='INFO')
 
 
 def status(

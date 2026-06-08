@@ -8,7 +8,7 @@ from numcodecs import Blosc
 
 from ... import constants as c
 from ... import io
-from ... import logging_utils as logut
+from ... import utils as ut
 from . import zarr_utils as utils
 
 if TYPE_CHECKING:
@@ -61,7 +61,7 @@ def write_transcripts(
     for level, specs in pyramid.items():
         msg += f'Level {level}: tile_size: {specs["tile_size"]} - scale: {specs["scale_fct"]}\n'
 
-    logut.log_msg_wrapped('Tile specs:', msg, level='debug')
+    ut.log_msg_wrapped('Tile specs:', msg, level='debug')
 
     # 5: assign tiles to tx and construct tile dataframes
     pyramid = _construct_tile_dfs(tx_table, pyramid)

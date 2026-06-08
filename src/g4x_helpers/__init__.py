@@ -1,4 +1,4 @@
-from importlib import import_module
+# from importlib import import_module
 from importlib.metadata import PackageNotFoundError, version
 
 try:
@@ -7,31 +7,49 @@ except PackageNotFoundError:
     __version__ = 'unknown'
 
 from . import constants as c
-from . import io, logging_utils, schema
+from . import io, schema
+from . import sample_ops as ops
 from . import utils as ut
+from .g4x_output import G4Xoutput
+from .modules import aggregate, demux, migrate, single_cell, viewer
 
-_LAZY_ATTRS = {
-    'aggregate': ('.modules', 'aggregate'),
-    'viewer': ('.modules', 'viewer'),
-    'single_cell': ('.modules', 'single_cell'),
-    'demux': ('.modules', 'demux'),
-    'migrate': ('.modules', 'migrate'),
-    'G4Xoutput': ('.g4x_output', 'G4Xoutput'),
-}
+__all__ = [
+    '__version__',
+    'G4Xoutput',
+    'c',
+    'io',
+    'schema',
+    'ut',
+    'ops',
+    'aggregate',
+    'demux',
+    'migrate',
+    'single_cell',
+    'viewer',
+]
 
-__all__ = ['__version__', 'c', 'io', 'schema', 'logging_utils', 'ut', *sorted(_LAZY_ATTRS)]
+# _LAZY_ATTRS = {
+#     'aggregate': ('.modules', 'aggregate'),
+#     'viewer': ('.modules', 'viewer'),
+#     'single_cell': ('.modules', 'single_cell'),
+#     'demux': ('.modules', 'demux'),
+#     'migrate': ('.modules', 'migrate'),
+#     'G4Xoutput': ('.g4x_output', 'G4Xoutput'),
+# }
+
+# __all__ = ['__version__', 'c', 'io', 'schema', 'logging_utils', 'ut', *sorted(_LAZY_ATTRS)]
 
 
-def __getattr__(name):
-    if name not in _LAZY_ATTRS:
-        raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
+# def __getattr__(name):
+#     if name not in _LAZY_ATTRS:
+#         raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
-    module_name, attr_name = _LAZY_ATTRS[name]
-    module = import_module(module_name, __name__)
-    value = getattr(module, attr_name)
-    globals()[name] = value
-    return value
+#     module_name, attr_name = _LAZY_ATTRS[name]
+#     module = import_module(module_name, __name__)
+#     value = getattr(module, attr_name)
+#     globals()[name] = value
+#     return value
 
 
-def __dir__():
-    return sorted(globals().keys() | set(__all__))
+# def __dir__():
+#     return sorted(globals().keys() | set(__all__))

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .. import c, io
+from .. import constants as c
+from .. import io
 
 
 def validation_test(func):

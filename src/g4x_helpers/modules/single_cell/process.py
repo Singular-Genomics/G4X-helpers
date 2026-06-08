@@ -10,7 +10,8 @@ import scanpy as sc
 from anndata import AnnData
 from scipy.sparse import csr_matrix
 
-from ... import c, io
+from ... import constants as c
+from ... import io
 from ...schema import definition as sd
 from . import sc_utils
 from .filter_panel import FilterPanel, _get_default_filter_panel

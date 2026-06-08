@@ -16,7 +16,7 @@ import tifffile
 import zarr
 from matplotlib.pyplot import imread
 
-from .. import c
+from .. import constants as c
 from . import convert, pathval
 
 if TYPE_CHECKING:
