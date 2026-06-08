@@ -8,15 +8,16 @@ import polars as pl
 from . import constants as c
 from . import io
 from . import utils as ut
+from .g4x_output import G4Xoutput
 from .schema import definition as sd
 
 if TYPE_CHECKING:
-    from .g4x_output import G4Xoutput
     from .schema.validator import BaseValidator
 
 log = logging.getLogger(__name__)
 
 
+# region demux
 def demux(
     smp: 'G4Xoutput',
     manifest: str | None = None,
@@ -24,7 +25,6 @@ def demux(
     overwrite: bool = True,
     **kwargs,
 ) -> None:
-
     from .modules.demux import demux_raw_features
 
     out_dir = smp.smp_dir if out_dir is None else io.pathval.validate_dir_path(out_dir)
@@ -44,6 +44,7 @@ def demux(
     manifest_file.load().write_csv(smp.src.Manifest.p)
 
 
+# region aggregate
 def aggregate(
     smp: 'G4Xoutput',
     segmentation_mask: str | None = None,
@@ -54,7 +55,6 @@ def aggregate(
     show_progress: bool = False,
     backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
 ) -> None:
-
     from g4x_helpers.modules import aggregate
 
     compute_backend = io.get_backend(which=backend)
@@ -76,6 +76,7 @@ def aggregate(
         cell_mask = segmentation_file.load(key=segmentation_file.available_keys[0])
         nuclei_mask = None
 
+    log.info('Aggregating cell metadata')
     cell_meta = aggregate.cell_metadata(
         segmentation_mask=cell_mask, nuclei_mask=nuclei_mask, static_columns=static_columns, show_progress=show_progress
     )
@@ -83,6 +84,7 @@ def aggregate(
     # cell_ids for the rest of the aggregation are extracted from the cell metadata to ensure consistency
     cell_ids = cell_meta.select('cell_id').collect()['cell_id'].to_list()
 
+    log.info('Aggregating cell by gene matrix')
     tx_table = tx_table_file.load(lazy=True)
     cell_by_gene, tx_table = aggregate.cell_x_gene(
         tx_table=tx_table,
@@ -101,6 +103,7 @@ def aggregate(
     if smp.src.pr_detected:
         images.update(smp.src.ProteinDir.mapped_files)
 
+    log.info('Aggregating cell by img-signal matrix')
     bead_mask = smp.load_bead_mask()
     cell_by_signal = aggregate.cell_x_signal(
         images=images,
@@ -116,7 +119,7 @@ def aggregate(
     stain_data = cell_by_signal.select([c.CELL_ID_NAME] + handles)
     cell_meta = cell_meta.join(stain_data, on=c.CELL_ID_NAME, how='left').sort(c.CELL_ID_NAME)
 
-    smp.reroute_source(sd.TxTable, out_dir, overwrite=overwrite)
+    smp.reroute_source(sd.TxTable, out_dir, overwrite=True)
     tx_table.collect().write_csv(smp.src.TxTable.p, compression='gzip')
 
     smp.reroute_source(sd.CellMetadata, out_dir, overwrite=overwrite)
@@ -126,6 +129,7 @@ def aggregate(
     cell_by_gene.sink_csv(smp.src.CellxGene.p, compression='gzip')
 
     if smp.src.pr_detected:
+        log.info('Creating cell by protein matrix')
         cell_by_signal = cell_by_signal.drop(handles)
         smp.reroute_source(sd.CellxProt, out_dir, overwrite=overwrite)
         cell_by_signal.sink_csv(smp.src.CellxProt.p, compression='gzip')
@@ -138,6 +142,7 @@ def aggregate(
         np.savez(smp.src.Segmentation.p, **mask_data)
 
 
+# region single cell processing
 def sc_process(
     smp: 'G4Xoutput',
     out_dir: str | None = None,
@@ -146,7 +151,6 @@ def sc_process(
     backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
     **kwargs,
 ):
-
     from g4x_helpers.modules.single_cell import sc_utils
     from g4x_helpers.modules.single_cell.correlation import run_correlation_analysis
     from g4x_helpers.modules.single_cell.process import (
@@ -165,11 +169,11 @@ def sc_process(
         manifest=smp.src.Manifest.parse(),
         cell_metadata=smp.src.CellMetadata.load(),
         cell_x_gene=smp.src.CellxGene.load(),
-        cell_x_protein=smp.src.CellxProt.load(),
+        cell_x_protein=smp.src.CellxProt.load() if smp.src.pr_detected else None,
     )
 
     # 1: Befor we modify the adata object, we write cell metadata with QC metrics
-    smp.reroute_source(sd.CellMetadata, out_dir, overwrite=overwrite)
+    smp.reroute_source(sd.CellMetadata, out_dir, overwrite=True)
     sc_meta = pl.from_pandas(adata.obs, include_index=True).cast({c.CELL_ID_NAME: pl.UInt32})
     sc_meta.write_csv(smp.src.CellMetadata.p, compression='gzip')
 
@@ -205,14 +209,42 @@ def sc_process(
         rna_pr_corr_df.to_csv(smp.src.AdataH5.p.parent / 'rna_protein_sc_correlation.csv')
 
 
+# region migrate
+def migrate(
+    legacy_dir: str,
+    out_dir: str,
+    roi_coords: tuple[float, float, float, float] | None = None,
+    downstream: bool = True,
+    backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
+    **kwargs,
+) -> None:
+    from .modules.migrate import migrate_legacy_raw_data
+
+    legacy_dir = io.pathval.validate_dir_path(legacy_dir)
+    out_dir = io.pathval.validate_dir_path(out_dir)
+
+    migrate_legacy_raw_data(legacy_dir, out_dir=out_dir, roi_coords=roi_coords, **kwargs)
+
+    if downstream:
+        smp = G4Xoutput(smp_dir=out_dir)
+        aggregate(smp, overwrite=True, backend=backend)
+        sc_process(smp, overwrite=False, backend=backend)
+        viewer_zarr(smp, overwrite=False)
+
+
+# region viewer
 def viewer_zarr(smp: 'G4Xoutput', out_dir: str | None = None, overwrite: bool = True, symlink_images: bool = True):
     from g4x_helpers.modules.viewer.zarr_utils import link_viewer_group
+
+    if out_dir is None:
+        symlink_images = False
 
     out_dir = smp.smp_dir if out_dir is None else io.pathval.validate_dir_path(out_dir)
 
     viewer_zarr_init(smp, out_dir=out_dir, overwrite=overwrite)
 
-    if out_dir != smp.smp_dir and symlink_images:
+    source_viewer = smp.smp_dir / c.FILE_VIEWER_ZARR
+    if source_viewer.exists() and symlink_images:
         link_viewer_group(smp, group_name='images', overwrite=overwrite)
     else:
         viewer_zarr_images(smp, overwrite=overwrite)
@@ -246,7 +278,6 @@ def viewer_zarr_images(
     from .modules.viewer import images as viewer_img
 
     log.debug('Preparing multiplex image')
-
     images = {
         f'{stain}stain': smp.src.HnEDir.mapped_files[stain]
         for stain in smp.stains
@@ -280,6 +311,7 @@ def viewer_zarr_images(
         chunk_size=chunk_size,
     )
 
+    log.debug('Preparing h_and_e image')
     he_file = smp.src.HnEDir.mapped_files['h_and_e']
     viewer_img.write_rgb_image(
         smp.src.ViewerZarr.p, image_name='h_and_e', image_path=he_file, overwrite=overwrite, chunk_size=chunk_size
@@ -288,8 +320,6 @@ def viewer_zarr_images(
 
 def viewer_zarr_transcripts(smp: 'G4Xoutput', overwrite: bool = True):
     from .modules.viewer import transcripts as viewer_tx
-
-    log.debug('Preparing multiplex image')
 
     viewer_tx.write_transcripts(
         smp.src.ViewerZarr.p,
@@ -304,20 +334,19 @@ def viewer_zarr_transcripts(smp: 'G4Xoutput', overwrite: bool = True):
 def viewer_zarr_cells(smp: 'G4Xoutput', seg_name='g4x-default', overwrite: bool = True):
     from .modules.viewer import cells as viewer_cells
 
-    log.debug('Preparing cells')
-
     viewer_cells.write_cells(
         smp.src.ViewerZarr.p,
         segmentation_mask=smp.src.Segmentation.load(),
         cell_metadata=smp.src.CellMetadata.load(),
         cell_x_gene=smp.src.CellxGene.load(),
         clustering_umap=smp.src.ClusteringUmap.load(),
-        cell_x_protein=smp.src.CellxProt.load(),
+        cell_x_protein=smp.src.CellxProt.load() if smp.src.pr_detected else None,
         seg_name=seg_name,
         overwrite=overwrite,
     )
 
 
+# region private functions
 def _collect_input(
     path: str,
     validator: 'BaseValidator',

@@ -32,7 +32,6 @@ class G4Xoutput:
         self.smp_dir = Path(smp_dir)
         self.alt_source = Path(alt_source) if alt_source is not None else None
         self.src = schema.FileTree(self.smp_dir, alt_source=alt_source)
-        self.out = self.src.copy()
         self.use_cache = use_cache
 
         if self.alt_source:
@@ -47,8 +46,6 @@ class G4Xoutput:
         self.cache = {}
 
         self.stains = [c.NUCLEAR_STAIN, c.CYTOPLASMIC_STAIN]
-        self.set_genes()
-        self.set_proteins()
 
     ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ### --- ###
     # region dunder
@@ -120,36 +117,22 @@ class G4Xoutput:
         nuc_img = self.src.HnEDir.get_img(c.NUCLEAR_STAIN)
         return ut.get_image_shape(nuc_img)
 
-    def set_genes(self, genes: list[str] | None = None):
-        self.genes = []
-        if genes is not None:
-            self.genes = genes
-            return
-
+    @property
+    def genes(self):
         if self.src.tx_detected:
-            tx_panel = self.out.Manifest.parse()
-            tx_panel = tx_panel.sort(by=['probe_type', 'probe'], descending=[True, False])
-            self.genes = tx_panel['gene_name'].unique(maintain_order=True).to_list()
+            tx_panel = self.src.Manifest.parse()
+            tx_panel = tx_panel.sort(by=['probe_type', 'gene_name'], descending=[True, False])
+            genes = tx_panel['gene_name'].unique(maintain_order=True).to_list()
+            return genes
+        return []
 
-    def set_proteins(self, proteins: list[str] | None = None):
-        self.available_proteins = []
+    @property
+    def proteins(self):
         if self.src.pr_detected:
             protein_panel = pl.read_csv(self.src.ProteinPanel.p)
             protein_panel.sort(by=['panel_type', pl.col('target').str.to_lowercase()], descending=[True, False])
-            self.available_proteins = self.sort_proteins(protein_panel['target'].to_list())
-
-        self.proteins = []
-        if proteins is not None and len(proteins) > 0:
-            unavailable_proteins = [p for p in proteins if p not in self.available_proteins]
-            if unavailable_proteins:
-                raise ValueError(
-                    f'The following requested proteins are not available in this data: {unavailable_proteins}'
-                )
-
-            self.proteins = proteins
-            return
-
-        self.proteins = self.available_proteins.copy()
+            return self.sort_proteins(protein_panel['target'].to_list())
+        return []
 
     @property
     def uses_branch(self):

@@ -127,7 +127,7 @@ class DataMigrator(BaseValidator):
         out_path = io.pathval.validate_dir_path(out_path)
 
         if self.COPY_CURRENT and 'current' in self.valid_versions:
-            log.debug(f'{self._name} has correct schema, copying file without migration.')
+            log.debug(f'{self._name} has correct schema, copying data without migration.')
             self.copy_if_current(out_path)
             return
 

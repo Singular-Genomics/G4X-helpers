@@ -1,26 +1,21 @@
 import logging
-from typing import Literal
 
 from .. import io, schema
-from .. import sample_ops as ops
 from .. import utils as ut
-from ..g4x_output import G4Xoutput
 from ..roi import Roi
 from ..schema.legacy import migrators as mig
 
 log = logging.getLogger(__name__)
 
 
-def migrate_sample(
-    sample_dir: str,
+def migrate_legacy_raw_data(
+    legacy_dir: str,
     out_dir: str,
     roi_coords: tuple | None = None,
     protein_subset: list | None = None,
-    downstream: bool = True,
-    backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
 ) -> None:
 
-    sample_dir = io.pathval.validate_dir_path(sample_dir)
+    legacy_dir = io.pathval.validate_dir_path(legacy_dir)
     out_dir = io.pathval.validate_dir_path(out_dir)
 
     if (out_dir / 'sample.g4x').exists():
@@ -28,7 +23,7 @@ def migrate_sample(
             'Output directory already contains a sample.g4x file. Aborting migration to prevent overwriting existing data.'
         )
 
-    ut.log_with_path('Starting migration for:', sample_dir, level='INFO')
+    ut.log_with_path('Starting migration for:', legacy_dir, level='INFO')
 
     roi = None
     if roi_coords is not None:
@@ -37,11 +32,11 @@ def migrate_sample(
         x0, x1, y0, y1 = roi.extent
         log.info(f'Roi provided with xlims={x0, x1}, ylims={y0, y1}, size in um: {roi_sz_um}')
 
-    basic_migrators, roi_migrators = _gather_migrators(sample_dir)
+    basic_migrators, roi_migrators = _gather_migrators(legacy_dir)
 
     if not all(m.is_migratable for m in basic_migrators + roi_migrators):
         log.error('Not all migrators are migratable. Aborting migration.')
-        status(sample_dir)
+        status(legacy_dir)
         return
 
     for m in basic_migrators:
@@ -50,23 +45,14 @@ def migrate_sample(
     for m in roi_migrators:
         m.migrate(out_dir, roi=roi, protein_subset=protein_subset)
 
-    log.info('All migrators completed migration. Starting post-processing...')
-
-    smp = G4Xoutput(smp_dir=out_dir)
-
-    if downstream:
-        ops.aggregate(smp, out_dir=out_dir, overwrite=True, backend=backend)
-        ops.sc_process(smp, out_dir=out_dir, overwrite=True, backend=backend)
-        ops.viewer_zarr(smp, out_dir=out_dir, overwrite=True)
-
-    ut.log_msg_wrapped(header='Migration completed. Migrated data is available at\n', msg=smp, level='INFO')
+    ut.log_with_path('Migration completed! Raw data is available at:', path=out_dir, level='INFO')
 
 
 def status(
-    sample_dir,
+    legacy_dir,
 ) -> None:
 
-    basic_migrators, roi_migrators = _gather_migrators(sample_dir)
+    basic_migrators, roi_migrators = _gather_migrators(legacy_dir)
     migrators = basic_migrators + roi_migrators
 
     res = {}
@@ -78,30 +64,30 @@ def status(
     print(ut.pretty_dict_str(res, separator=' '))
 
 
-def _gather_migrators(sample_dir):
-    sg4x = mig.SampleG4X_Migrator(root=sample_dir)
+def _gather_migrators(legacy_dir):
+    sg4x = mig.SampleG4X_Migrator(root=legacy_dir)
     basic_migrators = [sg4x]
     roi_migrators = []
     smp_meta = sg4x.build_sample_g4x()
 
     basic_migrators.extend(
         [
-            mig.SampleSheet_Migrator(root=sample_dir),
-            mig.Manifest_Migrator(root=sample_dir),
-            mig.QCSummary_Migrator(root=sample_dir),
-            mig.Metrics_Migrator(root=sample_dir),
+            mig.SampleSheet_Migrator(root=legacy_dir),
+            mig.Manifest_Migrator(root=legacy_dir),
+            mig.QCSummary_Migrator(root=legacy_dir),
+            mig.Metrics_Migrator(root=legacy_dir),
         ]
     )
     roi_migrators = [
-        mig.HnEDir_Migrator(root=sample_dir),
-        mig.Segmentation_Migrator(root=sample_dir),
-        mig.BeadMask_Migrator(root=sample_dir),
-        mig.RawFeatures_Migrator(root=sample_dir),
-        mig.TxTable_Migrator(root=sample_dir),
+        mig.HnEDir_Migrator(root=legacy_dir),
+        mig.Segmentation_Migrator(root=legacy_dir),
+        mig.BeadMask_Migrator(root=legacy_dir),
+        mig.RawFeatures_Migrator(root=legacy_dir),
+        mig.TxTable_Migrator(root=legacy_dir),
     ]
 
     assay_type = schema.ut.detect_assay_type(smp_meta)
     if assay_type != 'tx_only':
-        roi_migrators.append(mig.Protein_Migrator(root=sample_dir))
+        roi_migrators.append(mig.Protein_Migrator(root=legacy_dir))
 
     return basic_migrators, roi_migrators

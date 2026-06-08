@@ -12,7 +12,7 @@ from .. import io
 log = logging.getLogger(__name__)
 
 
-# region high-level functions
+# region main functions
 def cell_metadata(
     segmentation_mask: np.ndarray,
     nuclei_mask: np.ndarray | None = None,
@@ -26,7 +26,7 @@ def cell_metadata(
     if nuclei_mask is not None:
         cell_meta = cell_meta.drop([c.CELL_COORD_X, c.CELL_COORD_Y])
         nuc_meta = extract_cell_props(nuclei_mask, show_progress=show_progress)
-        nuc_meta = nuc_meta.rename({c.CELL_AREA_NAME: 'nuc_area_um'})
+        nuc_meta = nuc_meta.rename({c.CELL_AREA_NAME: c.NUC_AREA_NAME})
         cell_meta = cell_meta.join(nuc_meta, on=c.CELL_ID_NAME, how='left')
 
     cell_meta = cell_meta.with_columns([pl.lit(value).alias(key) for key, value in static_columns.items()])
@@ -217,6 +217,7 @@ def intersect_cells_with_img(
     return result
 
 
+# region private functions
 def _image_intensity_extraction_cpu(
     img: np.ndarray,
     mask_flat: np.ndarray,
@@ -301,12 +302,10 @@ def _report_comparison(requested: list, existing: list, data_type: str = 'genes'
     missing_in_data = set(requested) - set(existing)
 
     if missing_in_data:
-        log.warning(
-            f'{len(missing_in_data)} {data_type} were requested but are missing in the data. They will be filled with zeros.'
-        )
+        log.warning(f'{len(missing_in_data)} {data_type} are missing in the data. They will be filled with zeros.')
     if missing_in_reference:
         log.warning(
-            f'{len(missing_in_reference)} {data_type} are in the data but were not requested. They will be missing from the final output.'
+            f'{len(missing_in_reference)} {data_type} are in the data but were not in the reference. They will be missing from the final output.'
         )
 
 
@@ -318,28 +317,3 @@ def _add_artifically_large_beads(beads, sq_size=500):
     # set center block to True
     beads[center_row - half : center_row + half, center_col - half : center_col + half] = True
     return beads
-
-
-# def _compare_cell_ids(reference, data, column_name):
-#     missing_in_data = reference.join(
-#         data,
-#         on=column_name,
-#         how='anti',
-#     )
-
-#     missing_in_reference = data.join(
-#         reference,
-#         on=column_name,
-#         how='anti',
-#     )
-
-#     missing_in_data = missing_in_data.collect()[column_name].to_list()
-#     missing_in_reference = missing_in_reference.collect()[column_name].toFOL_list()
-#     return missing_in_data, missing_in_reference
-
-
-# def _cell_frame(segmentation_mask: np.ndarray, lazy: bool = True) -> int:
-#     cell_labels = np.unique(segmentation_mask)
-#     cell_labels = cell_labels[cell_labels != 0]
-#     lf = pl.LazyFrame(cell_labels, schema={c.CELL_ID_NAME: pl.Int32}).sort(c.CELL_ID_NAME)
-#     return lf if lazy else lf.collect()

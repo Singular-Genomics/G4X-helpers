@@ -78,8 +78,6 @@ def write_images(
     use_cache: bool = False,
 ):
 
-    log.debug('Preparing multiplex image')
-
     zarr_path = io.pathval.validate_dir_path(zarr_path)
 
     mode = 'w' if overwrite else 'r+'
