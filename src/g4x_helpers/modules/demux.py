@@ -62,12 +62,17 @@ def demux_raw_features(
             feature_batch = feature_batch.with_columns(
                 pl.col('TXUID').str.split('_').list.last().cast(int).alias('read_num')
             )
-            redemuxed_feature_batch = []
+            demuxed_feature_batch_reads = []
             for seq_read in seq_reads:
-                feature_batch_read = _demux_feature_batch(
-                    feature_batch=feature_batch,
-                    seq_read=seq_read,
-                    manifest_by_read=manifest_by_read,
+                feature_batch_read = feature_batch.filter(pl.col('read_num') == seq_read)
+                if feature_batch_read.height == 0:
+                    continue
+
+                manifest_read = manifest_by_read[seq_read]
+
+                demuxed_feature_batch_read = _demux_feature_batch(
+                    feature_batch_read=feature_batch_read,
+                    manifest_read=manifest_read,
                     probe_dict=probe_dict,
                     lut=lut,
                     demux_length=demux_length,
@@ -76,9 +81,9 @@ def demux_raw_features(
                     min_delta=min_delta,
                 )
 
-                redemuxed_feature_batch.append(feature_batch_read)
+                demuxed_feature_batch_reads.append(demuxed_feature_batch_read)
 
-            demuxed_batch = pl.concat(redemuxed_feature_batch)
+            demuxed_batch = pl.concat(demuxed_feature_batch_reads)
             demuxed_batch.write_parquet(batch_dir / f'batch_{i}.parquet')
 
             if num_expected_batches > 1:
@@ -97,10 +102,9 @@ def demux_raw_features(
 
 # region private functions
 def _demux_feature_batch(
-    feature_batch: pl.DataFrame,
+    feature_batch_read: pl.DataFrame,
+    manifest_read: pl.DataFrame,
     *,
-    seq_read: int,
-    manifest_by_read: dict[int, pl.DataFrame],
     probe_dict: dict[str, str],
     lut: np.ndarray,
     demux_length: int,
@@ -108,11 +112,6 @@ def _demux_feature_batch(
     max_ham_dist: int,
     min_delta: int,
 ) -> pl.DataFrame:
-    feature_batch_read = feature_batch.filter(pl.col('read_num') == seq_read)
-    manifest_read = manifest_by_read[seq_read]
-
-    if len(feature_batch_read) == 0 or len(manifest_read) == 0:
-        return _mark_as_undemuxed(feature_batch_read)
 
     seqs = feature_batch_read['sequence'].to_list()
     codes = manifest_read['sequence'].to_list()
@@ -130,18 +129,20 @@ def _demux_feature_batch(
         max_ham_dist=max_ham_dist,
         min_delta=min_delta,
     )
-    feature_batch_read = feature_batch_read.drop(['sequence', 'read_num'])
+
+    schema = {
+        'TXUID': pl.String,  #
+        'confidence_score': pl.Float64,
+        'y_pixel_coordinate': pl.Float64,
+        'x_pixel_coordinate': pl.Float64,
+        'z_level': pl.UInt8,
+        'probe_name': pl.String,
+        'gene_id': pl.String,
+        'demuxed': pl.Boolean,
+    }
+
+    feature_batch_read = feature_batch_read.drop(['sequence', 'read_num']).cast(schema)
     return feature_batch_read
-
-
-def _mark_as_undemuxed(feature_batch_read: pl.DataFrame) -> pl.DataFrame:
-    return feature_batch_read.with_columns(
-        [
-            pl.lit('UNDETERMINED').alias('probe_name'),
-            pl.lit('UNDETERMINED').alias(c.GENE_ID_NAME),
-            pl.lit(False).alias('demuxed'),
-        ]
-    ).drop(['sequence', 'read_num'])
 
 
 def _build_probe_id_to_gene_name(manifest: pl.DataFrame) -> dict[str, str]:

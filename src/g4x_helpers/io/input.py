@@ -134,6 +134,7 @@ def parse_input_manifest(manifest):
             )
         )
 
+    manifest = manifest.with_columns(pl.col('probe_id').fill_null('<not provided>'))
     return manifest.select(['probe', 'probe_id', 'gene_name', 'sequence', 'primer', 'read_num', 'probe_type'])
 
 
