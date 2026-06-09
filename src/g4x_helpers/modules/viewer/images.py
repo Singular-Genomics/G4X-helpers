@@ -55,8 +55,8 @@ channel_color_map = {
     'KI67': 'chartreuse',
     'ATPase': 'violet',
     'Isotype': 'orange',
-    'cytoplasmic': 'rose',
-    'nuclear': 'white',
+    'cytoplasmicstain': 'rose',
+    'nuclearstain': 'white',
 }
 
 OMERO_DEFAULT = {
@@ -238,17 +238,37 @@ def _add_rgb_astronaut_to_img(data):
     return out
 
 
-def _determine_visible_channels(channel_order: list[str] = None) -> list[str]:
-    num_def = len(DEFAULT_VISIBLE_CHANNELS)
-    channel_order_copy = channel_order.copy()
-    visible_channels = []
-    for channel in channel_order_copy:
-        if channel in DEFAULT_VISIBLE_CHANNELS:
-            channel_order_copy.remove(channel)
-            visible_channels.append(channel)
-        if len(visible_channels) >= num_def:
-            break
+def _determine_visible_channels(available_channels: list[str]) -> list[str]:
+    vi_chs = DEFAULT_VISIBLE_CHANNELS
+    channels = available_channels
 
-    if len(visible_channels) < len(DEFAULT_VISIBLE_CHANNELS):
-        visible_channels.extend(channel_order_copy[: (len(DEFAULT_VISIBLE_CHANNELS) - len(visible_channels))])
-    return visible_channels
+    num_def = len(vi_chs)
+    selected = [ch for ch in vi_chs if ch in channels]
+    remaining = [ch for ch in channels if ch not in vi_chs]
+
+    for stain in ['nuclearstain', 'cytoplasmicstain']:
+        remaining.remove(stain)
+
+    n_missing = num_def - len(selected)
+
+    for i in range(n_missing):
+        if remaining:
+            selected.append(remaining.pop(0))
+
+    return selected
+
+
+# def _determine_visible_channels(channel_order: list[str] = None) -> list[str]:
+#     num_def = len(DEFAULT_VISIBLE_CHANNELS)
+#     channel_order_copy = channel_order.copy()
+#     visible_channels = []
+#     for channel in channel_order_copy:
+#         if channel in DEFAULT_VISIBLE_CHANNELS:
+#             channel_order_copy.remove(channel)
+#             visible_channels.append(channel)
+#         if len(visible_channels) >= num_def:
+#             break
+
+#     if len(visible_channels) < len(DEFAULT_VISIBLE_CHANNELS):
+#         visible_channels.extend(channel_order_copy[: (len(DEFAULT_VISIBLE_CHANNELS) - len(visible_channels))])
+#     return visible_channels
