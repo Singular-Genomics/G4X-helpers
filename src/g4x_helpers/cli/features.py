@@ -134,7 +134,7 @@ def resegment(
     smp = G4Xoutput(smp_dir, alt_source=out_dir)
     ops.aggregate(
         smp,
-        segmentation_mask=segmentation_mask,
+        cell_mask=segmentation_mask,
         mask_key=mask_key,
         out_dir=out_dir,
         overwrite=overwrite,

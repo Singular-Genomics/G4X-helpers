@@ -20,6 +20,7 @@ log = logging.getLogger(__name__)
 # region demux
 def demux(
     smp: 'G4Xoutput',
+    *,
     manifest: str | None = None,
     out_dir: str | None = None,
     overwrite: bool = True,
@@ -47,9 +48,9 @@ def demux(
 # region aggregate
 def aggregate(
     smp: 'G4Xoutput',
-    segmentation_mask: str | None = None,
-    out_dir: str | None = None,
     *,
+    cell_mask: str | None = None,
+    out_dir: str | None = None,
     mask_key: str | None = None,
     overwrite: bool = True,
     show_progress: bool = False,
@@ -62,14 +63,14 @@ def aggregate(
     out_dir = smp.smp_dir if out_dir is None else io.pathval.validate_dir_path(out_dir)
 
     static_columns = {k: v for k, v in smp.smp_meta.items() if k in ['sample_id', 'tissue_type', 'block']}
-    static_columns['seg_source'] = 'g4x-default' if segmentation_mask is None else 'custom'
+    static_columns['seg_source'] = 'g4x-default' if cell_mask is None else 'custom'
     log.info('Using %s segmentation source', static_columns['seg_source'])
 
-    segmentation_path = smp.src.Segmentation.p if segmentation_mask is None else segmentation_mask
+    segmentation_path = smp.src.Segmentation.p if cell_mask is None else cell_mask
     segmentation_file = _collect_input(segmentation_path, sd.Segmentation)
     tx_table_file = _collect_input(smp.src.TxTable.p, sd.TxTable)
 
-    if mask_key is None and segmentation_mask is None:
+    if mask_key is None and cell_mask is None:
         cell_mask = segmentation_file.load(key='nuclei_exp')
         nuclei_mask = segmentation_file.load(key='nuclei')
     else:
@@ -78,7 +79,7 @@ def aggregate(
 
     log.info('Aggregating cell metadata')
     cell_meta = aggregate.cell_metadata(
-        segmentation_mask=cell_mask, nuclei_mask=nuclei_mask, static_columns=static_columns, show_progress=show_progress
+        cell_mask=cell_mask, nuclei_labels=nuclei_mask, static_columns=static_columns, show_progress=show_progress
     )
 
     # cell_ids for the rest of the aggregation are extracted from the cell metadata to ensure consistency
@@ -88,7 +89,7 @@ def aggregate(
     tx_table = tx_table_file.load(lazy=True)
     cell_by_gene, tx_table = aggregate.cell_x_gene(
         tx_table=tx_table,
-        segmentation_mask=cell_mask,
+        cell_mask=cell_mask,
         included_cells=cell_ids,
         included_genes=smp.genes,
         return_tx_table=True,
@@ -107,7 +108,7 @@ def aggregate(
     bead_mask = smp.load_bead_mask()
     cell_by_signal = aggregate.cell_x_signal(
         images=images,
-        segmentation_mask=cell_mask,
+        cell_mask=cell_mask,
         bead_mask=bead_mask,
         included_cells=cell_ids,
         backend=compute_backend,
@@ -134,7 +135,7 @@ def aggregate(
         smp.reroute_source(sd.CellxProt, out_dir, overwrite=overwrite)
         cell_by_signal.sink_csv(smp.src.CellxProt.p, compression='gzip')
 
-    if segmentation_mask is not None:
+    if cell_mask is not None:
         smp.reroute_source(sd.Segmentation, out_dir, overwrite=overwrite)
         mask_key = 'custom' if mask_key is None else mask_key
         mask_data = {mask_key: cell_mask}
@@ -145,6 +146,7 @@ def aggregate(
 # region single cell processing
 def sc_process(
     smp: 'G4Xoutput',
+    *,
     out_dir: str | None = None,
     overwrite: bool = True,
     omit_correlation: bool = False,
@@ -212,6 +214,7 @@ def sc_process(
 # region migrate
 def migrate(
     legacy_dir: str,
+    *,
     out_dir: str,
     roi_coords: tuple[float, float, float, float] | None = None,
     downstream: bool = True,
@@ -233,7 +236,13 @@ def migrate(
 
 
 # region viewer
-def viewer_zarr(smp: 'G4Xoutput', out_dir: str | None = None, overwrite: bool = True, symlink_images: bool = True):
+def viewer_zarr(
+    smp: 'G4Xoutput',
+    *,
+    out_dir: str | None = None,
+    overwrite: bool = True,
+    symlink_images: bool = True,
+):
     from g4x_helpers.modules.viewer.zarr_utils import link_viewer_group
 
     if out_dir is None:
@@ -253,7 +262,12 @@ def viewer_zarr(smp: 'G4Xoutput', out_dir: str | None = None, overwrite: bool = 
     viewer_zarr_cells(smp, seg_name='g4x-default', overwrite=overwrite)
 
 
-def viewer_zarr_init(smp: 'G4Xoutput', out_dir: str | None = None, overwrite: bool = True) -> None:
+def viewer_zarr_init(
+    smp: 'G4Xoutput',
+    *,
+    out_dir: str | None = None,
+    overwrite: bool = True,
+) -> None:
     from g4x_helpers.modules.viewer.zarr_utils import setup_viewer_zarr
 
     out_dir = smp.smp_dir if out_dir is None else io.pathval.validate_dir_path(out_dir)
@@ -273,7 +287,11 @@ def viewer_zarr_init(smp: 'G4Xoutput', out_dir: str | None = None, overwrite: bo
 
 
 def viewer_zarr_images(
-    smp: 'G4Xoutput', protein_list: list[str] | None = None, overwrite: bool = True, chunk_size: int = 1024
+    smp: 'G4Xoutput',
+    *,
+    protein_list: list[str] | None = None,
+    overwrite: bool = True,
+    chunk_size: int = 1024,
 ):
     from .modules.viewer import images as viewer_img
 
@@ -318,7 +336,11 @@ def viewer_zarr_images(
     )
 
 
-def viewer_zarr_transcripts(smp: 'G4Xoutput', overwrite: bool = True):
+def viewer_zarr_transcripts(
+    smp: 'G4Xoutput',
+    *,
+    overwrite: bool = True,
+):
     from .modules.viewer import transcripts as viewer_tx
 
     viewer_tx.write_transcripts(
@@ -331,7 +353,12 @@ def viewer_zarr_transcripts(smp: 'G4Xoutput', overwrite: bool = True):
     )
 
 
-def viewer_zarr_cells(smp: 'G4Xoutput', seg_name='g4x-default', overwrite: bool = True):
+def viewer_zarr_cells(
+    smp: 'G4Xoutput',
+    *,
+    seg_name='g4x-default',
+    overwrite: bool = True,
+):
     from .modules.viewer import cells as viewer_cells
 
     viewer_cells.write_cells(
