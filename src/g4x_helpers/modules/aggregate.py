@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 from .. import constants as c
 from .. import io
+from .. import utils as ut
 
 log = logging.getLogger(__name__)
 

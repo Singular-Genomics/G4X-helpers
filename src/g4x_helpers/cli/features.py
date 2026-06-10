@@ -4,7 +4,6 @@ from typing import Literal
 
 from .. import __version__, io
 from .. import constants as c
-from .. import logging_utils as logut
 from .. import sample_ops as ops
 from .. import utils as ut
 from ..g4x_output import G4Xoutput
@@ -49,8 +48,8 @@ def _base_command(func):
             if not log_dir.exists():
                 log_dir.mkdir(parents=True, exist_ok=True)
 
-            lvl = logut.verbose_to_level(verbose)
-            logger = logut.configure_g4x_logging(
+            lvl = ut.verbose_to_level(verbose)
+            logger = ut.configure_logging(
                 level=lvl, file_log=True, out_dir=log_dir, append_time=True, file_mode='w'
             )
 
@@ -59,8 +58,8 @@ def _base_command(func):
         compute_eng += ' (auto-detected)' if backend == 'auto' else ''
 
         d = {
-            'sample_dir': f'{smp_dir}',
-            'out_dir': f'{out_dir}',
+            'sample_dir': f'{smp_dir.resolve()}',
+            'out_dir': f'{out_dir.resolve()}',
             'downstream': f'{downstream}',
             'verbosity': f'{verbose}',
             'compute_eng': compute_eng,
@@ -69,7 +68,7 @@ def _base_command(func):
 
         header = f'Initializing G4X-helpers [{func.__name__}]\n'
         msg = ut.pretty_dict_str(d)
-        logut.log_msg_wrapped(header=header, msg=msg, prefix='  ')
+        ut.log_msg_wrapped(header=header, msg=msg, prefix='  ')
 
         try:
             result = func(
@@ -93,8 +92,8 @@ def _base_command(func):
 def redemux(
     smp_dir: str,
     manifest: str,
-    *,
     out_dir: str | None = None,
+    *,
     batch_size: int = c.DEFAULT_BATCH_SIZE,
     overwrite: bool = True,
     downstream: bool = True,
@@ -106,7 +105,13 @@ def redemux(
     smp = G4Xoutput(smp_dir, alt_source=out_dir)
 
     ops.demux(
-        smp, manifest=manifest, out_dir=out_dir, overwrite=overwrite, batch_size=batch_size, show_progress=show_progress
+        smp,
+        manifest=manifest,
+        out_dir=out_dir,
+        overwrite=overwrite,
+        batch_size=batch_size,
+        show_progress=show_progress,
+        **kwargs,
     )
 
     if downstream:
@@ -120,9 +125,9 @@ def redemux(
 @_base_command
 def resegment(
     smp_dir: str,
-    segmentation_mask: str,
-    *,
+    cell_mask: str,
     out_dir: str,
+    *,
     mask_key: str | None = None,
     overwrite: bool = True,
     downstream: bool = True,
@@ -134,7 +139,7 @@ def resegment(
     smp = G4Xoutput(smp_dir, alt_source=out_dir)
     ops.aggregate(
         smp,
-        cell_mask=segmentation_mask,
+        cell_mask=cell_mask,
         mask_key=mask_key,
         out_dir=out_dir,
         overwrite=overwrite,
@@ -175,7 +180,7 @@ def migrate_check(smp_dir: str) -> None:
     migrate.status(sample_dir=smp_dir)
 
 
-def validate(smp_dir: str, **kwargs):
+def validate(smp_dir: str):
 
     from ..schema import FileTree
 
@@ -184,7 +189,13 @@ def validate(smp_dir: str, **kwargs):
     print(report)
 
 
-def cell_metadata(viewer_zarr, import_metadata, export_metadata, segmentation):
+def cell_metadata(
+    viewer_zarr,
+    *,
+    import_metadata: str | None = None,
+    export_metadata: str | None = None,
+    segmentation: str = 'g4x_default_segmentation',
+):
     from ..modules.viewer import cells
 
     if import_metadata is not None and export_metadata is not None:

@@ -135,7 +135,7 @@ def resegment(ctx, g4x_data, cell_labels, labels_key, branch, no_downstream):
         resegment_feature(
             smp_dir=g4x_data,
             out_dir=out_dir,
-            segmentation_mask=cell_labels,
+            cell_mask=cell_labels,
             mask_key=labels_key,
             downstream=not no_downstream,
             verbose=ctx.obj['verbose'],

@@ -105,7 +105,7 @@ def g4x_data_opt():
 
 
 help_map = {
-    'redemux': 'After demuxing completes, do not create single-cell outputs or initialize viewer files',
+    'redemux': 'After demuxing completes, do not aggregate single-cell outputs or initialize viewer files',
     'resegment': 'After aggregation, do not post-process single-cell outputs or initialize viewer files',
     'migrate': 'Only migrate raw data and metadata; do not create single-cell output or viewer files',
 }
@@ -136,8 +136,8 @@ def branch_opt(cmd_name: str = ''):
         type=str,
         default=None,
         help=(
-            f'Branch of processed data to use\n\n'
-            f'If not specified, a branch named "g4x-helpers/{cmd_name}" will be created or reused automatically.\n\n'
+            f'Branch of processed data to use. '
+            f'If not specified, a branch named "g4x-helpers/{cmd_name}" will be used automatically.\n\n'
             f'Set "_src_" to edit the original data in-place.'
         ),
     )

@@ -1,3 +1,10 @@
+# Notes
+# all functions accept a G4Xoutput object (exception is migrate)
+# if no other inputs are provided, all required inputs are loaded from the sample context
+# output is written to specific locations relative to the sample directory, or optionally to an alternative directory
+# the output paths are registered in the G4Xoutput object for downstream access
+# (ie. if demux writes a TxTable to out_dir X, then subsequent functions will use TxTable in out_dir X as default input unless specified otherwise)
+
 import logging
 import shutil
 from typing import TYPE_CHECKING, Literal
@@ -20,15 +27,15 @@ log = logging.getLogger(__name__)
 # region demux
 def demux(
     smp: 'G4Xoutput',
-    *,
     manifest: str | None = None,
     out_dir: str | None = None,
+    *,
     overwrite: bool = True,
     **kwargs,
 ) -> None:
     from .modules.demux import demux_raw_features
 
-    out_dir = smp.smp_dir if out_dir is None else io.pathval.validate_dir_path(out_dir)
+    out_dir = _ingest_out_dir(smp, out_dir)
 
     manifest_path = smp.src.Manifest.p if manifest is None else manifest
 
@@ -48,9 +55,9 @@ def demux(
 # region aggregate
 def aggregate(
     smp: 'G4Xoutput',
-    *,
     cell_mask: str | None = None,
     out_dir: str | None = None,
+    *,
     mask_key: str | None = None,
     overwrite: bool = True,
     show_progress: bool = False,
@@ -60,32 +67,28 @@ def aggregate(
 
     compute_backend = io.get_backend(which=backend)
 
-    out_dir = smp.smp_dir if out_dir is None else io.pathval.validate_dir_path(out_dir)
+    out_dir = _ingest_out_dir(smp, out_dir)
 
     segmentation_path = smp.src.Segmentation.p if cell_mask is None else cell_mask
     segmentation_file = _collect_input(segmentation_path, sd.Segmentation)
     tx_table_file = _collect_input(smp.src.TxTable.p, sd.TxTable)
 
-    load_default_masks = False
-    if mask_key is None and cell_mask is None:
-        sfile_keys = segmentation_file.available_keys
-        if 'nuclei' in sfile_keys and 'nuclei_exp' in sfile_keys:
-            load_default_masks = True
-
-    if load_default_masks:
-        log.info('Loading both nuclei and nuclei_exp masks from default segmentation file')
+    save_segmentation = True
+    if mask_key is None and segmentation_file.is_default:
+        log.info('Loading both nuclei_exp and nuclei masks from default segmentation file')
         segmentation_mask = segmentation_file.load(key='nuclei_exp')
         nuclei_mask = segmentation_file.load(key='nuclei')
+        save_segmentation = False
     else:
         mask_key = segmentation_file.available_keys[0] if mask_key is None else mask_key
-        log.info('Loading custom segmentation mask with key: %s', mask_key)
+        log.info('Loading specified segmentation mask with key: %s', mask_key)
         segmentation_mask = segmentation_file.load(key=mask_key)
         nuclei_mask = None
 
     log.info('Aggregating cell metadata')
 
     static_columns = {k: v for k, v in smp.smp_meta.items() if k in ['sample_id', 'tissue_type', 'block']}
-    static_columns['seg_source'] = 'g4x-default' if load_default_masks else 'custom'
+    static_columns['seg_source'] = 'g4x-default' if segmentation_file.is_default else 'custom'
 
     cell_meta = aggregate.cell_metadata(
         cell_mask=segmentation_mask,
@@ -147,7 +150,7 @@ def aggregate(
         smp.reroute_source(sd.CellxProt, out_dir, overwrite=overwrite)
         cell_by_signal.sink_csv(smp.src.CellxProt.p, compression='gzip')
 
-    if cell_mask is not None:
+    if save_segmentation:
         smp.reroute_source(sd.Segmentation, out_dir, overwrite=overwrite)
         mask_key = 'custom' if mask_key is None else mask_key
         mask_data = {mask_key: segmentation_mask}
@@ -158,8 +161,8 @@ def aggregate(
 # region single cell processing
 def sc_process(
     smp: 'G4Xoutput',
-    *,
     out_dir: str | None = None,
+    *,
     overwrite: bool = True,
     omit_correlation: bool = False,
     backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
@@ -177,7 +180,7 @@ def sc_process(
 
     compute_backend = io.get_backend(which=backend)
 
-    out_dir = smp.smp_dir if out_dir is None else io.pathval.validate_dir_path(out_dir)
+    out_dir = _ingest_out_dir(smp, out_dir)
 
     adata = init_adata(
         manifest=smp.src.Manifest.parse(),
@@ -226,8 +229,8 @@ def sc_process(
 # region migrate
 def migrate(
     legacy_dir: str,
-    *,
     out_dir: str,
+    *,
     roi_coords: tuple[float, float, float, float] | None = None,
     downstream: bool = True,
     backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
@@ -250,8 +253,8 @@ def migrate(
 # region viewer
 def viewer_zarr(
     smp: 'G4Xoutput',
-    *,
     out_dir: str | None = None,
+    *,
     overwrite: bool = True,
     symlink_images: bool = True,
 ):
@@ -260,13 +263,13 @@ def viewer_zarr(
     if out_dir is None:
         symlink_images = False
 
-    out_dir = smp.smp_dir if out_dir is None else io.pathval.validate_dir_path(out_dir)
+    out_dir = _ingest_out_dir(smp, out_dir)
 
     viewer_zarr_init(smp, out_dir=out_dir, overwrite=overwrite)
 
     source_viewer = smp.smp_dir / c.FILE_VIEWER_ZARR
     if source_viewer.exists() and symlink_images:
-        link_viewer_group(smp, group_name='images', overwrite=overwrite)
+        link_viewer_group(smp, group_name='images', overwrite=True)
     else:
         viewer_zarr_images(smp, overwrite=overwrite)
 
@@ -276,13 +279,13 @@ def viewer_zarr(
 
 def viewer_zarr_init(
     smp: 'G4Xoutput',
-    *,
     out_dir: str | None = None,
+    *,
     overwrite: bool = True,
 ) -> None:
     from g4x_helpers.modules.viewer.zarr_utils import setup_viewer_zarr
 
-    out_dir = smp.smp_dir if out_dir is None else io.pathval.validate_dir_path(out_dir)
+    out_dir = _ingest_out_dir(smp, out_dir)
 
     smp.reroute_source(sd.ViewerZarr, out_dir, overwrite=overwrite)
 
@@ -386,6 +389,10 @@ def viewer_zarr_cells(
 
 
 # region private functions
+def _ingest_out_dir(smp: 'G4Xoutput', out_dir: str | None) -> str:
+    return smp.smp_dir if out_dir is None else io.pathval.validate_dir_path(out_dir)
+
+
 def _collect_input(
     path: str,
     validator: 'BaseValidator',
