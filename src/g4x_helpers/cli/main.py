@@ -249,7 +249,7 @@ def images(ctx, import_metadata, export_metadata):
     try:
         with setup._spinner(f'Running {func_name} process...'):
             from .features import image_metadata as image_metadata_feature
-        image_metadata_feature(ctx.obj['viewer_zarr'], import_metadata, export_metadata)
+        image_metadata_feature(ctx.obj['viewer_zarr'], import_metadata=import_metadata, export_metadata=export_metadata)
 
     except Exception as e:
         setup._fail_message(func_name, e)
@@ -280,23 +280,37 @@ def cells(ctx, import_metadata, export_metadata, segmentation):
     try:
         with setup._spinner(f'Running {func_name} process...'):
             from .features import cell_metadata as cell_metadata_feature
-        cell_metadata_feature(ctx.obj['viewer_zarr'], import_metadata, export_metadata, segmentation)
+        cell_metadata_feature(
+            ctx.obj['viewer_zarr'],
+            import_metadata=import_metadata,
+            export_metadata=export_metadata,
+            segmentation=segmentation,
+        )
 
     except Exception as e:
         setup._fail_message(func_name, e)
 
 
 @viewer.command(name='transcripts', help='Modify transcript metadata in a G4X-viewer zarr store')
-@click.option(
-    '--export-metadata',
-    type=click.Choice(['auto', 'cpu', 'gpu'], case_sensitive=False),
-    default='auto',
-    show_default=True,
-    help='Execution backend.',
-)
+@setup.import_metadata_opt('transcripts')
+@setup.export_metadata_opt('transcripts')
 @click.pass_context
-def transcripts(ctx):
-    pass
+def transcripts(ctx, import_metadata, export_metadata):
+    func_name = 'viewer/' + inspect.currentframe().f_code.co_name
+
+    if not import_metadata and not export_metadata:
+        click.echo('Please provide one of --import-metadata or --export-metadata options')
+        ctx.exit(0)
+
+    try:
+        with setup._spinner(f'Running {func_name} process...'):
+            from .features import transcript_metadata as transcript_metadata_feature
+        transcript_metadata_feature(
+            ctx.obj['viewer_zarr'], import_metadata=import_metadata, export_metadata=export_metadata
+        )
+
+    except Exception as e:
+        setup._fail_message(func_name, e)
 
 
 if __name__ == '__main__':

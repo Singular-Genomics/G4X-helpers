@@ -276,6 +276,7 @@ def get_channel_metadata(img_group):
 
 
 def apply_channel_metadata(img_group, new_data):
+    new_data = pl.read_csv(new_data)
     old_data = get_channel_metadata(img_group)
 
     if not set(old_data.columns) == set(new_data.columns):

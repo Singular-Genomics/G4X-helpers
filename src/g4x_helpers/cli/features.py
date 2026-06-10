@@ -2,8 +2,6 @@ import functools
 import logging
 from typing import Literal
 
-from g4x_helpers.cli.main import cells
-
 from .. import __version__, io
 from .. import constants as c
 from .. import sample_ops as ops
@@ -189,6 +187,40 @@ def validate(smp_dir: str):
     print(report)
 
 
+def _viewer_metadata_command(func):
+
+    @functools.wraps(func)
+    def wrapper(
+        viewer_zarr,
+        *,
+        import_metadata: str | None = None,
+        export_metadata: str | None = None,
+        **kwargs,
+    ):
+
+        if not import_metadata and not export_metadata:
+            raise ValueError('Please provide one of --import-metadata or --export-metadata options')
+
+        if import_metadata is not None and export_metadata is not None:
+            raise ValueError('--import-metadata and --export-metadata cannot be used together')
+
+        if import_metadata is not None:
+            import_metadata = io.pathval.validate_file_path(import_metadata)
+        if export_metadata is not None:
+            export_metadata = io.pathval.validate_file_parent(export_metadata)
+
+        result = func(
+            viewer_zarr=viewer_zarr,
+            import_metadata=import_metadata,
+            export_metadata=export_metadata,
+            **kwargs,
+        )
+        return result
+
+    return wrapper
+
+
+@_viewer_metadata_command
 def cell_metadata(
     viewer_zarr,
     *,
@@ -199,9 +231,6 @@ def cell_metadata(
     from ..modules.viewer import cells
     from ..modules.viewer import zarr_utils as zu
 
-    if import_metadata is not None and export_metadata is not None:
-        raise ValueError('--import-metadata and --export-metadata cannot be used together.')
-
     seg_group = zu.get_viewer_group(viewer_zarr, 'cells', segmentation)
 
     if export_metadata is not None:
@@ -211,6 +240,7 @@ def cell_metadata(
         cells.apply_cell_metadata(seg_group, import_metadata)
 
 
+@_viewer_metadata_command
 def image_metadata(
     viewer_zarr,
     *,
@@ -220,9 +250,6 @@ def image_metadata(
     from ..modules.viewer import images
     from ..modules.viewer import zarr_utils as zu
 
-    if import_metadata is not None and export_metadata is not None:
-        raise ValueError('--import-metadata and --export-metadata cannot be used together.')
-
     img_group = zu.get_viewer_group(viewer_zarr, 'images', 'multiplex')
 
     if export_metadata is not None:
@@ -230,3 +257,22 @@ def image_metadata(
         meta.write_csv(export_metadata)
     if import_metadata is not None:
         images.apply_channel_metadata(img_group, import_metadata)
+
+
+@_viewer_metadata_command
+def transcript_metadata(
+    viewer_zarr,
+    *,
+    import_metadata: str | None = None,
+    export_metadata: str | None = None,
+):
+    from ..modules.viewer import transcripts
+    from ..modules.viewer import zarr_utils as zu
+
+    tx_group = zu.get_viewer_group(viewer_zarr, 'transcripts')
+
+    if export_metadata is not None:
+        meta = transcripts.get_tx_metadata(tx_group)
+        meta.write_csv(export_metadata)
+    if import_metadata is not None:
+        transcripts.apply_tx_metadata(tx_group, import_metadata)

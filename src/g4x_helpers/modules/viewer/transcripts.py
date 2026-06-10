@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+# region main functions
 def write_transcripts(
     zarr_path: str,
     tx_table: pl.DataFrame,
@@ -319,3 +320,41 @@ def complete_panel_colors(tx_panel, assignments):
         .alias('hex')
     )
     return colors
+
+
+# region metadata handling
+def get_tx_metadata(tx_group):
+    tx_attrs = dict(tx_group.attrs)
+
+    order = tx_attrs['gene_order']
+
+    rows = []
+    for gene in order:
+        color = tx_attrs['gene_colors'][gene]
+        row = {'gene_id': gene, 'color': utils.rgb_to_hex(color).upper()}
+        rows.append(row)
+
+    return pl.DataFrame(rows)
+
+
+def apply_tx_metadata(tx_group, new_data):
+    new_data = pl.read_csv(new_data)
+    old_data = get_tx_metadata(tx_group)
+
+    if not set(old_data.columns) == set(new_data.columns):
+        raise ValueError(
+            f'New data columns {new_data.columns} do not match existing channel metadata columns {old_data.columns}'
+        )
+
+    if set(old_data['gene_id']) != set(new_data['gene_id']):
+        raise ValueError('New metadata labels do not match existing metadata labels')
+
+    gene_order = new_data['gene_id'].to_list()
+
+    gene_colors = {}
+    for row in new_data.iter_rows(named=True):
+        gene_id = row['gene_id']
+        gene_colors[gene_id] = utils.hex_to_rgb(row['color'])
+
+    tx_group.attrs['gene_order'] = gene_order
+    tx_group.attrs['gene_colors'] = gene_colors
