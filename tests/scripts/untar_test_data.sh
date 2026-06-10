@@ -11,6 +11,6 @@ rm -r test_data || true
 mkdir -p test_data
 
 echo "Extracting test data..."
-tar -xf "test_data.tar" -C test_data
+tar -xf "test_data.tar.gz" -C test_data --strip-components=1
 echo "Contents of ./tests/test_data:"
 ls -lh test_data

@@ -27,29 +27,3 @@ __all__ = [
     'single_cell',
     'viewer',
 ]
-
-# _LAZY_ATTRS = {
-#     'aggregate': ('.modules', 'aggregate'),
-#     'viewer': ('.modules', 'viewer'),
-#     'single_cell': ('.modules', 'single_cell'),
-#     'demux': ('.modules', 'demux'),
-#     'migrate': ('.modules', 'migrate'),
-#     'G4Xoutput': ('.g4x_output', 'G4Xoutput'),
-# }
-
-# __all__ = ['__version__', 'c', 'io', 'schema', 'logging_utils', 'ut', *sorted(_LAZY_ATTRS)]
-
-
-# def __getattr__(name):
-#     if name not in _LAZY_ATTRS:
-#         raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
-
-#     module_name, attr_name = _LAZY_ATTRS[name]
-#     module = import_module(module_name, __name__)
-#     value = getattr(module, attr_name)
-#     globals()[name] = value
-#     return value
-
-
-# def __dir__():
-#     return sorted(globals().keys() | set(__all__))

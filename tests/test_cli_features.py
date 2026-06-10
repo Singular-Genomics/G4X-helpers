@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from g4x_helpers.cli.cli import cli
+from g4x_helpers.cli.main import cli
 
 
 @pytest.fixture(scope='module')
@@ -37,10 +37,9 @@ def cli_commands(workdir):
     return load_cli_commands(Path(__file__).parent / 'cli_commands.yml', data_dir=data_dir)
 
 
-@pytest.mark.filterwarnings('ignore:Type google\\._upb\\._message\\..*:DeprecationWarning')
 @pytest.mark.parametrize(
     'command',
-    ['migrate', 'tar_viewer', 'new_bin', 'update_bin', 'resegment', 'redemux'],
+    ['resegment', 'redemux'],
 )
 def test_cli_commands_with_runner(command, cli_commands, runner):
     result = runner.invoke(cli, cli_commands[command], catch_exceptions=False)

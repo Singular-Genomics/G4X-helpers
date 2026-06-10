@@ -242,12 +242,14 @@ def migrate(
     out_dir = io.pathval.validate_dir_path(out_dir)
 
     migrate_legacy_raw_data(legacy_dir, out_dir=out_dir, roi_coords=roi_coords, **kwargs)
+    smp = G4Xoutput(smp_dir=out_dir)
 
     if downstream:
-        smp = G4Xoutput(smp_dir=out_dir)
         aggregate(smp, overwrite=True, backend=backend)
         sc_process(smp, overwrite=False, backend=backend)
         viewer_zarr(smp, overwrite=False)
+
+    return smp
 
 
 # region viewer
