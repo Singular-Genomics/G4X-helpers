@@ -2,6 +2,8 @@ import functools
 import logging
 from typing import Literal
 
+from g4x_helpers.cli.main import cells
+
 from .. import __version__, io
 from .. import constants as c
 from .. import sample_ops as ops
@@ -49,9 +51,7 @@ def _base_command(func):
                 log_dir.mkdir(parents=True, exist_ok=True)
 
             lvl = ut.verbose_to_level(verbose)
-            logger = ut.configure_logging(
-                level=lvl, file_log=True, out_dir=log_dir, append_time=True, file_mode='w'
-            )
+            logger = ut.configure_logging(level=lvl, file_log=True, out_dir=log_dir, append_time=True, file_mode='w')
 
         compute_backend = io.get_backend(backend)
         compute_eng = f'{compute_backend.kind}'
@@ -197,14 +197,36 @@ def cell_metadata(
     segmentation: str = 'g4x_default_segmentation',
 ):
     from ..modules.viewer import cells
+    from ..modules.viewer import zarr_utils as zu
 
     if import_metadata is not None and export_metadata is not None:
         raise ValueError('--import-metadata and --export-metadata cannot be used together.')
 
-    seg_group = cells.get_seg_group(viewer_zarr, segmentation)
+    seg_group = zu.get_viewer_group(viewer_zarr, 'cells', segmentation)
 
     if export_metadata is not None:
         meta = cells.get_cell_metadata(seg_group)
         meta.write_csv(export_metadata)
     if import_metadata is not None:
-        cells.apply_viewer_metadata(seg_group, import_metadata)
+        cells.apply_cell_metadata(seg_group, import_metadata)
+
+
+def image_metadata(
+    viewer_zarr,
+    *,
+    import_metadata: str | None = None,
+    export_metadata: str | None = None,
+):
+    from ..modules.viewer import images
+    from ..modules.viewer import zarr_utils as zu
+
+    if import_metadata is not None and export_metadata is not None:
+        raise ValueError('--import-metadata and --export-metadata cannot be used together.')
+
+    img_group = zu.get_viewer_group(viewer_zarr, 'images', 'multiplex')
+
+    if export_metadata is not None:
+        meta = images.get_channel_metadata(img_group)
+        meta.write_csv(export_metadata)
+    if import_metadata is not None:
+        images.apply_channel_metadata(img_group, import_metadata)

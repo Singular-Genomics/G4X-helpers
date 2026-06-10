@@ -12,7 +12,7 @@ def ensure_test_data():
     Downloads once (if missing) via get_test_data.sh, then extracts with untar_test_data.sh.
     """
     tests_dir = Path('./tests').resolve()
-    test_tar = tests_dir / 'datasets' / 'test_data.tar'
+    test_tar = tests_dir / 'datasets' / 'test_data.tar.gz'
 
     if not test_tar.exists():
         subprocess.run(['bash', str(tests_dir / 'scripts/get_test_data.sh')], check=True)

@@ -236,33 +236,31 @@ def viewer(ctx, viewer_zarr):
 
 
 @viewer.command(name='images', help='Modify image metadata in a G4X-viewer zarr store')
-@click.option(
-    '--export-metadata',
-    type=click.Choice(['auto', 'cpu', 'gpu'], case_sensitive=False),
-    default='auto',
-    show_default=True,
-    help='Execution backend.',
-)
+@setup.import_metadata_opt('images')
+@setup.export_metadata_opt('images')
 @click.pass_context
-def images(ctx):
-    pass
+def images(ctx, import_metadata, export_metadata):
+    func_name = 'viewer/' + inspect.currentframe().f_code.co_name
+
+    if not import_metadata and not export_metadata:
+        click.echo('Please provide one of --import-metadata or --export-metadata options')
+        ctx.exit(0)
+
+    try:
+        with setup._spinner(f'Running {func_name} process...'):
+            from .features import image_metadata as image_metadata_feature
+        image_metadata_feature(ctx.obj['viewer_zarr'], import_metadata, export_metadata)
+
+    except Exception as e:
+        setup._fail_message(func_name, e)
 
 
 @viewer.command(
     name='cells',
     help='Modify cell metadata in a G4X-viewer zarr store\n\n--import and --export options cannot be used together',
 )
-@click.option(
-    '--import-metadata',
-    type=click.Path(exists=True, dir_okay=False),
-    help='CSV file containing cell metadata to import.',
-)
-@click.option(
-    '--export-metadata',
-    type=click.Path(exists=False, writable=True, dir_okay=False),
-    show_default=True,
-    help='Output CSV file for exported cell metadata.',
-)
+@setup.import_metadata_opt('cells')
+@setup.export_metadata_opt('cells')
 @click.option(
     '--segmentation',
     type=str,

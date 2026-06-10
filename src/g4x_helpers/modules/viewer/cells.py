@@ -18,6 +18,7 @@ UNASSIGNED_CELL = 'unassigned'
 COMPRESSOR = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
 
 
+# region main function
 def write_cells(
     zarr_path: str,
     segmentation_mask: np.ndarray,
@@ -133,6 +134,36 @@ def write_cells(
         utils.create_array(seg_group, name, data=array, compressor=COMPRESSOR, chunks=chunks)
 
 
+def extract_polygons(mask, buffer: float = 4.0, simplify_tolerance: float = 1.0, show_progress: bool = False):
+    polygons = io.convert.ndarray_to_gdf(mask, show_progress=show_progress)
+
+    # Keep only largest polygon per label
+    polygons['_area'] = polygons.geometry.area
+    polygons = (
+        polygons.sort_values('_area', ascending=False)
+        .drop_duplicates(subset=c.CELL_ID_NAME, keep='first')
+        .drop(columns='_area')
+        .reset_index(drop=True)
+    )
+
+    # Alternative way to keep largest polygon per label
+    # idx = gdf.groupby(CELL_ID_NAME)["_area"].idxmax()
+    # gdf = gdf.loc[idx].drop(columns="_area").reset_index(drop=True)
+
+    # Simplify geometries
+    polygons['geometry_simplified'] = polygons.geometry.buffer(buffer).buffer(-buffer)
+    if simplify_tolerance > 0:
+        polygons['geometry_simplified'] = polygons.geometry_simplified.simplify(
+            tolerance=simplify_tolerance, preserve_topology=True
+        )
+
+    polygons['geometry'] = polygons.geometry_simplified
+    polygons = polygons.drop(columns='geometry_simplified')
+
+    return polygons.sort_values(c.CELL_ID_NAME)
+
+
+# region private functions
 def _write_metadata_arrays(seg_group, meta_columns):
     for key, (arr, dtype) in meta_columns.items():
         if key in seg_group:
@@ -200,35 +231,6 @@ def _cellxgene_to_csr(cell_x_gene: pl.DataFrame) -> tuple[csr_matrix, np.ndarray
     return gex, gene_names
 
 
-def extract_polygons(mask, buffer: float = 4.0, simplify_tolerance: float = 1.0, show_progress: bool = False):
-    polygons = io.convert.ndarray_to_gdf(mask, show_progress=show_progress)
-
-    # Keep only largest polygon per label
-    polygons['_area'] = polygons.geometry.area
-    polygons = (
-        polygons.sort_values('_area', ascending=False)
-        .drop_duplicates(subset=c.CELL_ID_NAME, keep='first')
-        .drop(columns='_area')
-        .reset_index(drop=True)
-    )
-
-    # Alternative way to keep largest polygon per label
-    # idx = gdf.groupby(CELL_ID_NAME)["_area"].idxmax()
-    # gdf = gdf.loc[idx].drop(columns="_area").reset_index(drop=True)
-
-    # Simplify geometries
-    polygons['geometry_simplified'] = polygons.geometry.buffer(buffer).buffer(-buffer)
-    if simplify_tolerance > 0:
-        polygons['geometry_simplified'] = polygons.geometry_simplified.simplify(
-            tolerance=simplify_tolerance, preserve_topology=True
-        )
-
-    polygons['geometry'] = polygons.geometry_simplified
-    polygons = polygons.drop(columns='geometry_simplified')
-
-    return polygons.sort_values(c.CELL_ID_NAME)
-
-
 def _sanitize_path_component(s, replacement='_'):
     invalid = r'<>:"/\\|?*- '
     for ch in invalid:
@@ -248,23 +250,6 @@ def _add_segmentation_attrs(cell_group, seg_name):
     cell_group.attrs['segmentation_sources'] = seg_sources
     cell_group.attrs['segmentation_order'] = list(set(seg_order))
     return seg_path
-
-
-# NOTE unused
-def _prepare_metadata_for_tiling(metadata, tile_size, img_res):
-    metadata = metadata.with_row_index()
-
-    image_resolution_hw = img_res
-    n_tiles_w = image_resolution_hw[1] // tile_size
-    n_tiles_h = image_resolution_hw[0] // tile_size
-    n_tiles_w, n_tiles_h
-
-    metadata = metadata.with_columns(
-        (pl.col('cell_x') / tile_size).cast(pl.Int32).alias('tile_x'),
-        (pl.col('cell_y') / tile_size).cast(pl.Int32).alias('tile_y'),
-    ).sort('tile_y', 'tile_x')
-
-    return metadata
 
 
 def _map_categories(mask: np.ndarray, labels: np.ndarray, categories: np.ndarray, missing_val=-1):
@@ -341,17 +326,6 @@ def get_user_cluster_metadata(new_data: pl.DataFrame) -> dict[str, dict]:
     return cluster_labels_meta, clusterings_order
 
 
-def get_seg_group(viewer_dir, segmentation_source='g4x_default_segmentation'):
-    cell_group = zarr.open(viewer_dir / 'cells', mode='r+')
-
-    if segmentation_source not in cell_group:
-        raise ValueError(
-            f'Segmentation source "{segmentation_source}" not found in the data. Available sources: {list(cell_group.keys())}'
-        )
-
-    return cell_group[segmentation_source]
-
-
 def get_cell_metadata(seg_group):
     cell_ids = pl.Series(name=c.CELL_ID_NAME, values=seg_group['cell_id'][:])
 
@@ -375,7 +349,8 @@ def get_cell_metadata(seg_group):
     return df
 
 
-def apply_viewer_metadata(seg_group, new_data):
+def apply_cell_metadata(seg_group, new_data):
+
     new_data_df = pl.read_csv(new_data)
     existing_data = get_cell_metadata(seg_group)
 
@@ -395,3 +370,20 @@ def apply_viewer_metadata(seg_group, new_data):
     }
 
     _write_metadata_arrays(seg_group, meta_columns)
+
+
+# NOTE unused but could be useful for future functionality
+# def _prepare_metadata_for_tiling(metadata, tile_size, img_res):
+#     metadata = metadata.with_row_index()
+
+#     image_resolution_hw = img_res
+#     n_tiles_w = image_resolution_hw[1] // tile_size
+#     n_tiles_h = image_resolution_hw[0] // tile_size
+#     n_tiles_w, n_tiles_h
+
+#     metadata = metadata.with_columns(
+#         (pl.col('cell_x') / tile_size).cast(pl.Int32).alias('tile_x'),
+#         (pl.col('cell_y') / tile_size).cast(pl.Int32).alias('tile_y'),
+#     ).sort('tile_y', 'tile_x')
+
+#     return metadata

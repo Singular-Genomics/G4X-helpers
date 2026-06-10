@@ -5,6 +5,7 @@ import logging
 import os
 import shutil
 
+import polars as pl
 import zarr
 
 from ... import constants as c
@@ -122,11 +123,14 @@ def hsv_to_hex(h, s, v):
     return '#{:02x}{:02x}{:02x}'.format(int(r * 255), int(g * 255), int(b * 255))
 
 
-# def get_gene_metadata(viewer_dir: str):
-#     g = zarr.open(viewer_dir, mode='r')
-#     cmap = dict(g['transcripts'].attrs)['gene_colors']
-#     cmap = {k: rgb_to_hex(v) for k, v in cmap.items()}
+# region metdata handling
+def get_viewer_group(viewer_dir, group: str, subgroup: str | None = None):
+    img_group = zarr.open(viewer_dir / group, mode='r+')
 
-#     df = pl.DataFrame(dict(g['transcripts'].attrs)['gene_order'], schema=['gene_id'])
-#     df = df.with_columns(pl.col('gene_id').replace(cmap).alias('color'))
-#     return df
+    if subgroup is None:
+        return img_group
+
+    if subgroup not in img_group:
+        raise ValueError(f'Subgroup "{subgroup}" not found in the data. Available subgroups: {list(img_group.keys())}')
+
+    return img_group[subgroup]

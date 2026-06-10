@@ -5,6 +5,7 @@ import warnings
 
 import dask.array as da
 import numpy as np
+import polars as pl
 import zarr
 from numcodecs import Blosc
 from ome_zarr import scale as oz_scale
@@ -67,6 +68,7 @@ OMERO_DEFAULT = {
 }
 
 
+# region main functions
 def write_images(
     zarr_path: str,
     images: dict[str, str],
@@ -178,7 +180,7 @@ def write_channel_stack(
     )
 
 
-# region helpers
+# region private functions
 class ImageChannel:
     def __init__(self, img, label: str = 'channel', dtype: np.dtype = None, omero_attrs: dict = {}):
         self.img = da.array(img, dtype=dtype)
@@ -214,6 +216,26 @@ def _write_image_withouth_storage_warning(*args, **kwargs):
         return oz_writer.write_image(*args, **kwargs)
 
 
+def _determine_visible_channels(available_channels: list[str]) -> list[str]:
+    vi_chs = DEFAULT_VISIBLE_CHANNELS
+    channels = available_channels
+
+    num_def = len(vi_chs)
+    selected = [ch for ch in vi_chs if ch in channels]
+    remaining = [ch for ch in channels if ch not in vi_chs]
+
+    for stain in ['nuclearstain', 'cytoplasmicstain']:
+        remaining.remove(stain)
+
+    n_missing = num_def - len(selected)
+
+    for i in range(n_missing):
+        if remaining:
+            selected.append(remaining.pop(0))
+
+    return selected
+
+
 # region testing
 def _add_rgb_astronaut_to_img(data):
     ### Add rgb image to bottom left corner
@@ -238,37 +260,56 @@ def _add_rgb_astronaut_to_img(data):
     return out
 
 
-def _determine_visible_channels(available_channels: list[str]) -> list[str]:
-    vi_chs = DEFAULT_VISIBLE_CHANNELS
-    channels = available_channels
+# region metadata handling
+def get_channel_metadata(img_group):
+    channels = dict(img_group.attrs)['omero']['channels']
+    rows = []
+    for channel in channels:
+        # window = channel.pop('window')
+        window = channel['window']
+        channel = {k: v for k, v in channel.items() if k != 'window'}
 
-    num_def = len(vi_chs)
-    selected = [ch for ch in vi_chs if ch in channels]
-    remaining = [ch for ch in channels if ch not in vi_chs]
+        channel.update(window)
+        rows.append(channel)
 
-    for stain in ['nuclearstain', 'cytoplasmicstain']:
-        remaining.remove(stain)
-
-    n_missing = num_def - len(selected)
-
-    for i in range(n_missing):
-        if remaining:
-            selected.append(remaining.pop(0))
-
-    return selected
+    return pl.DataFrame(rows).select(['label', 'active', 'color', 'min', 'max', 'start', 'end'])
 
 
-# def _determine_visible_channels(channel_order: list[str] = None) -> list[str]:
-#     num_def = len(DEFAULT_VISIBLE_CHANNELS)
-#     channel_order_copy = channel_order.copy()
-#     visible_channels = []
-#     for channel in channel_order_copy:
-#         if channel in DEFAULT_VISIBLE_CHANNELS:
-#             channel_order_copy.remove(channel)
-#             visible_channels.append(channel)
-#         if len(visible_channels) >= num_def:
-#             break
+def apply_channel_metadata(img_group, new_data):
+    old_data = get_channel_metadata(img_group)
 
-#     if len(visible_channels) < len(DEFAULT_VISIBLE_CHANNELS):
-#         visible_channels.extend(channel_order_copy[: (len(DEFAULT_VISIBLE_CHANNELS) - len(visible_channels))])
-#     return visible_channels
+    if not set(old_data.columns) == set(new_data.columns):
+        raise ValueError(
+            f'New data columns {new_data.columns} do not match existing channel metadata columns {old_data.columns}'
+        )
+
+    existing_labels = old_data['label'].to_list()
+
+    if set(existing_labels) != set(new_data['label']):
+        raise ValueError(
+            f'New data labels {new_data["label"]} do not match existing channel metadata labels {existing_labels}'
+        )
+
+    order_map = {label: i for i, label in enumerate(existing_labels)}
+
+    new_data = (
+        new_data.with_columns(pl.col('label').replace_strict(order_map).alias('_order')).sort('_order').drop('_order')
+    )
+
+    channels = []
+    for row in new_data.iter_rows(named=True):
+        window = {k: row[k] for k in ['min', 'max', 'start', 'end']}
+        channel_info = {k: row[k] for k in ['label', 'active', 'color']}
+        channel_info['window'] = window
+        channels.append(channel_info)
+
+    attrs = dict(img_group.attrs)
+
+    omero = attrs['omero']
+    omero['channels'] = channels
+
+    multiscales = attrs['multiscales']
+    multiscales[0]['metadata']['omero']['channels'] = channels
+
+    img_group.attrs['omero'] = omero
+    img_group.attrs['multiscales'] = multiscales

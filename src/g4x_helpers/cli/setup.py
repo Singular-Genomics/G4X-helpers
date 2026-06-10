@@ -127,6 +127,19 @@ def in_place_opt(cmd_name: str = ''):
         help=f'Edit G4X-data in-place if this flag is set.\n\nOtherwise creates a "g4x_helpers/{cmd_name}" folder.',
     )
 
+def import_metadata_opt(cmd_name: str = ''):
+    return click.option(
+        '--import-metadata',
+        type=click.Path(exists=True, dir_okay=False),
+        help=f'CSV file containing metadata for {cmd_name}',
+    )
+
+def export_metadata_opt(cmd_name: str = ''):
+    return click.option(
+        '--export-metadata',
+        type=click.Path(exists=False, dir_okay=False),
+        help=f'Output CSV file for exported {cmd_name} metadata',
+    )
 
 def branch_opt(cmd_name: str = ''):
     return click.option(
