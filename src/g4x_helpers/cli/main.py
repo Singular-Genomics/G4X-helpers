@@ -203,18 +203,22 @@ def migrate(ctx, g4x_data, out_dir, check, roi, no_downstream):
 # region validate
 @cli.command(name='validate', help=hm.VALIDATE_HELP)
 @setup.g4x_data_opt()
+@click.option(
+    '-r',
+    '--raw-only',
+    required=False,
+    is_flag=True,
+    help='Validate only the minimum raw data for G4X-helpers operation',
+)
 @click.pass_context
-def validate(ctx, g4x_data):
+def validate(ctx, g4x_data, raw_only):
     func_name = inspect.currentframe().f_code.co_name
 
     try:
         with setup._spinner(f'Running {func_name} process...'):
             from .features import validate as validate_feature
 
-        validate_feature(
-            smp_dir=g4x_data,
-            verbose=ctx.obj['verbose'],
-        )
+        validate_feature(smp_dir=g4x_data, raw_only=raw_only)
     except Exception as e:
         setup._fail_message(func_name, e)
 
@@ -235,7 +239,10 @@ def viewer(ctx, viewer_zarr):
     ctx.obj = {'viewer_zarr': viewer_zarr}
 
 
-@viewer.command(name='images', help='Modify image metadata in a G4X-viewer zarr store')
+@viewer.command(
+    name='images',
+    help=hm.IMAGES_META_HELP,
+)
 @setup.import_metadata_opt('images')
 @setup.export_metadata_opt('images')
 @click.pass_context
@@ -257,7 +264,7 @@ def images(ctx, import_metadata, export_metadata):
 
 @viewer.command(
     name='cells',
-    help='Modify cell metadata in a G4X-viewer zarr store\n\n--import and --export options cannot be used together',
+    help=hm.CELLS_META_HELP,
 )
 @setup.import_metadata_opt('cells')
 @setup.export_metadata_opt('cells')
@@ -267,7 +274,7 @@ def images(ctx, import_metadata, export_metadata):
     default='g4x_default_segmentation',
     required=False,
     show_default=False,
-    help='Only required if multiple segmentations are available.',
+    help='Only required if multiple segmentation groups are available.',
 )
 @click.pass_context
 def cells(ctx, import_metadata, export_metadata, segmentation):
@@ -291,7 +298,10 @@ def cells(ctx, import_metadata, export_metadata, segmentation):
         setup._fail_message(func_name, e)
 
 
-@viewer.command(name='transcripts', help='Modify transcript metadata in a G4X-viewer zarr store')
+@viewer.command(
+    name='transcripts',
+    help=hm.TRANSCRIPTS_META_HELP,
+)
 @setup.import_metadata_opt('transcripts')
 @setup.export_metadata_opt('transcripts')
 @click.pass_context

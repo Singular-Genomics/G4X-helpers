@@ -1,6 +1,6 @@
 import functools
 import logging
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from .. import __version__, io
 from .. import constants as c
@@ -8,10 +8,13 @@ from .. import sample_ops as ops
 from .. import utils as ut
 from ..g4x_output import G4Xoutput
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
 log = logging.getLogger(__name__)
 
 
-def _create_branch(sample_dir: str, name: str):
+def _create_branch(sample_dir: str, name: str) -> 'Path':
     HELPERS_DIR_NAME = 'g4x-helpers'
 
     sample_dir = io.pathval.validate_dir_path(sample_dir)
@@ -22,7 +25,7 @@ def _create_branch(sample_dir: str, name: str):
     return branch_dir
 
 
-def _base_command(func):
+def _base_command(func) -> None:
     """Decorator to apply standard command initialization logic."""
 
     @functools.wraps(func)
@@ -98,7 +101,7 @@ def redemux(
     show_progress: bool = False,
     backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
     **kwargs,
-):
+) -> None:
 
     smp = G4Xoutput(smp_dir, alt_source=out_dir)
 
@@ -117,8 +120,6 @@ def redemux(
         ops.sc_process(smp, out_dir=out_dir, backend=backend, overwrite=overwrite)
         ops.viewer_zarr(smp, out_dir=out_dir, overwrite=overwrite)
 
-    return smp
-
 
 @_base_command
 def resegment(
@@ -132,7 +133,7 @@ def resegment(
     show_progress: bool = False,
     backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
     **kwargs,
-):
+) -> None:
 
     smp = G4Xoutput(smp_dir, alt_source=out_dir)
     ops.aggregate(
@@ -149,8 +150,6 @@ def resegment(
         ops.sc_process(smp, out_dir=out_dir, backend=backend, overwrite=overwrite)
         ops.viewer_zarr(smp, out_dir=out_dir, overwrite=overwrite)
 
-    return smp
-
 
 @_base_command
 def migrate(
@@ -159,15 +158,16 @@ def migrate(
     *,
     roi_coords: tuple | None = None,
     downstream: bool = True,
+    backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
     **kwargs,
 ) -> None:
-    from ..modules import migrate
 
-    migrate.migrate_sample(
-        sample_dir=smp_dir,
+    ops.migrate(
+        legacy_dir=smp_dir,
         out_dir=out_dir,
         roi_coords=roi_coords,
         downstream=downstream,
+        backend=backend,
         **kwargs,
     )
 
@@ -175,19 +175,19 @@ def migrate(
 def migrate_check(smp_dir: str) -> None:
     from ..modules import migrate
 
-    migrate.status(sample_dir=smp_dir)
+    migrate.status(legacy_dir=smp_dir)
 
 
-def validate(smp_dir: str):
+def validate(smp_dir: str, raw_only: bool = False) -> None:
 
     from ..schema import FileTree
 
     ft = FileTree(smp_dir)
-    report = ft.validation_report(raise_exception=False)
+    report = ft.validation_report(raw_only=raw_only, raise_exception=False)
     print(report)
 
-
-def _viewer_metadata_command(func):
+# region viewer metadata
+def _viewer_metadata_command(func) -> None:
 
     @functools.wraps(func)
     def wrapper(
@@ -227,7 +227,7 @@ def cell_metadata(
     import_metadata: str | None = None,
     export_metadata: str | None = None,
     segmentation: str = 'g4x_default_segmentation',
-):
+) -> None:
     from ..modules.viewer import cells
     from ..modules.viewer import zarr_utils as zu
 
@@ -246,7 +246,7 @@ def image_metadata(
     *,
     import_metadata: str | None = None,
     export_metadata: str | None = None,
-):
+) -> None:
     from ..modules.viewer import images
     from ..modules.viewer import zarr_utils as zu
 
@@ -265,7 +265,7 @@ def transcript_metadata(
     *,
     import_metadata: str | None = None,
     export_metadata: str | None = None,
-):
+) -> None:
     from ..modules.viewer import transcripts
     from ..modules.viewer import zarr_utils as zu
 

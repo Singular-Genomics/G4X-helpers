@@ -67,8 +67,8 @@ class FileTree:
         meta_validator = MAIN_VALIDATOR(root=self.smp_dir)
         if not meta_validator.path_exists():
             msg = 'Missing sample.g4x\n'
-            msg += 'G4X-helpers v4 requires that G4X-data must contain a metadata file named "sample.g4x"\n\n'
-            msg += 'If this data was generated with a software version prior to SeqOS-v4, you can migrate it to the lastest schema using "g4x-helpers migrate"'
+            msg += 'G4X-helpers 4 requires that G4X-data must contain a metadata file named "sample.g4x"\n\n'
+            msg += 'If this data was generated with a software version prior to 26.1, you can convert it to the lastest schema using "g4x-helpers migrate"'
             raise ValidationError(msg)
 
         if not meta_validator.is_valid:
@@ -151,7 +151,7 @@ class FileTree:
     def _val_report_verbose(self, raw_only: bool = False, raise_exception: bool = True):
 
         if self.SampleG4X.path_exists():
-            msg = f'Detected G4X-metadata file:\n{self.SampleG4X.target_path}'
+            msg = f'Detected G4X-metadata file:\n{self.SampleG4X.target_path.resolve()}'
             msg += f'\nassay type: {self.assay_type}'
             msg += '\n\n> Validating required raw data ...'
         else:
