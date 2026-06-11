@@ -1,39 +1,35 @@
 name: Setup project environment
-description: Checkout repo + submodule, set up project with uv
+description: Checkout repo + optional docs core assets, set up project with uv
 
 inputs:
   docs-submodule-token:
-    description: Token used to fetch docs assets submodule
+    description: Token used to fetch private docs core assets
     required: false
     default: ''
 
 runs:
   using: composite
 
-  steps:      
-    - name: Fetch submodule
-      if: ${{ inputs.docs-submodule-token != '' }} # Only run if a token was passed
-      uses: actions/checkout@v5
-      with:
-        fetch-depth: 1
-        submodules: recursive
-        token: ${{ inputs.docs-submodule-token }}
-
-    - name: Pull latest changes for submodules
-      if: ${{ inputs.docs-submodule-token != '' }}
-      shell: bash
-      run: |
-        git submodule update --init --recursive docs/_core
-        cd docs/_core
-        git fetch origin
-        git checkout main
-        git pull origin main
-
+  steps:
     - name: Checkout repo
       uses: actions/checkout@v5
       with:
         fetch-depth: 1
-        clean: false # do not clean the working directory as this would remove the submodule changes
+        clean: false
+
+    - name: Clone docs core assets
+      if: ${{ inputs.docs-submodule-token != '' }}
+      shell: bash
+      env:
+        DOCS_CORE_TOKEN: ${{ inputs.docs-submodule-token }}
+      run: |
+        rm -rf docs/_core
+        git clone \
+          --depth 1 \
+          --branch main \
+          "https://x-access-token:${DOCS_CORE_TOKEN}@github.com/Singular-Genomics/docs_core_assets.git" \
+          docs/_core
+        git -C docs/_core remote set-url origin "https://github.com/Singular-Genomics/docs_core_assets.git"
 
     - name: Install uv
       uses: astral-sh/setup-uv@v6
