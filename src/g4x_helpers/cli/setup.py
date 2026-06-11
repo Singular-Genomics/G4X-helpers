@@ -119,15 +119,6 @@ def no_downstream_opt(cmd_name: str = ''):
     )
 
 
-def in_place_opt(cmd_name: str = ''):
-    return click.option(
-        '-ip',
-        '--in-place',
-        is_flag=True,
-        help=f'Edit G4X-data in-place if this flag is set.\n\nOtherwise creates a "g4x_helpers/{cmd_name}" folder.',
-    )
-
-
 def import_metadata_opt(cmd_name: str = ''):
     return click.option(
         '-i',
