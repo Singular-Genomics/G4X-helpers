@@ -3,14 +3,12 @@
 # `redemux`
 #### Reprocess G4X-output with a new transcript manifest
 
-Replaces or updates the transcript manifest in a G4X run, reassigns transcripts via demultiplexing, and regenerates all downstream single-cell data and `.tar` viewer files.
+Generates a new [`transcript_table.csv.gz`](https://docs.singulargenomics.com/g4x_data/output_files/rna/#transcript_tablecsvgz) by demultiplexing the raw feature data against a provided list of probe sequences and mapping each feature to its corresponding target gene. It then proceeds to regenerate single-cell outputs and initializes a new G4X-viewer zarr store. Does not regenerate metrics.  
 
 ---
 
 ## Usage
 ![`g4x-helpers redemux --help`](../img/redemux-help.svg)
-
---8<-- "_partials/global_options_note.md"
 
 --8<-- "_partials/args_optns.md"
 
@@ -38,7 +36,9 @@ _default_  : `1.000.000`
 
 ---
 
---8<-- "_partials/arg_in_place.md"
+--8<-- "_partials/arg_no_downstream.md"
+
+--8<-- "_partials/arg_branch.md"
 
 <br>
 --8<-- "_core/_partials/end_cap.md"

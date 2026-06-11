@@ -5,7 +5,7 @@
 G4X-helpers offers several tools for common post-processing needs, each of which is described in detail in the [CLI features](../features/index.md) section. On this page, we will demonstrate how to execute these tools either from the CLI or through a Docker image (depending on how you [installed G4X-helpers](../installation/index.md)).
 
 ## Quickstart
-If you have installed G4X-helpers and your environment is functional, you can get an overview of the basic usage by calling the main entrypoint `g4x-helpers --help`.  
+If you have successfully installed G4X-helpers, you can get an overview of the basic usage by calling the main entrypoint `g4x-helpers --help`.  
 Please refer to the sections below for details on how to run a subcommand.
 
 ![`g4x-helpers --help`](../img/main-help.svg)
@@ -63,19 +63,18 @@ Before getting started, you need to ensure that the environment in which you ins
 g4x-helpers [GLOBAL OPTIONS] <command> [OPTIONS] /path/to/g4x_data
 ```
 
-Provide global options **before** the sub-command. Each command then defines its own required and optional arguments, followed by the `G4X-DATA` positional argument. All workflows assume you have a single-sample [G4X output directory](https://docs.singulargenomics.com/g4x_data/g4x_output/) and, in some cases, additional input files (e.g. manifests or metadata tables).
+Provide global options **before** the sub-command. Each command then defines its own required and optional arguments, followed by the `G4X-DATA` positional argument. All workflows assume you have a single-sample [G4X-data directory](https://docs.singulargenomics.com/g4x_data/g4x_output/) and, in some cases, additional input files (e.g. manifests or metadata tables).
 
 #### Global options
 
 | option | default | description |
 | --- | --- | --- |
-| `--threads` / `-t` | half of available CPU cores (minimum 1) | Number of worker threads used by CPU-heavy steps (segmentation, demultiplexing, conversions). Increase to speed up processing or lower it when sharing a server. |
-| `--verbose` / `-v` | `1` | Controls logging detail in the terminal. `0` prints warnings only, `1` shows progress-level logs, `2` enables detailed debugging output. |
+| `--verbose` / `-v` | `1` | Controls logging detail in the terminal. `0` prints warnings only, `1` shows progress-level logs, `2` enables detailed debugging output. File logs will always contain level `2` outputs |
 | `--version` | — | Prints the installed `g4x-helpers` version and exits, which is helpful for troubleshooting and documentation. |
 | `--help` / `-h` | — | Standard Click help flag that prints contextual usage information for the command you attach it to. |
 
 !!! tip
-    Always place global options **before** the sub-command: `g4x-helpers --threads 8 resegment ...`
+    Always place global options **before** the sub-command: `g4x-helpers --verbose 2 resegment ...`
 
 #### Discovering CLI commands
 
@@ -100,13 +99,13 @@ Provide global options **before** the sub-command. Each command then defines its
 
 ### Example: running `resegment` from the CLI
 
-Below we apply a custom cell segmentation to existing data using the `resegment` sub-command. The command writes results to `<G4X-DATA>/g4x_helpers/resegment` unless `--in-place` is set.
+Below we apply a custom cell segmentation to existing data using the `resegment` sub-command. The command writes results to `<G4X-DATA>/g4x-helpers/custom_seg`.
 
 ```
 g4x-helpers resegment \
     --cell-labels /path/to/custom/segmentation/seg_mask.npz \
-    [--labels-key nuclei] \
-    [--in-place] \
+    --branch custom_seg \
+    --no-downstream \
     /path/to/g4x_output/directory/sample_id
 ```
 
@@ -116,17 +115,9 @@ For this run we provide:
 | --- | --- | --- |
 | `G4X-DATA` | /path/to/g4x_output/directory/sample_id | directory |
 | `--cell-labels` | /path/to/custom/segmentation/seg_mask.npz | .npz file |
-| `--labels-key` | nuclei (optional) | string |
-| `--in-place` | flag (optional) | — |
+| `--branch` | custom_seg | string |
+| `--no-downstream` | - | flag |
 
-The full command is:
-
-```
-g4x-helpers resegment \
-    --cell-labels /path/to/custom/segmentation/seg_mask.npz \
-    --labels-key nuclei \
-    /path/to/g4x_output/directory/sample_id
-```
 
 If the command succeeds you'll see the `resegment` progress log in your terminal.
 

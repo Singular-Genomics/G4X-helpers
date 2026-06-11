@@ -151,7 +151,7 @@ After installing uv, you can build the environment by calling:
 $ uv sync
 ```
 
-A folder named `.venv` will be created. It holds the correct python version and all project dependencies. It will also install necessary development tools like `ruff`, `mkdocs`, `pre-commit`, `bump-my-version`.
+A folder named `.venv` will be created. It holds the correct python version and all project dependencies. It will also install necessary development tools like `ruff`, `mkdocs`, `pre-commit`.
 
 You can now activate this environment with:
 ```bash

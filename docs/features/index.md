@@ -7,9 +7,7 @@
 
 - [resegment](./resegment.md) : reprocess G4X-output with a new segmentation 
 - [redemux](./redemux.md) : reprocess G4X-output with a new transcript manifest 
-- [update_bin](./update_bin.md) : update G4X-viewer `.bin` file with new metadata
-- [new_bin](./new_bin.md) : generate G4X-viewer `.bin` files from sample output
-- [tar_viewer](./tar_viewer.md) : package G4X-viewer folder for distribution
-- [migrate](./migrate.md) : migrate legacy runs to the latest G4X-data schema and viewer format
+- [migrate](./migrate.md) : migrate legacy data to the latest G4X-data schema and Viewer format
+- [validate](./validate.md) : validate G4X-data file and folder structure
   
 --8<-- "_core/_partials/end_cap.md"

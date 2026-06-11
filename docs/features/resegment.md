@@ -3,14 +3,14 @@
 # `resegment`
 #### Reprocess G4X-output with a new segmentation
 
-Replaces or updates the segmentation mask in a G4X run and regenerates all downstream single-cell data and `.bin` files.
+Takes new cell-labels from a custom segmentation output and re-assigns transcripts  
+ and protein signals to those cells. The operation recreates single-cell outputs and 
+ initializes a new G4X-viewer zarr store. Does not regenerate metrics.
 
 ---
 
 ## Usage
 ![`g4x-helpers resegment --help`](../img/resegment-help.svg)
-
---8<-- "_partials/global_options_note.md"
 
 --8<-- "_partials/args_optns.md"
 
@@ -42,7 +42,9 @@ _example_  : `cell_id`
 
 ---
 
---8<-- "_partials/arg_in_place.md"
+--8<-- "_partials/arg_no_downstream.md"
+
+--8<-- "_partials/arg_branch.md"
 
 <br>
 --8<-- "_core/_partials/end_cap.md"

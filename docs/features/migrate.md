@@ -10,7 +10,7 @@ Creates a backup in `<G4X-DATA>/g4x_helpers/migration_backup` before making any 
 ---
 
 ## Usage
-![`g4x-helpers migrate --help`](../img/migrate-help.svg)
+<!-- ![`g4x-helpers migrate --help`](../img/migrate-help.svg) -->
 
 --8<-- "_partials/global_options_note.md"
 

@@ -12,7 +12,7 @@ This page explains how you can install `G4X-helpers` on your local machine. If y
 - integrate pieces of the library into your own Python environment
 
 
-If these use cases apply to you, please read on
+If these use cases apply to you, please read on.
 
 <br>
 
@@ -67,7 +67,7 @@ cd G4X-helpers
     Create the environment:
 
     ```bash
-    conda create -n g4x-helpers_env python=3.12
+    conda create -n g4x-helpers_env python=3.10
     ```
 
     Activate the environment:
@@ -87,7 +87,7 @@ cd G4X-helpers
     #### Install into your current python environment via `pip`
 
     !!!warning
-        `pip` does not create or manage virtual environments, so installing through `pip install .` will require that your local Python version is compatible with the package dependencies (`Python >= 3.10`).
+        `pip` does not create or manage virtual environments, so installing through `pip install .` will require that your local Python version is compatible with the package dependencies (`Python >= 3.10, <3.12`).
     
     ```bash
     pip install .
@@ -124,7 +124,7 @@ python -c "import glymur; print(glymur.version.openjpeg_version)"
     2.4.1
     ```
 
-!!! Failure "Failure: Version <2.2.0"
+!!! failure "Failure: Version <2.2.0"
     ```
     0.0.0
     ```
@@ -179,16 +179,9 @@ Hints on other systems are provided, but not supported! You can find further det
 ---
 
 To start using G4X-helpers, ensure that you have activated the environment in which the package was installed. 
-If your installation of G4X-helpers was successful, the following commands should print help text:
-
+If your installation of G4X-helpers was successful, the following command should print help text:
 
 + `g4x-helpers --help`  
-+ `g4x-helpers resegment --help`  
-+ `g4x-helpers redemux --help`  
-+ `g4x-helpers update_bin --help`  
-+ `g4x-helpers new_bin --help`  
-+ `g4x-helpers tar_viewer --help`
-+ `g4x-helpers migrate --help`  
 
 
 !!!tip

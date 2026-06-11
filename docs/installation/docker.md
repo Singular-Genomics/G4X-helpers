@@ -25,7 +25,7 @@ Docker is available for most platforms. Please refer to the Docker installation 
 ## Step 2: Pull the G4X-helpers image
 ---
 
-The docker pull command downloads the G4X-helpers container image (and all of its layers) from GitHub’s Container Registry ( ghcr.io ) to your local Docker cache.
+The `docker pull` command downloads the G4X-helpers container image (and all of its layers) from GitHub’s Container Registry ( ghcr.io ) to your local Docker cache.
 
 ```bash
 docker pull ghcr.io/singular-genomics/g4x-helpers:latest
@@ -36,7 +36,7 @@ Once the image is pulled, you can start new containers from it instantly — eve
 !!!tip
     `latest` will always retrieve the most recently published build.  
     You can replace it with an explicit tag, which locks you to a reproducible version.  
-    e.g. `ghcr.io/singular-genomics/g4x-helpers:v0.4.11`  
+    e.g. `ghcr.io/singular-genomics/g4x-helpers:v4.0.0`  
     
 if the pull was successful, you can confirm that the image is available by calling
 
@@ -65,6 +65,7 @@ A useful one-shot cleanup command is:
 ```bash
 docker system prune -a
 ```
+Note: It removes all unused images, not just this project’s images
 
 For more general information on how to utilize the features of CLI Docker, please refer to the [Docker documentation](https://docs.docker.com/engine/reference/commandline/cli/).
 
