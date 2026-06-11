@@ -16,3 +16,5 @@ build/
 
 tests/datasets/**
 tests/test_data/**
+
+docs/_core/
