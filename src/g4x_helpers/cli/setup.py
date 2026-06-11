@@ -4,8 +4,6 @@ from contextlib import contextmanager
 import rich_click as click
 from rich.console import Console
 
-from .. import constants
-
 console = Console()
 
 
@@ -60,32 +58,6 @@ def _fail_message(func_name, e, trace_back=False):
     if trace_back:
         traceback.print_exc()
     raise click.ClickException(f'{type(e).__name__}: {e}')
-
-
-def initialize_sample(
-    smp_dir: str, sample_id: str | None = None, in_place: bool = False, n_threads: int = constants.DEFAULT_THREADS
-) -> None:
-    msg = f'loading G4X-data from [blue]{smp_dir}[/blue]'
-    with _spinner(msg):
-        import glymur
-
-        from ..g4x_output import G4Xoutput
-
-        glymur.set_option('lib.num_threads', n_threads)
-        try:
-            sample = G4Xoutput(smp_dir=smp_dir, sample_id=sample_id)
-        except Exception as e:
-            click.echo('\n')
-            click.secho('Failed to load G4X-data:', fg='red', err=True, bold=True)
-            raise click.ClickException(f'{e}')
-
-    if in_place:
-        out_dir = sample.smp_dir
-        click.secho('Editing in-place!', fg='blue', bold=True)
-    else:
-        out_dir = sample.smp_dir / 'g4x_helpers'
-
-    return sample, out_dir
 
 
 def print_k_v(item, value, gap=2):
