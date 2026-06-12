@@ -204,8 +204,10 @@ def sc_process(
     else:
         clustering_umap = sc_utils._extract_umap_clustering(adata, cluster_keys=success_clusterings)
 
+    # TODO this try/except is technically duplicated within run_dgex... should consolidate this logic
     try:
         dgex = run_dgex(adata, cluster_keys=success_clusterings, downsample=1000)
+        return dgex
     except Exception as e:
         log.warning(f'Failed to run differential gene expression analysis: {e}')
         dgex = dummy_dgex_output('dgex_failed')
@@ -219,7 +221,7 @@ def sc_process(
     smp.reroute_source(sd.AdataH5, out_dir, overwrite=overwrite)
     adata.write(smp.src.AdataH5.p)
 
-    ### unclear if this is ok to run at the very end of the pipeline
+    ### NOTE unclear if this is ok to run at the very end of the pipeline
     if smp.src.pr_detected and not omit_correlation:
         pr_corr_df, rna_pr_corr_df = run_correlation_analysis(adata)
         pr_corr_df.to_csv(smp.src.AdataH5.p.parent / 'protein_sc_correlation.csv')

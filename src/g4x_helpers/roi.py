@@ -7,7 +7,7 @@ import numpy as np
 from shapely.affinity import scale, translate
 from shapely.geometry import Polygon
 
-from . import c
+from . import constants as c
 
 
 @dataclass

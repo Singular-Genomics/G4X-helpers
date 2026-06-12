@@ -6,8 +6,8 @@ try:
 except PackageNotFoundError:
     __version__ = 'unknown'
 
+from . import cli, io, schema
 from . import constants as c
-from . import io, schema
 from . import sample_ops as ops
 from . import utils as ut
 from .g4x_output import G4Xoutput
@@ -26,4 +26,5 @@ __all__ = [
     'migrate',
     'single_cell',
     'viewer',
+    'cli',
 ]

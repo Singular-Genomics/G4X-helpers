@@ -36,7 +36,12 @@ def write_transcripts(
     tx_group = zarr.open_group(zarr_path / 'transcripts', mode='r+')
 
     # 1: load inputs
-    gene_colors = get_gene_colors_dgex(manifest=manifest, dgex=dgex)
+    try:
+        gene_colors = get_gene_colors_dgex(manifest=manifest, dgex=dgex)
+    except Exception as _:
+        log.warning('Failed to get gene colors from dgex results')
+        log.info('Falling back to simple random color assignment')
+        gene_colors = get_gene_colors_simple(manifest=manifest)
 
     # 2: load tx table and filter to relevant columns
     agg_col = c.PROBE_ID_NAME if aggregation_level == 'probe' else c.GENE_ID_NAME

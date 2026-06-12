@@ -360,7 +360,6 @@ def run_dgex(adata: 'AnnData', cluster_keys: list[str] = ['leiden'], downsample:
             log.warning(f'DGEX failed for {leiden}: {e}')
             log.debug(traceback.format_exc())
 
-    dgex = pl.DataFrame()
     if len(dfList) > 0:
         dgex = pl.concat(dfList).rename(
             {
@@ -375,6 +374,8 @@ def run_dgex(adata: 'AnnData', cluster_keys: list[str] = ['leiden'], downsample:
         first_cols = ['leiden_res', 'cluster_id']
         last_cols = [c for c in dgex.columns if c not in first_cols]
         dgex = dgex.select(first_cols + last_cols)
+    else:
+        dgex = dummy_dgex_output('dgex_failed')
 
     return dgex
 
