@@ -3,8 +3,14 @@ from pathlib import Path
 
 import numpy as np
 import polars as pl
+import pytest
 
 import g4x_helpers as g4x
+
+
+@pytest.fixture(params=['pr_sample', 'tx_sample'], ids=['pr_sample', 'tx_sample'])
+def sample(request):
+    return request.getfixturevalue(request.param)
 
 
 def create_test_manifest(smp: g4x.G4Xoutput, out_dir: Path) -> Path:
@@ -33,8 +39,8 @@ def create_test_mask(smp: g4x.G4Xoutput, out_dir: Path, n_drop: int = 100) -> Pa
     return test_mask
 
 
-def test_demux_with_provided_manifest(workdir):
-    smp = g4x.G4Xoutput(workdir)
+def test_demux_with_provided_manifest(sample):
+    smp = sample
     test_manifest = create_test_manifest(smp, smp.smp_dir)
 
     g4x.ops.demux(smp, manifest=test_manifest, out_dir=None)
@@ -43,12 +49,11 @@ def test_demux_with_provided_manifest(workdir):
     assert not txtable.filter(pl.col('gene_id') == '000').is_empty()
 
 
-def test_aggregate_with_provided_mask(workdir):
-    smp = g4x.G4Xoutput(workdir)
-
+def test_aggregate_with_provided_mask(sample):
+    smp = sample
     original_metadata = smp.src.CellMetadata.load()
     original_cellxgene = smp.src.CellxGene.load()
-    original_cellxprot = smp.src.CellxProt.load()
+    original_cellxprot = smp.src.CellxProt.load() if smp.src.pr_detected else None
 
     n_drop = 100
     test_mask = create_test_mask(smp, smp.smp_dir, n_drop=n_drop)
@@ -57,14 +62,16 @@ def test_aggregate_with_provided_mask(workdir):
 
     cm = original_metadata.height - smp.src.CellMetadata.load().height
     cg = original_cellxgene.height - smp.src.CellxGene.load().height
-    cp = original_cellxprot.height - smp.src.CellxProt.load().height
 
-    assert cm == cg == cp == n_drop
+    assert cm == cg == n_drop
+
+    if smp.src.pr_detected:
+        cp = original_cellxprot.height - smp.src.CellxProt.load().height
+        assert cp == n_drop
 
 
-def test_sc_process(workdir):
-    smp = g4x.G4Xoutput(workdir)
-
+def test_sc_process(sample):
+    smp = sample
     shutil.rmtree(smp.smp_dir / 'single_cell_data', ignore_errors=True)
 
     g4x.ops.aggregate(smp)
@@ -73,10 +80,9 @@ def test_sc_process(workdir):
     assert smp.src.ClusteringUmap.is_valid == smp.src.Dgex.is_valid == smp.src.AdataH5.is_valid is True
 
 
-def test_viewer_zarr(workdir):
-    smp = g4x.G4Xoutput(workdir)
-
-    shutil.rmtree(smp.src.ViewerZarr.p, ignore_errors=True)
+def test_viewer_zarr(sample):
+    smp = sample
+    shutil.rmtree(sample.src.ViewerZarr.p, ignore_errors=True)
 
     g4x.ops.viewer_zarr(smp)
     assert smp.src.ViewerZarr.is_valid

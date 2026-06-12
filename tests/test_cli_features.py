@@ -50,8 +50,7 @@ def cli_commands(workdir):
     Build the CLI invocations with absolute paths so they can be executed
     directly via CliRunner without changing cwd.
     """
-    data_dir = Path(workdir)
-    return load_cli_commands(CLI_COMMANDS_PATH, data_dir=data_dir)
+    return load_cli_commands(CLI_COMMANDS_PATH, data_dir=workdir)
 
 
 @pytest.mark.parametrize(

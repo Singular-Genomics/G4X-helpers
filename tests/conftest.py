@@ -1,9 +1,12 @@
+import json
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
+
+from g4x_helpers import G4Xoutput
 
 
 @pytest.fixture(scope='session', autouse=True)
@@ -46,6 +49,26 @@ def ensure_test_data_archive():
 @pytest.fixture(scope='function')
 def workdir(ensure_test_data_archive):
     return reset_test_data()
+
+
+@pytest.fixture(scope='function')
+def pr_sample(workdir):
+    return G4Xoutput(workdir)
+
+
+@pytest.fixture(scope='function')
+def tx_sample(pr_sample):
+    smp = pr_sample
+
+    new_meta = smp.smp_meta.copy()
+    new_meta['protein_panel'] = None
+    with open(smp.src.SampleG4X.p, 'w') as f:
+        json.dump(new_meta, f)
+
+    shutil.rmtree(smp.smp_dir / 'protein')
+    smp.src.ProteinPanel.p.unlink()
+
+    return G4Xoutput(smp.smp_dir)
 
 
 @pytest.fixture(scope='session')
