@@ -6,24 +6,47 @@ import yaml
 from g4x_helpers.cli.main import cli
 
 
+CLI_COMMANDS_PATH = Path(__file__).parent / 'cli_commands.yml'
+CASE_FIELDS = ('args', 'expect_files', 'expect_dirs', 'assert_output_contains')
+
+
 @pytest.fixture(scope='module')
 def workdir(ensure_test_data):
     return ensure_test_data
 
 
-def load_cli_commands(cfg_path: Path, *, data_dir: Path) -> dict[str, list[str]]:
+def load_cli_command_names(cfg_path: Path) -> list[str]:
     cfg = yaml.safe_load(cfg_path.read_text())
-    out: dict[str, list[str]] = {}
-    for name, parts in cfg['commands'].items():
-        # Flatten because YAML anchors can introduce nested lists
-        flat: list[str] = []
-        for p in parts:
-            if isinstance(p, list):
-                flat.extend(p)
-            else:
-                flat.append(p)
+    return list(cfg['commands'])
 
-        out[name] = [s.format(data_dir=str(data_dir)) for s in flat]
+
+def flatten_cli_parts(parts: list) -> list[str]:
+    flat: list[str] = []
+    for part in parts:
+        if isinstance(part, list):
+            flat.extend(flatten_cli_parts(part))
+        else:
+            flat.append(part)
+    return flat
+
+
+def format_cli_parts(parts: list | None, *, data_dir: Path) -> list[str]:
+    if parts is None:
+        return []
+
+    return [str(part).format(data_dir=str(data_dir)) for part in flatten_cli_parts(parts)]
+
+
+def load_cli_commands(cfg_path: Path, *, data_dir: Path) -> dict[str, dict[str, list[str]]]:
+    cfg = yaml.safe_load(cfg_path.read_text())
+    out: dict[str, dict[str, list[str]]] = {}
+    for name, case in cfg['commands'].items():
+        if not isinstance(case, dict):
+            raise TypeError(f'CLI command case "{name}" must be a mapping')
+        if 'args' not in case:
+            raise ValueError(f'CLI command case "{name}" must define args')
+
+        out[name] = {field: format_cli_parts(case.get(field), data_dir=data_dir) for field in CASE_FIELDS}
     return out
 
 
@@ -34,14 +57,24 @@ def cli_commands(workdir):
     directly via CliRunner without changing cwd.
     """
     data_dir = Path(workdir)
-    return load_cli_commands(Path(__file__).parent / 'cli_commands.yml', data_dir=data_dir)
+    return load_cli_commands(CLI_COMMANDS_PATH, data_dir=data_dir)
 
 
 @pytest.mark.parametrize(
     'command',
-    ['resegment', 'redemux'],
+    load_cli_command_names(CLI_COMMANDS_PATH),
 )
 def test_cli_commands_with_runner(command, cli_commands, runner):
-    result = runner.invoke(cli, cli_commands[command], catch_exceptions=False)
+    case = cli_commands[command]
+    result = runner.invoke(cli, case['args'], catch_exceptions=False)
 
     assert result.exit_code == 0, result.output
+
+    for expected in case['assert_output_contains']:
+        assert expected in result.output
+
+    for expected_file in case['expect_files']:
+        assert Path(expected_file).is_file()
+
+    for expected_dir in case['expect_dirs']:
+        assert Path(expected_dir).is_dir()

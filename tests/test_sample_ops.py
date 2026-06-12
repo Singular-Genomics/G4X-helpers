@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -65,3 +66,23 @@ def test_aggregate_with_provided_mask(workdir):
     cp = original_cellxprot.height - smp.src.CellxProt.load().height
 
     assert cm == cg == cp == n_drop
+
+
+def test_sc_process(workdir):
+    smp = g4x.G4Xoutput(Path(workdir))
+
+    shutil.rmtree(smp.smp_dir / 'single_cell_data', ignore_errors=True)
+
+    g4x.ops.aggregate(smp)
+    g4x.ops.sc_process(smp)
+
+    assert smp.src.ClusteringUmap.is_valid == smp.src.Dgex.is_valid == smp.src.AdataH5.is_valid is True
+
+
+def test_viewer_zarr(workdir):
+    smp = g4x.G4Xoutput(Path(workdir))
+
+    shutil.rmtree(smp.src.ViewerZarr.p, ignore_errors=True)
+
+    g4x.ops.viewer_zarr(smp)
+    assert smp.src.ViewerZarr.is_valid

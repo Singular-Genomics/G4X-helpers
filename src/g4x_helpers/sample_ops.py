@@ -207,7 +207,6 @@ def sc_process(
     # TODO this try/except is technically duplicated within run_dgex... should consolidate this logic
     try:
         dgex = run_dgex(adata, cluster_keys=success_clusterings, downsample=1000)
-        return dgex
     except Exception as e:
         log.warning(f'Failed to run differential gene expression analysis: {e}')
         dgex = dummy_dgex_output('dgex_failed')

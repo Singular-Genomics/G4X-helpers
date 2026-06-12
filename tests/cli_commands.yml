@@ -3,23 +3,37 @@ common: &common
   - "2"
 
 commands:
-#   migrate:
-#     - *common
-#     - migrate
-#     - "{data_dir}"
+  validate:
+    args:
+      - *common
+      - validate
+      - "{data_dir}"
+    assert_output_contains:
+      - "G4X-[all data] validation passed"
+
+  validate_raw_only:
+    args:
+      - *common
+      - validate
+      - "{data_dir}"
+      - --raw-only
+    assert_output_contains:
+      - "G4X-[raw data] validation passed"
 
   resegment:
-    - *common
-    - resegment
-    - "{data_dir}"
-    - --cell-labels
-    - "{data_dir}/masks/segmentation_mask.npz"
-    - --labels-key
-    - nuclei_exp
+    args:
+      - *common
+      - resegment
+      - "{data_dir}"
+      - --cell-labels
+      - "{data_dir}/masks/segmentation_mask.npz"
+      - --labels-key
+      - nuclei_exp
   
   redemux:
-    - *common
-    - redemux
-    - "{data_dir}"
-    - --manifest
-    - "{data_dir}/transcript_manifest.csv"
+    args:
+      - *common
+      - redemux
+      - "{data_dir}"
+      - --manifest
+      - "{data_dir}/transcript_manifest.csv"
