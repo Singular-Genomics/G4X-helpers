@@ -3,14 +3,8 @@ from pathlib import Path
 
 import numpy as np
 import polars as pl
-import pytest
 
 import g4x_helpers as g4x
-
-
-@pytest.fixture(scope='module')
-def workdir(ensure_test_data):
-    return ensure_test_data
 
 
 def create_test_manifest(smp: g4x.G4Xoutput, out_dir: Path) -> Path:
@@ -40,7 +34,7 @@ def create_test_mask(smp: g4x.G4Xoutput, out_dir: Path, n_drop: int = 100) -> Pa
 
 
 def test_demux_with_provided_manifest(workdir):
-    smp = g4x.G4Xoutput(Path(workdir))
+    smp = g4x.G4Xoutput(workdir)
     test_manifest = create_test_manifest(smp, smp.smp_dir)
 
     g4x.ops.demux(smp, manifest=test_manifest, out_dir=None)
@@ -50,7 +44,7 @@ def test_demux_with_provided_manifest(workdir):
 
 
 def test_aggregate_with_provided_mask(workdir):
-    smp = g4x.G4Xoutput(Path(workdir))
+    smp = g4x.G4Xoutput(workdir)
 
     original_metadata = smp.src.CellMetadata.load()
     original_cellxgene = smp.src.CellxGene.load()
@@ -69,7 +63,7 @@ def test_aggregate_with_provided_mask(workdir):
 
 
 def test_sc_process(workdir):
-    smp = g4x.G4Xoutput(Path(workdir))
+    smp = g4x.G4Xoutput(workdir)
 
     shutil.rmtree(smp.smp_dir / 'single_cell_data', ignore_errors=True)
 
@@ -80,7 +74,7 @@ def test_sc_process(workdir):
 
 
 def test_viewer_zarr(workdir):
-    smp = g4x.G4Xoutput(Path(workdir))
+    smp = g4x.G4Xoutput(workdir)
 
     shutil.rmtree(smp.src.ViewerZarr.p, ignore_errors=True)
 

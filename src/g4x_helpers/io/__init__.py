@@ -1,6 +1,7 @@
 from . import convert, pathval
 from .compute_backend import ComputeBackend, get_backend
 from .input import (
+    cache,
     import_image,
     import_image_dask,
     import_segmentation,
@@ -12,6 +13,7 @@ from .sample_g4x import create_sample_g4x
 from .serve import serve
 
 __all__ = [
+    'cache',
     'create_sample_g4x',
     'import_segmentation',
     'parse_input_manifest',

@@ -185,35 +185,34 @@ class G4Xoutput:
         img_path: str,
         dask: bool = False,
         shape: tuple[int] | None = None,
-        use_cache: bool = False,
+        use_cache: bool | None = None,
         dtype: np.dtype = np.uint16,
     ) -> np.ndarray:
+        use_cache = self.use_cache if use_cache is None else use_cache
         if dask:
             return io.import_image_dask(img_path=img_path, shape=shape or self.shape, dtype=dtype, use_cache=use_cache)
         else:
             return io.import_image(img_path=img_path, use_cache=use_cache)
 
-    def load_nuclear_image(self, dask: bool = False, use_cache: bool = False) -> np.ndarray:
+    def load_nuclear_image(self, dask: bool = False, **kwargs) -> np.ndarray:
         img_path = self.src.HnEDir.get_img(c.NUCLEAR_STAIN)
-        return self._return_image(img_path=img_path, dask=dask, use_cache=use_cache)
+        return self._return_image(img_path=img_path, dask=dask, **kwargs)
 
-    def load_cytoplasmic_image(self, dask: bool = False, use_cache: bool = False) -> np.ndarray:
+    def load_cytoplasmic_image(self, dask: bool = False, **kwargs) -> np.ndarray:
         img_path = self.src.HnEDir.get_img(c.CYTOPLASMIC_STAIN)
-        return self._return_image(img_path=img_path, dask=dask, use_cache=use_cache)
+        return self._return_image(img_path=img_path, dask=dask, **kwargs)
 
-    def load_he_image(self, dask: bool = False, use_cache: bool = False) -> np.ndarray:
+    def load_he_image(self, dask: bool = False, **kwargs) -> np.ndarray:
         img_path = self.src.HnEDir.get_img(c.H_AND_E)
-        return self._return_image(
-            img_path=img_path, shape=self.shape + (3,), dask=dask, dtype=np.uint8, use_cache=use_cache
-        )
+        return self._return_image(img_path=img_path, shape=self.shape + (3,), dask=dask, dtype=np.uint8, **kwargs)
 
-    def load_protein_image(self, protein: str, dask: bool = False, use_cache: bool = False) -> np.ndarray:
+    def load_protein_image(self, protein: str, dask: bool = False, **kwargs) -> np.ndarray:
         img_path = self.src.ProteinDir.get_img(protein)
         if img_path is None:
             print(f'Protein image for {protein} not found.')
             return None
 
-        return self._return_image(img_path=img_path, dask=dask, use_cache=use_cache)
+        return self._return_image(img_path=img_path, dask=dask, **kwargs)
 
     def load_segmentation(self, expanded: bool = True, key: str = False) -> np.ndarray:
         key = 'nuclei_exp' if expanded else 'nuclei'

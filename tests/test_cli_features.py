@@ -5,14 +5,8 @@ import yaml
 
 from g4x_helpers.cli.main import cli
 
-
 CLI_COMMANDS_PATH = Path(__file__).parent / 'cli_commands.yml'
 CASE_FIELDS = ('args', 'expect_files', 'expect_dirs', 'assert_output_contains')
-
-
-@pytest.fixture(scope='module')
-def workdir(ensure_test_data):
-    return ensure_test_data
 
 
 def load_cli_command_names(cfg_path: Path) -> list[str]:
@@ -50,7 +44,7 @@ def load_cli_commands(cfg_path: Path, *, data_dir: Path) -> dict[str, dict[str, 
     return out
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope='function')
 def cli_commands(workdir):
     """
     Build the CLI invocations with absolute paths so they can be executed

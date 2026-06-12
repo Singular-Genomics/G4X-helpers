@@ -28,6 +28,30 @@ if TYPE_CHECKING:
     from polars import LazyFrame as plLF
 
 
+_CACHE_ENABLED = True
+_CACHED_LOADERS = []
+
+
+def cache(use: bool | None = None, *, clear: bool = False) -> bool:
+    """
+    Get or set the process-wide IO loader cache state.
+
+    Disabling the cache also clears cached loader results so future reads
+    cannot reuse stale data from paths that were rewritten.
+    """
+    global _CACHE_ENABLED
+
+    if use is not None:
+        _CACHE_ENABLED = use
+        clear = clear or not use
+
+    if clear:
+        for loader in _CACHED_LOADERS:
+            loader.cache_clear()
+
+    return _CACHE_ENABLED
+
+
 def optionally_cached(*, maxsize=32, ignore_kwargs=()):
     ignore_kwargs = frozenset(ignore_kwargs)
 
@@ -42,7 +66,7 @@ def optionally_cached(*, maxsize=32, ignore_kwargs=()):
 
         @wraps(func)
         def wrapper(*args, use_cache=False, **kwargs):
-            if not use_cache:
+            if not use_cache or not _CACHE_ENABLED:
                 return func(*args, **kwargs)
 
             bound = sig.bind(*args, **kwargs)
@@ -55,6 +79,7 @@ def optionally_cached(*, maxsize=32, ignore_kwargs=()):
 
         wrapper.cache_clear = cached_call.cache_clear
         wrapper.cache_info = cached_call.cache_info
+        _CACHED_LOADERS.append(wrapper)
         return wrapper
 
     return decorator
