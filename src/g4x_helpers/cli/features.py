@@ -6,7 +6,7 @@ from .. import __version__, io
 from .. import constants as c
 from .. import sample_ops as ops
 from .. import utils as ut
-from ..g4x_output import G4Xoutput
+from ..g4x_sample import G4Xsample
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -103,7 +103,7 @@ def redemux(
     **kwargs,
 ) -> None:
 
-    smp = G4Xoutput(smp_dir, alt_source=out_dir)
+    smp = G4Xsample(smp_dir, alt_source=out_dir)
 
     ops.demux(
         smp,
@@ -135,7 +135,7 @@ def resegment(
     **kwargs,
 ) -> None:
 
-    smp = G4Xoutput(smp_dir, alt_source=out_dir)
+    smp = G4Xsample(smp_dir, alt_source=out_dir)
     ops.aggregate(
         smp,
         cell_mask=cell_mask,

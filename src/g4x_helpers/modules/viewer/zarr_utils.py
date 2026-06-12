@@ -5,7 +5,6 @@ import logging
 import os
 import shutil
 
-import polars as pl
 import zarr
 
 from ... import constants as c

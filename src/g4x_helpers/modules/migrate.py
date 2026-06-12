@@ -8,7 +8,7 @@ from ..schema.legacy import migrators as mig
 log = logging.getLogger(__name__)
 
 
-def migrate_legacy_raw_data(
+def migrate_raw_data(
     legacy_dir: str,
     out_dir: str,
     roi_coords: tuple | None = None,

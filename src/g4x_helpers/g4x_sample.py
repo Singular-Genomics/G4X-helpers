@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-class G4Xoutput:
+class G4Xsample:
     """
     Container for managing and processing data from a G4X run.
 

@@ -27,7 +27,7 @@ def demux_raw_features(
     batch_size: int = c.DEFAULT_BATCH_SIZE,
     batch_dir: Path | None = None,
     show_progress: bool = False,
-):
+) -> pl.DataFrame:
 
     log.info('Initializing batched demuxing of raw features')
 

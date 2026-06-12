@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from g4x_helpers import G4Xoutput
+from g4x_helpers import G4Xsample
 
 TESTS_DIR = Path('./tests').resolve()
 TEST_DATA_DIR = TESTS_DIR / 'datasets' / 'test_data'
@@ -63,7 +63,7 @@ def workdir(ensure_test_data_archive):
 
 @pytest.fixture(scope='function')
 def pr_sample(workdir):
-    return G4Xoutput(workdir)
+    return G4Xsample(workdir)
 
 
 @pytest.fixture(scope='function')
@@ -78,7 +78,7 @@ def tx_sample(pr_sample):
     shutil.rmtree(smp.smp_dir / 'protein')
     smp.src.ProteinPanel.p.unlink()
 
-    return G4Xoutput(smp.smp_dir)
+    return G4Xsample(smp.smp_dir)
 
 
 @pytest.fixture(scope='session')

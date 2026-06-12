@@ -1,8 +1,8 @@
 # Notes
-# all functions accept a G4Xoutput object (exception is migrate)
+# all functions accept a G4Xsample object (exception is migrate)
 # if no other inputs are provided, all required inputs are loaded from the sample context
 # output is written to specific locations relative to the sample directory, or optionally to an alternative directory
-# the output paths are registered in the G4Xoutput object for downstream access
+# the output paths are registered in the G4Xsample object for downstream access
 # (ie. if demux writes a TxTable to out_dir X, then subsequent functions will use TxTable in out_dir X as default input unless specified otherwise)
 
 import logging
@@ -15,7 +15,7 @@ import polars as pl
 from . import constants as c
 from . import io
 from . import utils as ut
-from .g4x_output import G4Xoutput
+from .g4x_sample import G4Xsample
 from .schema import definition as sd
 
 if TYPE_CHECKING:
@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 
 # region demux
 def demux(
-    smp: 'G4Xoutput',
+    smp: 'G4Xsample',
     manifest: str | None = None,
     out_dir: str | None = None,
     *,
@@ -54,7 +54,7 @@ def demux(
 
 # region aggregate
 def aggregate(
-    smp: 'G4Xoutput',
+    smp: 'G4Xsample',
     cell_mask: str | None = None,
     out_dir: str | None = None,
     *,
@@ -160,7 +160,7 @@ def aggregate(
 
 # region single cell processing
 def sc_process(
-    smp: 'G4Xoutput',
+    smp: 'G4Xsample',
     out_dir: str | None = None,
     *,
     overwrite: bool = True,
@@ -237,13 +237,13 @@ def migrate(
     backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
     **kwargs,
 ) -> None:
-    from .modules.migrate import migrate_legacy_raw_data
+    from .modules.migrate import migrate_raw_data
 
     legacy_dir = io.pathval.validate_dir_path(legacy_dir)
     out_dir = io.pathval.validate_dir_path(out_dir)
 
-    migrate_legacy_raw_data(legacy_dir, out_dir=out_dir, roi_coords=roi_coords, **kwargs)
-    smp = G4Xoutput(smp_dir=out_dir)
+    migrate_raw_data(legacy_dir, out_dir=out_dir, roi_coords=roi_coords, **kwargs)
+    smp = G4Xsample(smp_dir=out_dir)
 
     if downstream:
         aggregate(smp, overwrite=True, backend=backend)
@@ -255,7 +255,7 @@ def migrate(
 
 # region viewer
 def viewer_zarr(
-    smp: 'G4Xoutput',
+    smp: 'G4Xsample',
     out_dir: str | None = None,
     *,
     overwrite: bool = True,
@@ -281,7 +281,7 @@ def viewer_zarr(
 
 
 def viewer_zarr_init(
-    smp: 'G4Xoutput',
+    smp: 'G4Xsample',
     out_dir: str | None = None,
     *,
     overwrite: bool = True,
@@ -305,7 +305,7 @@ def viewer_zarr_init(
 
 
 def viewer_zarr_images(
-    smp: 'G4Xoutput',
+    smp: 'G4Xsample',
     *,
     protein_list: list[str] | None = None,
     overwrite: bool = True,
@@ -355,7 +355,7 @@ def viewer_zarr_images(
 
 
 def viewer_zarr_transcripts(
-    smp: 'G4Xoutput',
+    smp: 'G4Xsample',
     *,
     overwrite: bool = True,
 ) -> None:
@@ -372,7 +372,7 @@ def viewer_zarr_transcripts(
 
 
 def viewer_zarr_cells(
-    smp: 'G4Xoutput',
+    smp: 'G4Xsample',
     *,
     seg_name='g4x-default',
     overwrite: bool = True,
@@ -392,7 +392,7 @@ def viewer_zarr_cells(
 
 
 # region private functions
-def _ingest_out_dir(smp: 'G4Xoutput', out_dir: str | None) -> str:
+def _ingest_out_dir(smp: 'G4Xsample', out_dir: str | None) -> str:
     return smp.smp_dir if out_dir is None else io.pathval.validate_dir_path(out_dir)
 
 

@@ -10,12 +10,12 @@ from . import cli, io, schema
 from . import constants as c
 from . import sample_ops as ops
 from . import utils as ut
-from .g4x_output import G4Xoutput
+from .g4x_sample import G4Xsample
 from .modules import aggregate, demux, migrate, single_cell, viewer
 
 __all__ = [
     '__version__',
-    'G4Xoutput',
+    'G4Xsample',
     'c',
     'io',
     'schema',

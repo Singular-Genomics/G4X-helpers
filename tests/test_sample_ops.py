@@ -13,7 +13,7 @@ def sample(request):
     return request.getfixturevalue(request.param)
 
 
-def create_test_manifest(smp: g4x.G4Xoutput, out_dir: Path) -> Path:
+def create_test_manifest(smp: g4x.G4Xsample, out_dir: Path) -> Path:
     txtable = smp.src.TxTable.load()
     manifest_ori = smp.src.Manifest.load()
 
@@ -25,7 +25,7 @@ def create_test_manifest(smp: g4x.G4Xoutput, out_dir: Path) -> Path:
     return test_manifest
 
 
-def create_test_mask(smp: g4x.G4Xoutput, out_dir: Path, n_drop: int = 100) -> Path:
+def create_test_mask(smp: g4x.G4Xsample, out_dir: Path, n_drop: int = 100) -> Path:
 
     flipped = np.fliplr(smp.src.Segmentation.load())
 
