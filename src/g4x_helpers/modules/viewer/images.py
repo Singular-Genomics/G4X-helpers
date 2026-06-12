@@ -198,7 +198,8 @@ class ImageChannel:
 
 def default_window_recipe(arr):
     arr_max = int(arr.max().compute())
-    clip_vmax = int(da.percentile(arr.ravel(), 99.5).compute())
+    # clip_vmax = int(da.percentile(arr.ravel(), 99.5).compute())
+    clip_vmax = int(da.percentile(arr.ravel(), 99.5).compute().item())
     clip_vmin = int(clip_vmax * 0.10)
     window = {'min': 0, 'max': arr_max, 'start': clip_vmin, 'end': clip_vmax}
     return window

@@ -167,7 +167,7 @@ def sc_process(
     omit_correlation: bool = False,
     backend: Literal['cpu', 'gpu', 'auto'] = 'auto',
     **kwargs,
-):
+) -> None:
     from g4x_helpers.modules.single_cell import sc_utils
     from g4x_helpers.modules.single_cell.correlation import run_correlation_analysis
     from g4x_helpers.modules.single_cell.process import (
@@ -261,7 +261,7 @@ def viewer_zarr(
     *,
     overwrite: bool = True,
     symlink_images: bool = True,
-):
+) -> None:
     from g4x_helpers.modules.viewer.zarr_utils import link_viewer_group
 
     if out_dir is None:
@@ -311,7 +311,7 @@ def viewer_zarr_images(
     protein_list: list[str] | None = None,
     overwrite: bool = True,
     chunk_size: int = 1024,
-):
+) -> None:
     from .modules.viewer import images as viewer_img
 
     log.debug('Preparing multiplex image')
@@ -359,7 +359,7 @@ def viewer_zarr_transcripts(
     smp: 'G4Xoutput',
     *,
     overwrite: bool = True,
-):
+) -> None:
     from .modules.viewer import transcripts as viewer_tx
 
     viewer_tx.write_transcripts(
@@ -377,7 +377,7 @@ def viewer_zarr_cells(
     *,
     seg_name='g4x-default',
     overwrite: bool = True,
-):
+) -> None:
     from .modules.viewer import cells as viewer_cells
 
     viewer_cells.write_cells(
@@ -401,7 +401,7 @@ def _collect_input(
     path: str,
     validator: 'BaseValidator',
     validate: bool = True,
-):
+) -> 'BaseValidator':
     path_valid = io.pathval.validate_file_path(path)
     in_obj = validator(target_path=path_valid)
 

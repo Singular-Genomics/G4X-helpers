@@ -170,6 +170,7 @@ def _write_metadata_arrays(seg_group, meta_columns):
             del seg_group[key]
 
         array = arr.to_numpy() if isinstance(arr, (pl.DataFrame, pl.Series)) else arr
+        # TODO sometimes this leads to RuntimeWarning: invalid value encountered in cast -- investigate and fix
         array = array.astype(dtype)
         chunks = utils.calculate_chunks(array, target_mb=4)
 
