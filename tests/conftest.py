@@ -9,6 +9,10 @@ from click.testing import CliRunner
 from g4x_helpers import G4Xoutput
 
 
+TESTS_DIR = Path('./tests').resolve()
+TEST_DATA_DIR = TESTS_DIR / 'datasets' / 'test_data'
+
+
 @pytest.fixture(scope='session', autouse=True)
 def disable_io_cache():
     import g4x_helpers as g4x
@@ -19,36 +23,37 @@ def disable_io_cache():
     g4x.io.cache(use=previous, clear=True)
 
 
-def reset_test_data():
-    tests_dir = Path('./tests').resolve()
-    test_data_dir = tests_dir / 'datasets' / 'test_data'
+def remove_test_data():
+    if TEST_DATA_DIR.exists():
+        shutil.rmtree(TEST_DATA_DIR)
 
-    if test_data_dir.exists():
-        shutil.rmtree(test_data_dir)
+
+def reset_test_data():
+    remove_test_data()
 
     subprocess.run(
-        ['bash', str(tests_dir / 'scripts/untar_test_data.sh')],
+        ['bash', str(TESTS_DIR / 'scripts/untar_test_data.sh')],
         check=True,
     )
 
-    return test_data_dir
+    return TEST_DATA_DIR
 
 
 @pytest.fixture(scope='session')
 def ensure_test_data_archive():
-    tests_dir = Path('./tests').resolve()
-    test_tar = tests_dir / 'datasets' / 'test_data.tar.gz'
+    test_tar = TESTS_DIR / 'datasets' / 'test_data.tar.gz'
 
     if not test_tar.exists():
         subprocess.run(
-            ['bash', str(tests_dir / 'scripts/get_test_data.sh')],
+            ['bash', str(TESTS_DIR / 'scripts/get_test_data.sh')],
             check=True,
         )
 
 
 @pytest.fixture(scope='function')
 def workdir(ensure_test_data_archive):
-    return reset_test_data()
+    yield reset_test_data()
+    remove_test_data()
 
 
 @pytest.fixture(scope='function')
