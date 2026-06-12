@@ -25,6 +25,7 @@ nav:
 
     - CLI features:
       - features/index.md
+      - viewer: features/viewer.md
       - redemux: features/redemux.md
       - resegment: features/resegment.md
       - migrate: features/migrate.md

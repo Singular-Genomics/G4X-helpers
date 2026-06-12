@@ -1,7 +1,7 @@
 <br>
 
 # `resegment`
-#### Reprocess G4X-output with a new segmentation
+#### Reprocess G4X-data with a new segmentation
 
 Takes new cell-labels from a custom segmentation output and re-assigns transcripts  
  and protein signals to those cells. The operation recreates single-cell outputs and 

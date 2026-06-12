@@ -127,7 +127,7 @@ If the command succeeds you'll see the `resegment` progress log in your terminal
 ---
 ### Pull the G4X-helpers image
 
-If you haven't done so already (maybe you skipped the [Docker setup](../installation/docker.md) section) you will first need to pull the G4X-helper Docker image. This is done via `docker pull`, which downloads the image (and all of its layers) from GitHub’s Container Registry ( ghcr.io ) to your local Docker cache.
+If you haven't done so already (maybe you skipped the [Docker setup](../installation/docker.md) section) you will first need to pull the G4X-helpers Docker image. This is done via `docker pull`, which downloads the image (and all of its layers) from GitHub’s Container Registry ( ghcr.io ) to your local Docker cache.
 
 ```bash
 docker pull ghcr.io/singular-genomics/g4x-helpers:latest
