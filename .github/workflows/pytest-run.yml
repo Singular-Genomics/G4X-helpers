@@ -24,10 +24,6 @@ jobs:
           aws-access-key-id: ${{ secrets.BFX_AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.BFX_AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-1
-
-      - name: Download test dataset
-        run: |
-          bash ./tests/scripts/get_test_data.sh micro_data.tar
       
       - name: run pytest
         run: |

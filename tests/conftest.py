@@ -8,9 +8,9 @@ from click.testing import CliRunner
 
 from g4x_helpers import G4Xoutput
 
-
 TESTS_DIR = Path('./tests').resolve()
 TEST_DATA_DIR = TESTS_DIR / 'datasets' / 'test_data'
+TEST_DATA_ARCHIVE = TESTS_DIR / 'datasets' / 'test_data.tar.gz'
 
 
 @pytest.fixture(scope='session', autouse=True)
@@ -28,6 +28,11 @@ def remove_test_data():
         shutil.rmtree(TEST_DATA_DIR)
 
 
+def remove_test_data_source():
+    if TEST_DATA_ARCHIVE.exists():
+        shutil.rmtree(TEST_DATA_ARCHIVE.parent)
+
+
 def reset_test_data():
     remove_test_data()
 
@@ -41,13 +46,13 @@ def reset_test_data():
 
 @pytest.fixture(scope='session')
 def ensure_test_data_archive():
-    test_tar = TESTS_DIR / 'datasets' / 'test_data.tar.gz'
-
-    if not test_tar.exists():
+    if not TEST_DATA_ARCHIVE.exists():
         subprocess.run(
             ['bash', str(TESTS_DIR / 'scripts/get_test_data.sh')],
             check=True,
         )
+    yield
+    remove_test_data_source()
 
 
 @pytest.fixture(scope='function')
