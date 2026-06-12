@@ -175,7 +175,7 @@ def migrate(
 def migrate_check(smp_dir: str) -> None:
     from ..modules import migrate
 
-    migrate.status(legacy_dir=smp_dir)
+    print(migrate.status(legacy_dir=smp_dir))
 
 
 def validate(smp_dir: str, raw_only: bool = False) -> None:
@@ -185,6 +185,7 @@ def validate(smp_dir: str, raw_only: bool = False) -> None:
     ft = FileTree(smp_dir)
     report = ft.validation_report(raw_only=raw_only, raise_exception=False)
     print(report)
+
 
 # region viewer metadata
 def _viewer_metadata_command(func) -> None:

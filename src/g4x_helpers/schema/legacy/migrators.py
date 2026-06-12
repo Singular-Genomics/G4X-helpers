@@ -10,7 +10,7 @@ from ... import io
 from .. import definition as sd
 from .. import utils
 from ..validator import DirectoryValidator
-from .datamigrator import DataMigrator
+from .datamigrator import DataMigrator, MigrationError
 
 log = logging.getLogger(__name__)
 
@@ -58,13 +58,13 @@ class SampleG4X_Migrator(DataMigrator, sd.SampleG4X):
     @property  # this overrides the default behaviour
     def migration_status(self):
         if not self.smp_sheet.is_valid:
-            return False, f'{self._name} SampleSheet is not valid.'
+            return False, 'SampleSheet is not valid!'
 
         if self.legacy_smp_id is None:
-            return False, f'{self._name} Could not determine legacy sample_id.'
+            return False, 'Could not determine legacy sample_id!'
 
         if not len(self.valid_versions) > 0:
-            return False, f'{self._name} No valid legacy versions are available.'
+            return False, 'No valid legacy versions are available (run_meta.json or sample.g4x)!'
 
         return True, f'{self._name} is migratable.'
 
@@ -84,7 +84,7 @@ class SampleG4X_Migrator(DataMigrator, sd.SampleG4X):
                 out_path=out_path,
             )
         else:
-            raise ValueError(f'{self._name} is not migratable. Reason: {self.migration_status[1]}')
+            raise MigrationError(f'{self._name} is not migratable.\nReason: {self.migration_status[1]}')
 
     def _migrate_method(self, out_path, **kwargs):
         out_path = out_path / self.DEFAULT_TARGET_PATH

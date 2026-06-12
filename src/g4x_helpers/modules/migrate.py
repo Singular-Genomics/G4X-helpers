@@ -23,7 +23,7 @@ def migrate_legacy_raw_data(
             'Output directory already contains a sample.g4x file. Aborting migration to prevent overwriting existing data.'
         )
 
-    ut.log_with_path('Starting migration for:', legacy_dir, level='INFO')
+    ut.log_with_path('Starting migration for:', legacy_dir.resolve(), level='INFO')
 
     roi = None
     if roi_coords is not None:
@@ -35,9 +35,10 @@ def migrate_legacy_raw_data(
     basic_migrators, roi_migrators = _gather_migrators(legacy_dir)
 
     if not all(m.is_migratable for m in basic_migrators + roi_migrators):
-        log.error('Not all migrators are migratable. Aborting migration.')
-        status(legacy_dir)
-        return
+        msg = status(legacy_dir)
+        error = 'Not all source files are migratable. Aborting migration!'
+        ut.log_msg_wrapped(f'{error}\n', msg, level='ERROR')
+        raise mig.MigrationError(error)
 
     for m in basic_migrators:
         m.migrate(out_dir)
@@ -61,7 +62,7 @@ def status(
         status = 'is migratable' if m.is_migratable else 'can not be migrated'
         res[f'{icon} {m._name}'] = status
 
-    print(ut.pretty_dict_str(res, separator=' '))
+    return ut.pretty_dict_str(res, separator=' ')
 
 
 def _gather_migrators(legacy_dir):

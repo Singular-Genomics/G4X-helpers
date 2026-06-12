@@ -8,6 +8,10 @@ from ..validator import BaseValidator, DirectoryValidator, FileValidator
 LOGGER = logging.getLogger(__name__)
 
 
+class MigrationError(Exception):
+    pass
+
+
 class DataMigrator(BaseValidator):
     IS_OPTIONAL = False
     VERSION_VALIDATORS = {}
