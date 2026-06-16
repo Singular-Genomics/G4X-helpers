@@ -30,6 +30,9 @@ def demux(
     manifest: str | None = None,
     out_dir: str | None = None,
     *,
+    max_ham_dist: int = 2,
+    min_delta: int = 2,
+    demux_length: int = 15,
     overwrite: bool = True,
     **kwargs,
 ) -> None:
@@ -43,7 +46,12 @@ def demux(
     manifest_file = _collect_input(manifest_path, sd.Manifest)
 
     tx_table = demux_raw_features(
-        raw_features=raw_features_file.load(lazy=True), manifest=manifest_file.load(), **kwargs
+        raw_features=raw_features_file.load(lazy=True),
+        manifest=manifest_file.load(),
+        max_ham_dist=max_ham_dist,
+        min_delta=min_delta,
+        demux_length=demux_length,
+        **kwargs,
     )
 
     smp.reroute_source(sd.Manifest, out_dir, overwrite=overwrite)
@@ -268,10 +276,10 @@ def viewer_zarr(
 
     out_dir = _ingest_out_dir(smp, out_dir)
 
+    src_viewer_exists = (smp.smp_dir / c.FILE_VIEWER_ZARR).exists()  
     viewer_zarr_init(smp, out_dir=out_dir, overwrite=overwrite)
 
-    source_viewer = smp.smp_dir / c.FILE_VIEWER_ZARR
-    if source_viewer.exists() and symlink_images:
+    if src_viewer_exists and symlink_images:
         link_viewer_group(smp, group_name='images', overwrite=True)
     else:
         viewer_zarr_images(smp, overwrite=overwrite)
