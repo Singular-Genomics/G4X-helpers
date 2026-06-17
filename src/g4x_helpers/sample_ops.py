@@ -371,7 +371,7 @@ def viewer_zarr_transcripts(
 
     viewer_tx.write_transcripts(
         smp.src.ViewerZarr.p,
-        tx_table=smp.load_transcript_table(),
+        tx_table=smp.src.TxTable.load(),
         manifest=smp.src.Manifest.parse(),
         data_shape=smp.shape,
         dgex=smp.src.Dgex.load(),

@@ -13,7 +13,7 @@ from ... import io
 from . import zarr_utils as utils
 
 log = logging.getLogger(__name__)
-UNASSIGNED_CELL = 'unassigned'
+
 
 COMPRESSOR = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
 
@@ -63,7 +63,7 @@ def write_cells(
     cell_metadata = cell_metadata.cast({c.CELL_ID_NAME: pl.UInt32})
     clustering_umap = clustering_umap.cast({c.CELL_ID_NAME: pl.UInt32})
     metadata = cell_metadata.join(clustering_umap, on=c.CELL_ID_NAME, how='left')
-    metadata = metadata.with_columns(pl.col('^leiden.*$').fill_null(UNASSIGNED_CELL))
+    metadata = metadata.with_columns(pl.col('^leiden.*$').fill_null(c.UNASSIGNED_CELL))
 
     ################################
     clusterings = [c for c in metadata.columns if c.startswith('leiden')]
@@ -194,9 +194,9 @@ def _get_sorted_cluster_ids(df, cluster_key: str):
         df.select(cluster_key).group_by(cluster_key).agg(pl.len()).sort('len', descending=True)[cluster_key].to_list()
     )
 
-    if UNASSIGNED_CELL in cluster_ids_order:
-        cluster_ids_order.remove(UNASSIGNED_CELL)
-        cluster_ids_order.append(UNASSIGNED_CELL)
+    if c.UNASSIGNED_CELL in cluster_ids_order:
+        cluster_ids_order.remove(c.UNASSIGNED_CELL)
+        cluster_ids_order.append(c.UNASSIGNED_CELL)
 
     return cluster_ids_order
 
@@ -217,7 +217,7 @@ def _generate_cluster_palette(ordered_unique_clusters: list, max_colors: int = 2
     for i, cluster in enumerate(ordered_unique_clusters):
         cluster_palette[str(cluster)] = utils.hex_to_rgb(hex_list[i])
 
-    cluster_palette[UNASSIGNED_CELL] = utils.hex_to_rgb(c.UNASSIGNED_COLOR)
+    cluster_palette[c.UNASSIGNED_CELL] = utils.hex_to_rgb(c.UNASSIGNED_COLOR)
 
     return cluster_palette
 

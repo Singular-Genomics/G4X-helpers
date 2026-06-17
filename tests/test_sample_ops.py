@@ -39,6 +39,39 @@ def create_test_mask(smp: g4x.G4Xsample, out_dir: Path, n_drop: int = 100) -> Pa
     return test_mask
 
 
+def create_test_img_meta(smp: g4x.G4Xsample, out_dir: Path) -> Path:
+    img_meta = pl.read_csv(smp.smp_dir / 'exported_image_metadata.csv')
+
+    img_meta = img_meta.with_columns(pl.lit('#00AAFF'.upper()).alias('color'))
+    img_meta = img_meta.with_columns(
+        pl.lit(0).alias('min'), pl.lit(1000).alias('max'), pl.lit(10).alias('start'), pl.lit(750).alias('end')
+    )
+
+    test_manifest = out_dir / 'test_manifest.csv'
+    img_meta.write_csv(test_manifest)
+    return test_manifest
+
+
+def create_test_tx_meta(smp: g4x.G4Xsample, out_dir: Path) -> Path:
+    tx_meta = pl.read_csv(smp.smp_dir / 'exported_transcript_metadata.csv')
+    new_data = tx_meta.sort('color')
+    new_data = new_data.with_columns(pl.lit('#FF00AA').alias('color'))
+    test_tx_meta = out_dir / 'test_tx_meta.csv'
+    new_data.write_csv(test_tx_meta)
+    return test_tx_meta
+
+
+def create_test_cell_meta(smp: g4x.G4Xsample, out_dir: Path) -> Path:
+    old_data = pl.read_csv(smp.smp_dir / 'exported_cell_metadata.csv')
+    new_data = old_data.with_columns(
+        pl.col('leiden_fine').sort().replace({'unassigned': 'nex'}).alias('custom_clusters')
+    )
+    new_data = new_data.cast({'cell_id': pl.Int64})
+    test_cell_meta = out_dir / 'test_cell_meta.csv'
+    new_data.write_csv(test_cell_meta)
+    return test_cell_meta
+
+
 def test_demux_with_provided_manifest(sample):
     smp = sample
     test_manifest = create_test_manifest(smp, smp.smp_dir)

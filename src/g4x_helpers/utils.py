@@ -198,7 +198,7 @@ def peek(smp):
     img = smp.load_nuclear_image()[::downsample, ::downsample]
     mask = smp.load_segmentation()[::downsample, ::downsample]
 
-    df = smp.load_transcript_table().sample(100_000, with_replacement=True)
+    df = smp.src.TxTable.load().sample(100_000, with_replacement=True)
 
     axs[0].imshow(img, cmap='gray')
     axs[1].scatter(df['x_pixel_coordinate'] / downsample, df['y_pixel_coordinate'] / downsample, s=0.1, alpha=0.5)
