@@ -69,7 +69,7 @@ default-groups = ["dev", "docs"]
 index-strategy = "unsafe-best-match"
 
 [tool.uv-ship]
-release-branch = "staging"
+release-branch = false
 changelog-path = "CHANGELOG.md"
 changelog-template = "- {message}"
 date-first = true
