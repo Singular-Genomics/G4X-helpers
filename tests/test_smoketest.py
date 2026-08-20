@@ -1,6 +1,3 @@
-import pytest
-
-
 def test_cli_help_option(runner):
     """Exercise the top-level CLI to ensure the package is wired up."""
     from g4x_helpers.cli.main import cli
