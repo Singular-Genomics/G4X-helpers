@@ -32,7 +32,7 @@ runs:
         git -C docs/_core remote set-url origin "https://github.com/Singular-Genomics/docs_core_assets.git"
 
     - name: Install uv
-      uses: astral-sh/setup-uv@v6
+      uses: astral-sh/setup-uv@v10
       with:
         version-file: pyproject.toml
 
