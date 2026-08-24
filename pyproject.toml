@@ -35,7 +35,7 @@ dependencies = [
     "scanpy ~= 1.11",
     "scikit-image ~= 0.25",
     "shapely ~= 2.1",
-    "pyarrow ~= 19.0",
+    "pyarrow ~= 19.0", 
     "rich-click ~= 1.9",
     "ome-zarr ~= 0.10",
     "igraph >= 1.0.0",
@@ -50,7 +50,7 @@ dev = [
     "ipykernel ~= 7.1",
     "ipywidgets ~= 8.1",
     "pre-commit ~= 4.5",
-    "pytest ~= 9.0",
+    "pytest ~= 9.1",
     "ruff == 0.15.9",               # pinned to match pre-commit version
     "mpl-spaceplot>=0.3.0",
     "dask[diagnostics]>=2024.11.2",
