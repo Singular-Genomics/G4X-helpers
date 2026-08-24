@@ -13,10 +13,6 @@ on:
         type: string
         default: ${{ github.ref_name }}
 
-permissions:
-  contents: read
-  packages: write
-
 env:
   IMAGE_BASE: ghcr.io/singular-genomics/g4x-helpers
 
