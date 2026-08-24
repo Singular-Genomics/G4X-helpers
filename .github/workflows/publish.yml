@@ -5,7 +5,6 @@ on:
   push:
     tags:
       - v*  # e.g. v0.1.0
-      - 'test_publish_*'
   workflow_dispatch:
 
 jobs:
@@ -24,5 +23,10 @@ jobs:
       - name: Setup Project Environment
         uses: ./.github/actions/setup-project
 
+      - name: Validate PyPI publishing
+        if: github.event_name == 'workflow_dispatch'
+        run: uv publish --dry-run --trusted-publishing always
+
       - name: Publish
-        run: uv publish
+        if: github.event_name == 'push'
+        run: uv publish --trusted-publishing always
