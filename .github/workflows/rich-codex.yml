@@ -1,5 +1,10 @@
 name: Rich-codex
-on: [push]
+
+# Temporarily disabled for automatic pushes while GitHub is used as a release mirror.
+# Keep manual dispatch available so the workflow can be revisited and tested deliberately.
+on:
+  workflow_dispatch:
+
 jobs:
   rich_codex:
     if: ${{ github.actor != 'github-actions[bot]' }}
