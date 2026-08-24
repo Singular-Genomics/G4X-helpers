@@ -26,6 +26,8 @@ jobs:
 
       - name: Setup Project Environment
         uses: ./.github/actions/setup-project
+        with:
+          docs-submodule-token: ${{ secrets.CORE_DOCS_ASSETS_READ }}
 
       - name: Run Ruff
         run: uv run ruff check .
