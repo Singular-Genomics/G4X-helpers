@@ -1,5 +1,71 @@
 # Changelog
 
+## [Unreleased] — `v4.0.0`
+
+#### Overview
+
+G4X-helpers v4 is a major architectural release designed to support the latest G4X-data v4 format and the new zarr based G4X-viewer input.
+This release reorganizes the Python API, processing modules, CLI, schema validation, and G4X-viewer generation. It introduces a more consistent workflow for processing, validating, migrating, and modifying G4X datasets.
+
+#### Highlights
+- continued support to migrate legacy data to latest v4 format
+- begin phase-out of jp2 files (will be replaced with ome.tiff during migration)
+- new functions to inspect and edit G4X-viewer input
+- now handles single-cell processing steps after redemux and resegment operations
+- added optional GPU acceleration through the `gpu` dependency extra.
+- added region-of-interest support for processing cropped datasets.
+- expanded support for transcript-only, protein-only, and combined assay data.
+
+#### CLI
+
+- Reorganized the CLI around five supported commands:
+  - `redemux`
+  - `resegment`
+  - `migrate`
+  - `validate`
+  - `viewer`
+- Added `migrate --check` for checking migration compatibility without modifying data.
+- Added `migrate --roi` for migrating a selected region.
+- Added branch-based output handling for `redemux` and `resegment`.
+- Added `--no-downstream` for skipping downstream processing.
+- Added `validate --raw-only` for validating only the inputs required by G4X-helpers.
+- Added viewer metadata import and export commands for images, cells, and transcripts.
+- Improved CLI help messages, progress reporting, error handling, and version reporting.
+
+#### Data processing
+
+- Refactored demultiplexing, aggregation, and single-cell processing into independent modules.
+- Added configurable demultiplexing parameters and batch handling.
+- Added RNA and protein correlation analysis.
+- Added assay-aware image, transcript, and cell output generation.
+- Improved handling of missing bead masks, empty transcript data, failed clustering, and transcript-only runs.
+
+#### Validation and migration
+
+- Replaced the legacy schema implementation with dedicated file, directory, and dataset validators.
+- Added more detailed validation reporting for raw and processed G4X-data.
+- Reworked legacy-data migration around dedicated migrator classes.
+- Improved samplesheet, manifest, transcript-table, protein-directory, and `sample.g4x` validation.
+- Added migration support for cropped regions and updated G4X-viewer layouts.
+
+#### G4X-viewer
+
+- New G4X-viewer Zarr creation for images, transcripts, cell masks, and metadata.
+- Added metadata import and export for existing viewer stores.
+- Added support for multiple segmentations and assay-aware channel ordering.
+- Improved image conversion, tiling, chunking, and Zarr compatibility.
+- Improved transcript visualization, polygon generation, and color controls.
+
+#### Reliability and release infrastructure
+
+- Expanded CLI, processing, smoke, transcript-only, and protein-only tests.
+- Added strict documentation, package, wheel, and multi-architecture Docker preflight checks.
+- Added AMD64 and ARM64 container validation.
+- Refreshed dependencies to address reported security vulnerabilities.
+- Removed development and documentation dependencies from production container images.
+- Updated GitHub Actions to use Node.js 24-compatible action versions.
+
+
 ## [2026-04-13] — `v3.0.2`
 
 - fix: load adata from correct location
