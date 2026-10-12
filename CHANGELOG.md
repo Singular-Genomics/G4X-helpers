@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased] — `v4.0.0`
+## [2026-10-13] — `v4.0.0`
 
 #### Overview
 
@@ -9,15 +9,14 @@ This release reorganizes the Python API, processing modules, CLI, schema validat
 
 #### Highlights
 - continued support to migrate legacy data to latest v4 format
+- now handles single-cell processing steps after redemux and resegment operations
 - begin phase-out of jp2 files (will be replaced with ome.tiff during migration)
 - new functions to inspect and edit G4X-viewer input
-- now handles single-cell processing steps after redemux and resegment operations
 - added optional GPU acceleration through the `gpu` dependency extra.
 - added region-of-interest support for processing cropped datasets.
 - expanded support for transcript-only, protein-only, and combined assay data.
 
 #### CLI
-
 - Reorganized the CLI around five supported commands:
   - `redemux`
   - `resegment`
@@ -33,7 +32,6 @@ This release reorganizes the Python API, processing modules, CLI, schema validat
 - Improved CLI help messages, progress reporting, error handling, and version reporting.
 
 #### Data processing
-
 - Refactored demultiplexing, aggregation, and single-cell processing into independent modules.
 - Added configurable demultiplexing parameters and batch handling.
 - Added RNA and protein correlation analysis.
@@ -41,7 +39,6 @@ This release reorganizes the Python API, processing modules, CLI, schema validat
 - Improved handling of missing bead masks, empty transcript data, failed clustering, and transcript-only runs.
 
 #### Validation and migration
-
 - Replaced the legacy schema implementation with dedicated file, directory, and dataset validators.
 - Added more detailed validation reporting for raw and processed G4X-data.
 - Reworked legacy-data migration around dedicated migrator classes.
@@ -49,7 +46,6 @@ This release reorganizes the Python API, processing modules, CLI, schema validat
 - Added migration support for cropped regions and updated G4X-viewer layouts.
 
 #### G4X-viewer
-
 - New G4X-viewer Zarr creation for images, transcripts, cell masks, and metadata.
 - Added metadata import and export for existing viewer stores.
 - Added support for multiple segmentations and assay-aware channel ordering.
@@ -57,7 +53,6 @@ This release reorganizes the Python API, processing modules, CLI, schema validat
 - Improved transcript visualization, polygon generation, and color controls.
 
 #### Reliability and release infrastructure
-
 - Expanded CLI, processing, smoke, transcript-only, and protein-only tests.
 - Added strict documentation, package, wheel, and multi-architecture Docker preflight checks.
 - Added AMD64 and ARM64 container validation.
