@@ -144,7 +144,7 @@ Inside the container, always reference the mounted paths (e.g. `/data/...`), not
 ```bash
 docker run --rm \
   -v /host/path/to/g4x_output:/data/g4x_output \
-  [-v /host/path/to/other_inputs:/data/inputs ] \
+  -v /host/path/to/other_inputs:/data/inputs \
   ghcr.io/singular-genomics/g4x-helpers:latest \
   g4x-helpers [GLOBAL OPTIONS] <command> [OPTIONS] /data/g4x_output/sample_id
 ```
